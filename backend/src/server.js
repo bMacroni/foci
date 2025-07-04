@@ -1,10 +1,13 @@
+import dotenv from 'dotenv';
+dotenv.config();
 import express from 'express'
 import cors from 'cors'
-import dotenv from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
+import { requireAuth } from './middleware/auth.js'
+import goalsRouter from './routes/goals.js'
+import tasksRouter from './routes/tasks.js'
 
-// Load environment variables
-dotenv.config()
+
 
 const app = express()
 const PORT = process.env.PORT || 5000
@@ -46,6 +49,16 @@ app.get('/api', (req, res) => {
     }
   })
 })
+
+app.get('/api/protected', requireAuth, (req, res) => {
+  res.json({ message: `Hello, ${req.user.email}! You have accessed a protected route.` });
+});
+
+console.log('Registering goals router...');
+app.use('/api/goals', goalsRouter);
+console.log('Goals router registered');
+
+app.use('/api/tasks', tasksRouter);
 
 // Start server
 app.listen(PORT, () => {
