@@ -6,6 +6,10 @@ import { createClient } from '@supabase/supabase-js'
 import { requireAuth } from './middleware/auth.js'
 import goalsRouter from './routes/goals.js'
 import tasksRouter from './routes/tasks.js'
+import googleAuthRoutes from './routes/googleAuth.js'
+import authRouter from './routes/auth.js'
+import calendarRouter from './routes/calendar.js'
+import aiRouter from './routes/ai.js'
 
 
 
@@ -27,6 +31,8 @@ if (supabaseUrl && supabaseKey) {
 } else {
   console.warn('Supabase credentials not found. Some features may not work.')
 }
+
+console.log('Loaded GOOGLE_REDIRECT_URI:', process.env.GOOGLE_REDIRECT_URI);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -59,6 +65,17 @@ app.use('/api/goals', goalsRouter);
 console.log('Goals router registered');
 
 app.use('/api/tasks', tasksRouter);
+
+app.use('/api/auth', authRouter);
+app.use('/api/auth/google', googleAuthRoutes);
+
+console.log('Registering calendar router...');
+app.use('/api/calendar', calendarRouter);
+console.log('Calendar router registered');
+
+console.log('Registering AI router...');
+app.use('/api/ai', aiRouter);
+console.log('AI router registered');
 
 // Start server
 app.listen(PORT, () => {

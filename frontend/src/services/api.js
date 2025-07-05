@@ -53,6 +53,22 @@ export const tasksAPI = {
   delete: (id) => api.delete(`/tasks/${id}`),
 };
 
+// Calendar API
+export const calendarAPI = {
+  getStatus: () => api.get('/calendar/status'),
+  getEvents: (maxResults = 10) => api.get(`/calendar/events?maxResults=${maxResults}`),
+  createEvent: (eventData) => api.post('/calendar/events', eventData),
+  updateEvent: (eventId, eventData) => api.put(`/calendar/events/${eventId}`, eventData),
+  deleteEvent: (eventId) => api.delete(`/calendar/events/${eventId}`),
+  getCalendarList: () => api.get('/calendar/list'),
+};
+
+// AI API
+export const aiAPI = {
+  sendMessage: (message) => api.post('/ai/chat', { message }),
+  getGoalSuggestions: (goalTitle) => api.post('/ai/goal-suggestions', { goalTitle }),
+};
+
 // Health check
 export const healthCheck = () => api.get('/health');
 

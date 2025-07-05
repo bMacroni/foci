@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
 export async function createGoal(req, res) {
-  const { title, description, due_date } = req.body;
+  const { title, description, target_completion_date, category } = req.body;
   const user_id = req.user.id;
   
   // Get the JWT from the request
@@ -22,7 +22,7 @@ export async function createGoal(req, res) {
   
   const { data, error } = await supabase
     .from('goals')
-    .insert([{ user_id, title, description, due_date }])
+    .insert([{ user_id, title, description, target_completion_date, category }])
     .select()
     .single();
   
@@ -85,18 +85,34 @@ export async function getGoalById(req, res) {
 }
 
 export async function updateGoal(req, res) {
-  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
   const user_id = req.user.id;
   const { id } = req.params;
-  const { title, description, due_date, completed } = req.body;
+  const { title, description, target_completion_date, completed, category } = req.body;
+  
+  // Get the JWT from the request
+  const token = req.headers.authorization?.split(' ')[1];
+  
+  // Create Supabase client with the JWT
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  });
+  
   const { data, error } = await supabase
     .from('goals')
-    .update({ title, description, due_date, completed })
+    .update({ title, description, target_completion_date, completed, category })
     .eq('id', id)
     .eq('user_id', user_id)
     .select()
     .single();
-  if (error) return res.status(400).json({ error: error.message });
+    
+  if (error) {
+    console.log('Supabase update error:', error);
+    return res.status(400).json({ error: error.message });
+  }
   res.json(data);
 }
 
