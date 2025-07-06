@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { goalsAPI, tasksAPI } from './apiService.js';
-import { createCalendarEvent, listCalendarEvents } from './calendarService.js';
+import { createCalendarEvent, listCalendarEvents, updateCalendarEvent, deleteCalendarEvent } from './calendarService.js';
 
 export class GeminiService {
   constructor() {
@@ -58,7 +58,7 @@ Current context: The user is interacting with their Foci productivity system.`;
 
   async processMessage(message, userId) {
     try {
-      // If Gemini is not enabled, only handle direct commands
+      // If Gemini is not enabled, fall back to basic command handling
       if (!this.enabled) {
         const commandResponse = await this.handleDirectCommands(message, userId);
         if (commandResponse) {
@@ -70,13 +70,8 @@ Current context: The user is interacting with their Foci productivity system.`;
         };
       }
 
-      // First, check if this is a direct command that needs immediate action
-      const commandResponse = await this.handleDirectCommands(message, userId);
-      if (commandResponse) {
-        return commandResponse;
-      }
-
-      // If not a direct command, use Gemini for intelligent response
+      // ALL requests go through Gemini for intelligent interpretation and routing
+      console.log('Processing message through Gemini:', message);
       return await this.getGeminiResponse(message, userId);
     } catch (error) {
       console.error('Gemini Service Error:', error);
@@ -360,20 +355,30 @@ Response:`;
 }
 
 Classification rules:
-- "goal" or "goals": User wants to manage goals/objectives/aspirations
-- "task" or "tasks": User wants to manage tasks/todos/actions
-- "calendar" or "event" or "events": User wants to manage calendar events/meetings/appointments
-- "general": General conversation, questions, or other requests
+- "goal" or "goals": User wants to manage goals/objectives/aspirations/targets/aims/resolutions
+- "task" or "tasks": User wants to manage tasks/todos/actions/items/chores/assignments
+- "calendar" or "event" or "events": User wants to manage calendar events/meetings/appointments/schedules/bookings/sessions
+- "general": General conversation, questions, advice requests, or other requests
 
 Operation types:
-- "create": User wants to add/create new items (add, create, new, set, make, schedule)
-- "read": User wants to view/list existing items (show, list, display, get, my, what are)
-- "update": User wants to modify existing items (update, edit, change, modify, move, reschedule)
-- "delete": User wants to remove items (delete, remove, cancel, drop, get rid of, eliminate)
-- "complete": User wants to mark items as done (complete, finish, done, mark as complete, accomplish)
-- "help": User is asking for help or instructions
+- "create": User wants to add/create new items (add, create, new, set, make, schedule, book, establish, define, formulate, prepare, obtain, maintain, save, achieve, work towards, assign, plan, organize)
+- "read": User wants to view/list existing items (show, list, display, get, my, what are, see, view, check, review, look at)
+- "update": User wants to modify existing items (update, edit, change, modify, move, reschedule, adjust, alter, revise, amend)
+- "delete": User wants to remove items (delete, remove, cancel, drop, get rid of, eliminate, clear, wipe, erase)
+- "complete": User wants to mark items as done (complete, finish, done, mark as complete, accomplish, achieve, fulfill, wrap up)
+- "help": User is asking for help, instructions, suggestions, advice, or guidance
 
-IMPORTANT: Pay special attention to action words at the beginning of sentences. "Delete my goal" should be classified as delete operation, not create.
+IMPORTANT CLASSIFICATION GUIDELINES:
+1. Pay special attention to action words at the beginning of sentences
+2. "Delete my goal" should be classified as delete operation, not create
+3. "Update calendar for Oil Change Service" should be classified as calendar update
+4. "Schedule a meeting" should be classified as calendar create
+5. "Show my goals" should be classified as goal read
+6. "Add a task" should be classified as task create
+7. "Complete my goal" should be classified as goal complete
+8. "Cancel my meeting" should be classified as event delete
+9. "Get suggestions" or "goal suggestions" should be classified as general help
+10. "How are you?" or general questions should be classified as general help
 
 Examples:
 - "Please add the following goals: Prepare for Kindergarten, Save money" → {"type": "goals", "operation": "create", "confidence": "high", "reasoning": "Contains 'goals' and 'add' operation"}
@@ -384,6 +389,9 @@ Examples:
 - "Cancel my meeting tomorrow" → {"type": "event", "operation": "delete", "confidence": "high", "reasoning": "Contains 'meeting' and 'cancel' operation"}
 - "Complete the goal to learn React" → {"type": "goal", "operation": "complete", "confidence": "high", "reasoning": "Contains 'goal' and 'complete' operation"}
 - "Schedule a meeting tomorrow at 2pm" → {"type": "event", "operation": "create", "confidence": "high", "reasoning": "Contains time and scheduling information"}
+- "Update calendar for Oil Change Service on July 9th at 10:00 AM CST" → {"type": "event", "operation": "update", "confidence": "high", "reasoning": "Contains 'calendar', 'update' operation, a date, and a time"}
+- "Add a task to review documents" → {"type": "task", "operation": "create", "confidence": "high", "reasoning": "Contains 'task' and 'add' operation"}
+- "Get suggestions for my goals" → {"type": "general", "operation": "help", "confidence": "high", "reasoning": "Asking for suggestions/advice"}
 - "How are you today?" → {"type": "general", "operation": "help", "confidence": "high", "reasoning": "General conversation question"}
 
 User request: "${message}"
@@ -1355,23 +1363,43 @@ JSON response:`;
 
       console.log('Parsed task update data:', parsedTask);
 
+      // First, find the task by title to get the actual UUID
+      const tasksResponse = await tasksAPI.getAll();
+      const tasks = tasksResponse.data;
+      
+      // Find the task that matches the title (case-insensitive)
+      const taskToUpdate = tasks.find(task => 
+        task.title.toLowerCase().includes(parsedTask.title.toLowerCase()) ||
+        parsedTask.title.toLowerCase().includes(task.title.toLowerCase())
+      );
+
+      if (!taskToUpdate) {
+        return {
+          message: `I couldn't find a task matching "${parsedTask.title}". Please check your tasks and try again.`,
+          actions: []
+        };
+      }
+
+      console.log('Found task to update:', taskToUpdate);
+
       const taskData = {
-        title: parsedTask.title,
-        description: parsedTask.description,
-        due_date: parsedTask.dueDate ? parsedTask.dueDate.toISOString() : undefined,
-        priority: parsedTask.priority,
-        status: parsedTask.status
+        title: parsedTask.title || taskToUpdate.title,
+        description: parsedTask.description || taskToUpdate.description,
+        due_date: parsedTask.dueDate ? parsedTask.dueDate.toISOString() : taskToUpdate.due_date,
+        priority: parsedTask.priority || taskToUpdate.priority,
+        status: parsedTask.status || taskToUpdate.status
       };
 
       // Remove undefined values
       Object.keys(taskData).forEach(key => taskData[key] === undefined && delete taskData[key]);
 
-      await tasksAPI.update(parsedTask.taskId, taskData);
+      await tasksAPI.update(taskToUpdate.id, taskData);
       return {
-        message: `Perfect! I've updated your task: **"${parsedTask.title}"**. You can view the changes in the Tasks tab.`,
-        actions: [`Updated task: ${parsedTask.title}`]
+        message: `Perfect! I've updated your task: **"${taskToUpdate.title}"**. You can view the changes in the Tasks tab.`,
+        actions: [`Updated task: ${taskToUpdate.title}`]
       };
     } catch (error) {
+      console.error('Error updating task:', error);
       return {
         message: "I couldn't update the task. Please try again or check the Tasks tab to update it manually.",
         actions: []
@@ -1392,12 +1420,32 @@ JSON response:`;
 
       console.log('Parsed task delete data:', parsedTask);
 
-      await tasksAPI.delete(parsedTask.taskId);
+      // First, find the task by title to get the actual UUID
+      const tasksResponse = await tasksAPI.getAll();
+      const tasks = tasksResponse.data;
+      
+      // Find the task that matches the title (case-insensitive)
+      const taskToDelete = tasks.find(task => 
+        task.title.toLowerCase().includes(parsedTask.title.toLowerCase()) ||
+        parsedTask.title.toLowerCase().includes(task.title.toLowerCase())
+      );
+
+      if (!taskToDelete) {
+        return {
+          message: `I couldn't find a task matching "${parsedTask.title}". Please check your tasks and try again.`,
+          actions: []
+        };
+      }
+
+      console.log('Found task to delete:', taskToDelete);
+
+      await tasksAPI.delete(taskToDelete.id);
       return {
-        message: `I've deleted your task: **"${parsedTask.title}"**.`,
-        actions: [`Deleted task: ${parsedTask.title}`]
+        message: `I've deleted your task: **"${taskToDelete.title}"**.`,
+        actions: [`Deleted task: ${taskToDelete.title}`]
       };
     } catch (error) {
+      console.error('Error deleting task:', error);
       return {
         message: "I couldn't delete the task. Please try again or check the Tasks tab to delete it manually.",
         actions: []
@@ -1418,16 +1466,36 @@ JSON response:`;
 
       console.log('Parsed task complete data:', parsedTask);
 
+      // First, find the task by title to get the actual UUID
+      const tasksResponse = await tasksAPI.getAll();
+      const tasks = tasksResponse.data;
+      
+      // Find the task that matches the title (case-insensitive)
+      const taskToComplete = tasks.find(task => 
+        task.title.toLowerCase().includes(parsedTask.title.toLowerCase()) ||
+        parsedTask.title.toLowerCase().includes(task.title.toLowerCase())
+      );
+
+      if (!taskToComplete) {
+        return {
+          message: `I couldn't find a task matching "${parsedTask.title}". Please check your tasks and try again.`,
+          actions: []
+        };
+      }
+
+      console.log('Found task to complete:', taskToComplete);
+
       const taskData = {
         status: 'completed'
       };
 
-      await tasksAPI.update(parsedTask.taskId, taskData);
+      await tasksAPI.update(taskToComplete.id, taskData);
       return {
-        message: `Great job! I've marked your task as complete: **"${parsedTask.title}"**.`,
-        actions: [`Completed task: ${parsedTask.title}`]
+        message: `Great job! I've marked your task as complete: **"${taskToComplete.title}"**.`,
+        actions: [`Completed task: ${taskToComplete.title}`]
       };
     } catch (error) {
+      console.error('Error completing task:', error);
       return {
         message: "I couldn't complete the task. Please try again or check the Tasks tab to mark it as complete manually.",
         actions: []
@@ -1449,14 +1517,58 @@ JSON response:`;
 
       console.log('Parsed event update data:', parsedEvent);
 
-      // This would need to be implemented with Google Calendar API
+      // First, try to find the event by title
+      const events = await listCalendarEvents(userId, 50);
+      const eventToUpdate = events.find(event => 
+        event.summary && event.summary.toLowerCase().includes(parsedEvent.title.toLowerCase())
+      );
+
+      if (!eventToUpdate) {
+        return {
+          message: `I couldn't find an event matching "${parsedEvent.title}". Please check your calendar and try again, or create a new event with that name.`,
+          actions: []
+        };
+      }
+
+      console.log('Found event to update:', eventToUpdate);
+
+      // Prepare the update data
+      const updateData = {
+        summary: parsedEvent.newTitle || eventToUpdate.summary,
+        description: eventToUpdate.description || '',
+        startTime: parsedEvent.newStartTime ? parsedEvent.newStartTime.toISOString() : eventToUpdate.start.dateTime || eventToUpdate.start.date,
+        endTime: parsedEvent.newEndTime ? parsedEvent.newEndTime.toISOString() : eventToUpdate.end.dateTime || eventToUpdate.end.date,
+        timeZone: 'America/Chicago'
+      };
+
+      // Update the event using the calendar service
+      await updateCalendarEvent(userId, eventToUpdate.id, updateData);
+      
+      let responseMessage = `Perfect! I've updated your event: **"${eventToUpdate.summary}"**.`;
+      
+      if (parsedEvent.newTitle) {
+        responseMessage += ` The title is now "${parsedEvent.newTitle}".`;
+      }
+      if (parsedEvent.newDate || parsedEvent.newStartTime) {
+        responseMessage += ` The time has been updated.`;
+      }
+      
+      responseMessage += ` You can view the changes in your Google Calendar or the Calendar tab.`;
+
       return {
-        message: `I understand you want to update your event: **"${parsedEvent.title}"**. Please use the Calendar tab to make changes to your events, as calendar updates require special permissions.`,
-        actions: [`Identified event to update: ${parsedEvent.title}`]
+        message: responseMessage,
+        actions: [`Updated event: ${eventToUpdate.summary}`]
       };
     } catch (error) {
+      console.error('Error updating event:', error);
+      if (error.message && error.message.includes('No Google tokens found')) {
+        return {
+          message: "I couldn't update the event because your Google Calendar isn't connected. Please connect your Google account in the Calendar tab first.",
+          actions: []
+        };
+      }
       return {
-        message: "I couldn't update the event. Please use the Calendar tab to update it manually.",
+        message: "I couldn't update the event. Please try again or use the Calendar tab to update it manually.",
         actions: []
       };
     }
@@ -1475,14 +1587,38 @@ JSON response:`;
 
       console.log('Parsed event delete data:', parsedEvent);
 
-      // This would need to be implemented with Google Calendar API
+      // First, try to find the event by title
+      const events = await listCalendarEvents(userId, 50);
+      const eventToDelete = events.find(event => 
+        event.summary && event.summary.toLowerCase().includes(parsedEvent.title.toLowerCase())
+      );
+
+      if (!eventToDelete) {
+        return {
+          message: `I couldn't find an event matching "${parsedEvent.title}". Please check your calendar and try again.`,
+          actions: []
+        };
+      }
+
+      console.log('Found event to delete:', eventToDelete);
+
+      // Delete the event using the calendar service
+      await deleteCalendarEvent(userId, eventToDelete.id);
+      
       return {
-        message: `I understand you want to delete your event: **"${parsedEvent.title}"**. Please use the Calendar tab to delete events, as calendar deletions require special permissions.`,
-        actions: [`Identified event to delete: ${parsedEvent.title}`]
+        message: `Perfect! I've deleted your event: **"${eventToDelete.summary}"**. The event has been removed from your calendar.`,
+        actions: [`Deleted event: ${eventToDelete.summary}`]
       };
     } catch (error) {
+      console.error('Error deleting event:', error);
+      if (error.message && error.message.includes('No Google tokens found')) {
+        return {
+          message: "I couldn't delete the event because your Google Calendar isn't connected. Please connect your Google account in the Calendar tab first.",
+          actions: []
+        };
+      }
       return {
-        message: "I couldn't delete the event. Please use the Calendar tab to delete it manually.",
+        message: "I couldn't delete the event. Please try again or use the Calendar tab to delete it manually.",
         actions: []
       };
     }
@@ -1692,29 +1828,321 @@ JSON response:`;
 
   // Task parsing methods (similar structure to goals)
   async parseTaskUpdateWithGemini(message) {
-    // Similar implementation to parseGoalUpdateWithGemini
-    return null; // Placeholder
+    try {
+      const prompt = `Parse this task update request and extract the task details. Return ONLY a JSON object with the following structure:
+
+{
+  "taskId": "Task ID or identifier",
+  "title": "Updated task title",
+  "description": "Updated task description (optional)",
+  "dueDate": "Updated due date string (optional)",
+  "priority": "high|medium|low (optional)",
+  "status": "pending|in_progress|completed (optional)",
+  "success": true/false,
+  "error": "Error message if parsing failed"
+}
+
+Examples:
+- "Update my task to review documents with a new due date of tomorrow" → {"taskId": "review documents", "title": "review documents", "dueDate": "tomorrow", "success": true}
+- "Change my task about calling the client to be due by Friday" → {"taskId": "calling the client", "title": "call the client", "dueDate": "Friday", "success": true}
+
+User request: "${message}"
+
+JSON response:`;
+
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+      
+      console.log('Task update parsing - Gemini raw response:', text);
+      
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        console.error('No JSON found in task update response:', text);
+        return null;
+      }
+
+      const parsedData = JSON.parse(jsonMatch[0]);
+      console.log('Task update parsing - Parsed data:', parsedData);
+      
+      if (!parsedData.success) {
+        console.log('Task update parsing failed:', parsedData.error);
+        return null;
+      }
+
+      // Convert due date if provided
+      let dueDate = null;
+      if (parsedData.dueDate) {
+        dueDate = this.parseDate(parsedData.dueDate);
+        if (!dueDate) {
+          console.error('Could not parse due date:', parsedData.dueDate);
+          return null;
+        }
+      }
+
+      return {
+        taskId: parsedData.taskId,
+        title: parsedData.title,
+        description: parsedData.description,
+        dueDate: dueDate,
+        priority: parsedData.priority,
+        status: parsedData.status
+      };
+
+    } catch (error) {
+      console.error('Error parsing task update with Gemini:', error);
+      return null;
+    }
   }
 
   async parseTaskDeleteWithGemini(message) {
-    // Similar implementation to parseGoalDeleteWithGemini
-    return null; // Placeholder
+    try {
+      const prompt = `Parse this task deletion request and extract the task identifier. Return ONLY a JSON object with the following structure:
+
+{
+  "taskId": "Task ID or identifier",
+  "title": "Task title for confirmation",
+  "success": true/false,
+  "error": "Error message if parsing failed"
+}
+
+Examples:
+- "Delete my task to review documents" → {"taskId": "review documents", "title": "review documents", "success": true}
+- "Remove my task about calling the client" → {"taskId": "calling the client", "title": "calling the client", "success": true}
+
+User request: "${message}"
+
+JSON response:`;
+
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+      
+      console.log('Task delete parsing - Gemini raw response:', text);
+      
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        console.error('No JSON found in task delete response:', text);
+        return null;
+      }
+
+      const parsedData = JSON.parse(jsonMatch[0]);
+      console.log('Task delete parsing - Parsed data:', parsedData);
+      
+      if (!parsedData.success) {
+        console.log('Task delete parsing failed:', parsedData.error);
+        return null;
+      }
+
+      return {
+        taskId: parsedData.taskId,
+        title: parsedData.title
+      };
+
+    } catch (error) {
+      console.error('Error parsing task delete with Gemini:', error);
+      return null;
+    }
   }
 
   async parseTaskCompleteWithGemini(message) {
-    // Similar implementation to parseGoalCompleteWithGemini
-    return null; // Placeholder
+    try {
+      const prompt = `Parse this task completion request and extract the task identifier. Return ONLY a JSON object with the following structure:
+
+{
+  "taskId": "Task ID or identifier",
+  "title": "Task title for confirmation",
+  "success": true/false,
+  "error": "Error message if parsing failed"
+}
+
+Examples:
+- "Complete my task to review documents" → {"taskId": "review documents", "title": "review documents", "success": true}
+- "Mark my task about calling the client as complete" → {"taskId": "calling the client", "title": "calling the client", "success": true}
+
+User request: "${message}"
+
+JSON response:`;
+
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+      
+      console.log('Task complete parsing - Gemini raw response:', text);
+      
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        console.error('No JSON found in task complete response:', text);
+        return null;
+      }
+
+      const parsedData = JSON.parse(jsonMatch[0]);
+      console.log('Task complete parsing - Parsed data:', parsedData);
+      
+      if (!parsedData.success) {
+        console.log('Task complete parsing failed:', parsedData.error);
+        return null;
+      }
+
+      return {
+        taskId: parsedData.taskId,
+        title: parsedData.title
+      };
+
+    } catch (error) {
+      console.error('Error parsing task complete with Gemini:', error);
+      return null;
+    }
   }
 
   // Event parsing methods (similar structure to goals)
   async parseEventUpdateWithGemini(message) {
-    // Similar implementation to parseGoalUpdateWithGemini
-    return null; // Placeholder
+    try {
+      const prompt = `Parse this calendar event update request and extract the event details. Return ONLY a JSON object with the following structure:
+
+{
+  "title": "Event title to identify the event",
+  "newTitle": "New event title (optional)",
+  "newDate": "New date string (optional)",
+  "newStartTime": "New start time string (optional)",
+  "newEndTime": "New end time string (optional)",
+  "success": true/false,
+  "error": "Error message if parsing failed"
+}
+
+Examples:
+- "Update calendar for Oil Change Service on July 9th at 10:00 AM CST" → {"title": "Oil Change Service", "newDate": "July 9th", "newStartTime": "10:00 AM CST", "success": true}
+- "Change my meeting tomorrow to start at 3pm instead of 2pm" → {"title": "meeting", "newStartTime": "3pm", "success": true}
+- "Update the team lunch event to be on Friday instead of Thursday" → {"title": "team lunch", "newDate": "Friday", "success": true}
+
+User request: "${message}"
+
+JSON response:`;
+
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+      
+      console.log('Event update parsing - Gemini raw response:', text);
+      
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        console.error('No JSON found in event update response:', text);
+        return null;
+      }
+
+      const parsedData = JSON.parse(jsonMatch[0]);
+      console.log('Event update parsing - Parsed data:', parsedData);
+      
+      if (!parsedData.success) {
+        console.log('Event update parsing failed:', parsedData.error);
+        return null;
+      }
+
+      // Convert dates and times if provided
+      let newDate = null;
+      let newStartTime = null;
+      let newEndTime = null;
+
+      if (parsedData.newDate) {
+        newDate = this.parseDate(parsedData.newDate);
+        if (!newDate) {
+          console.error('Could not parse new date:', parsedData.newDate);
+          return null;
+        }
+      }
+
+      if (parsedData.newStartTime) {
+        const baseDate = newDate || new Date();
+        newStartTime = this.parseTime(parsedData.newStartTime, baseDate);
+        if (!newStartTime) {
+          console.error('Could not parse new start time:', parsedData.newStartTime);
+          return null;
+        }
+      }
+
+      if (parsedData.newEndTime) {
+        const baseDate = newDate || new Date();
+        newEndTime = this.parseTime(parsedData.newEndTime, baseDate);
+        if (!newEndTime) {
+          console.error('Could not parse new end time:', parsedData.newEndTime);
+          return null;
+        }
+      }
+
+      return {
+        title: parsedData.title,
+        newTitle: parsedData.newTitle,
+        newDate: newDate,
+        newStartTime: newStartTime,
+        newEndTime: newEndTime
+      };
+
+    } catch (error) {
+      console.error('Error parsing event update with Gemini:', error);
+      return null;
+    }
   }
 
   async parseEventDeleteWithGemini(message) {
-    // Similar implementation to parseGoalDeleteWithGemini
-    return null; // Placeholder
+    try {
+      const prompt = `Parse this calendar event deletion request and extract the event identifier. Return ONLY a JSON object with the following structure:
+
+{
+  "title": "Event title to identify the event",
+  "date": "Event date (optional, for disambiguation)",
+  "success": true/false,
+  "error": "Error message if parsing failed"
+}
+
+Examples:
+- "Delete my meeting tomorrow" → {"title": "meeting", "date": "tomorrow", "success": true}
+- "Remove the Oil Change Service event" → {"title": "Oil Change Service", "success": true}
+- "Cancel my team lunch on Friday" → {"title": "team lunch", "date": "Friday", "success": true}
+
+User request: "${message}"
+
+JSON response:`;
+
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+      
+      console.log('Event delete parsing - Gemini raw response:', text);
+      
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        console.error('No JSON found in event delete response:', text);
+        return null;
+      }
+
+      const parsedData = JSON.parse(jsonMatch[0]);
+      console.log('Event delete parsing - Parsed data:', parsedData);
+      
+      if (!parsedData.success) {
+        console.log('Event delete parsing failed:', parsedData.error);
+        return null;
+      }
+
+      // Convert date if provided
+      let date = null;
+      if (parsedData.date) {
+        date = this.parseDate(parsedData.date);
+        if (!date) {
+          console.error('Could not parse date:', parsedData.date);
+          return null;
+        }
+      }
+
+      return {
+        title: parsedData.title,
+        date: date
+      };
+
+    } catch (error) {
+      console.error('Error parsing event delete with Gemini:', error);
+      return null;
+    }
   }
 
   // Generate AI suggestions for goal achievement
