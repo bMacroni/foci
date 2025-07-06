@@ -28,7 +28,7 @@ function Dashboard({ showSuccess }) {
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 p-4 lg:p-6">
+        <div className={`flex-1 ${activeTab === 'ai' ? 'p-0' : 'p-4 lg:p-6'}`}>
           {activeTab === 'ai' && (
             <div className="h-full">
               <AIChat onNavigateToTab={setActiveTab} />

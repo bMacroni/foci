@@ -11,7 +11,6 @@ const AIChat = ({ onNavigateToTab }) => {
   const [currentThreadId, setCurrentThreadId] = useState(null);
   const [isLoadingThreads, setIsLoadingThreads] = useState(false);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
-  const [showSuggestions, setShowSuggestions] = useState(true);
   const messagesEndRef = useRef(null);
 
   // Load user data and conversation threads
@@ -281,7 +280,6 @@ const AIChat = ({ onNavigateToTab }) => {
     setMessages(prev => [...prev, userMessage]);
     setInputMessage('');
     setIsLoading(true);
-    setShowSuggestions(false); // Hide suggestions when user starts typing
 
     try {
       // Create a new thread if none exists and get the thread ID
@@ -360,53 +358,7 @@ const AIChat = ({ onNavigateToTab }) => {
     }
   };
 
-  // Generate smart suggestions based on user data
-  const generateSuggestions = () => {
-    const hasGoals = Array.isArray(userData.goals) ? userData.goals.length > 0 : false;
-    const hasTasks = Array.isArray(userData.tasks) ? userData.tasks.length > 0 : false;
-    const tasksArray = Array.isArray(userData.tasks) ? userData.tasks : [];
-    const incompleteTasks = tasksArray.filter(task => !task.completed);
 
-    const suggestions = [];
-
-    if (!hasGoals) {
-      suggestions.push({
-        text: "Create my first goal",
-        action: () => setInputMessage("I want to create a goal to improve my productivity"),
-        icon: "🎯"
-      });
-    }
-
-    if (hasGoals && !hasTasks) {
-      suggestions.push({
-        text: "Break down my goals into tasks",
-        action: () => setInputMessage("Help me break down my goals into actionable tasks"),
-        icon: "📋"
-      });
-    }
-
-    if (incompleteTasks.length > 0) {
-      suggestions.push({
-        text: `Review my ${incompleteTasks.length} incomplete tasks`,
-        action: () => setInputMessage("Show me my incomplete tasks and help me prioritize them"),
-        icon: "📝"
-      });
-    }
-
-    suggestions.push({
-      text: "Schedule something for today",
-      action: () => setInputMessage("I want to schedule an event for today"),
-      icon: "📅"
-    });
-
-    suggestions.push({
-      text: "Get productivity advice",
-      action: () => setInputMessage("Give me some productivity tips for today"),
-      icon: "💡"
-    });
-
-    return suggestions;
-  };
 
   // Show loading state while fetching user data
   if (!hasLoadedData) {
@@ -621,27 +573,40 @@ const AIChat = ({ onNavigateToTab }) => {
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
         {/* Chat Header */}
-        <div className="bg-black text-white p-6 rounded-t-3xl">
+        <div className="bg-black text-white p-4 lg:p-6">
           <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mr-4 shadow-lg">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-xl font-bold">Foci.ai</h3>
-                <p className="text-gray-200 font-medium">Your intelligent productivity companion</p>
-              </div>
-            </div>
-            
-            {/* Mobile menu button */}
+            {/* Hamburger menu button */}
             <button
               onClick={() => setShowMobileSidebar(true)}
               className="lg:hidden p-2 text-gray-300 hover:text-white transition-colors"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            
+            <div className="flex items-center">
+              <div className="w-10 h-10 lg:w-12 lg:h-12 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mr-3 lg:mr-4 shadow-lg">
+                <svg className="w-5 h-5 lg:w-6 lg:h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg lg:text-xl font-bold">Foci.ai</h3>
+                <p className="text-gray-200 text-sm lg:text-base font-medium">Your intelligent productivity companion</p>
+              </div>
+            </div>
+            
+            {/* Logout button */}
+            <button
+              onClick={() => {
+                localStorage.removeItem('jwt_token');
+                window.location.href = '/login';
+              }}
+              className="p-2 text-gray-300 hover:text-white transition-colors"
+            >
+              <svg className="w-5 h-5 lg:w-6 lg:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
               </svg>
             </button>
           </div>
@@ -669,29 +634,7 @@ const AIChat = ({ onNavigateToTab }) => {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Smart Suggestions */}
-        {showSuggestions && messages.length <= 1 && (
-          <div className="border-t border-black/10 p-4 bg-gray-50">
-            <div className="mb-3">
-              <h4 className="text-sm font-semibold text-gray-700 mb-2">Quick Actions</h4>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {generateSuggestions().map((suggestion, index) => (
-                <button
-                  key={index}
-                  onClick={() => {
-                    suggestion.action();
-                    setShowSuggestions(false);
-                  }}
-                  className="px-3 py-2 bg-white border border-black/20 rounded-lg hover:bg-gray-50 transition-colors text-sm flex items-center space-x-2"
-                >
-                  <span>{suggestion.icon}</span>
-                  <span>{suggestion.text}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+
 
         {/* Input Area */}
         <div className="border-t border-black/10 p-4">
