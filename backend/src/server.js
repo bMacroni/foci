@@ -10,6 +10,7 @@ import googleAuthRoutes from './routes/googleAuth.js'
 import authRouter from './routes/auth.js'
 import calendarRouter from './routes/calendar.js'
 import aiRouter from './routes/ai.js'
+import conversationsRouter from './routes/conversations.js'
 
 
 
@@ -76,6 +77,10 @@ console.log('Calendar router registered');
 console.log('Registering AI router...');
 app.use('/api/ai', aiRouter);
 console.log('AI router registered');
+
+console.log('Registering conversations router...');
+app.use('/api/conversations', conversationsRouter);
+console.log('Conversations router registered');
 
 // Start server
 app.listen(PORT, () => {

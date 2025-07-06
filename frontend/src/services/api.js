@@ -66,8 +66,20 @@ export const calendarAPI = {
 
 // AI API
 export const aiAPI = {
-  sendMessage: (message) => api.post('/ai/chat', { message }),
+  sendMessage: (message, threadId) => api.post('/ai/chat', { message, threadId }),
   getGoalSuggestions: (goalTitle) => api.post('/ai/goal-suggestions', { goalTitle }),
+  createThread: (title, summary) => api.post('/ai/threads', { title, summary }),
+};
+
+// Conversations API
+export const conversationsAPI = {
+  getThreads: () => api.get('/conversations/threads'),
+  getThread: (threadId) => api.get(`/conversations/threads/${threadId}`),
+  createThread: (title, summary) => api.post('/conversations/threads', { title, summary }),
+  addMessage: (threadId, content, role, metadata) => api.post(`/conversations/threads/${threadId}/messages`, { content, role, metadata }),
+  updateThread: (threadId, updates) => api.put(`/conversations/threads/${threadId}`, updates),
+  deleteThread: (threadId) => api.delete(`/conversations/threads/${threadId}`),
+  getStats: () => api.get('/conversations/stats'),
 };
 
 // Health check

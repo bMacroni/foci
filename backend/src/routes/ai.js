@@ -2,15 +2,16 @@ import express from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import GeminiService from '../utils/geminiService.js';
 import AIService from '../utils/aiService.js';
+import { conversationController } from '../controllers/conversationController.js';
 
 const router = express.Router();
 const geminiService = new GeminiService();
 const aiService = new AIService(); // Fallback service
 
-// Chat endpoint
+// Chat endpoint with conversation history support
 router.post('/chat', requireAuth, async (req, res) => {
   try {
-    const { message } = req.body;
+    const { message, threadId } = req.body;
     const userId = req.user.id;
 
     if (!message || typeof message !== 'string') {
@@ -19,7 +20,7 @@ router.post('/chat', requireAuth, async (req, res) => {
       });
     }
 
-    console.log(`AI Chat - User ${userId}: ${message}`);
+    console.log(`AI Chat - User ${userId}: ${message}${threadId ? ` (Thread: ${threadId})` : ''}`);
 
     // Try Gemini first, fallback to basic AI service if needed
     let response;
@@ -32,9 +33,36 @@ router.post('/chat', requireAuth, async (req, res) => {
       console.log(`Fallback AI Response: ${response.message}`);
     }
 
+    // If threadId is provided, save the conversation
+    if (threadId) {
+      try {
+        // Save user message
+        await conversationController.addMessage({
+          params: { threadId },
+          body: { content: message, role: 'user' },
+          user: { id: userId }
+        }, { status: () => ({ json: () => {} }) });
+
+        // Save AI response
+        await conversationController.addMessage({
+          params: { threadId },
+          body: { 
+            content: response.message, 
+            role: 'assistant',
+            metadata: { actions: response.actions || [] }
+          },
+          user: { id: userId }
+        }, { status: () => ({ json: () => {} }) });
+      } catch (saveError) {
+        console.error('Error saving conversation:', saveError);
+        // Don't fail the request if saving fails
+      }
+    }
+
     res.json({
       message: response.message,
-      actions: response.actions || []
+      actions: response.actions || [],
+      threadId: threadId
     });
 
   } catch (error) {
@@ -42,6 +70,32 @@ router.post('/chat', requireAuth, async (req, res) => {
     res.status(500).json({ 
       error: 'Failed to process message',
       message: "I'm sorry, I encountered an error. Please try again."
+    });
+  }
+});
+
+// Create new conversation thread
+router.post('/threads', requireAuth, async (req, res) => {
+  try {
+    const { title, summary } = req.body;
+    const userId = req.user.id;
+
+    // Generate a title if not provided
+    let threadTitle = title;
+    if (!threadTitle) {
+      threadTitle = `Conversation ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`;
+    }
+
+    const thread = await conversationController.createThread({
+      body: { title: threadTitle, summary },
+      user: { id: userId }
+    }, res);
+
+  } catch (error) {
+    console.error('Error creating conversation thread:', error);
+    res.status(500).json({ 
+      error: 'Failed to create conversation thread',
+      message: "I'm sorry, I couldn't create a new conversation thread."
     });
   }
 });
