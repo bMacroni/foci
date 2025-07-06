@@ -326,7 +326,7 @@ const AIChat = () => {
               </svg>
             </div>
             <div>
-              <h3 className="text-xl font-bold">Foci AI Assistant</h3>
+              <h3 className="text-xl font-bold">Foci.ai</h3>
               <p className="text-gray-200 font-medium">Your intelligent productivity companion</p>
             </div>
           </div>
@@ -696,6 +696,7 @@ const AIChat = () => {
         </div>
       </div>
     </div>
+  </div>
   );
 };
 
