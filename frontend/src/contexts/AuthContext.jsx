@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { goalsAPI, tasksAPI } from '../services/api';
 
+// Debug: Log the API URL being used
+console.log('AuthContext - VITE_API_URL:', import.meta.env.VITE_API_URL);
+
 const AuthContext = createContext();
 
 export const useAuth = () => {
@@ -33,7 +36,7 @@ export const AuthProvider = ({ children }) => {
 
   const loginWithCredentials = async (email, password) => {
     try {
-      const response = await fetch('http://localhost:5000/api/auth/login', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -58,7 +61,7 @@ export const AuthProvider = ({ children }) => {
 
   const signup = async (email, password) => {
     try {
-      const response = await fetch('http://localhost:5000/api/auth/signup', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/auth/signup`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
