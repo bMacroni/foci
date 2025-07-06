@@ -85,7 +85,7 @@ const GoalList = ({ showSuccess }) => {
       const response = await goalsAPI.getAll();
       console.log('Goals response:', response);
       console.log('Goals data:', response.data);
-      setGoals(response.data);
+      setGoals(Array.isArray(response.data) ? response.data : []);
     } catch (err) {
       console.error('Error fetching goals:', err);
       setError('Failed to load goals');
@@ -102,7 +102,7 @@ const GoalList = ({ showSuccess }) => {
     if (window.confirm('Are you sure you want to delete this goal?')) {
       try {
         await goalsAPI.delete(id);
-        setGoals(goals.filter(goal => goal.id !== id));
+        setGoals(prev => Array.isArray(prev) ? prev.filter(goal => goal.id !== id) : []);
         showSuccess('Goal deleted successfully!');
       } catch (err) {
         setError('Failed to delete goal');
@@ -134,7 +134,8 @@ const GoalList = ({ showSuccess }) => {
   };
 
   // Group goals by category
-  const groupedGoals = goals.reduce((acc, goal) => {
+  const goalsArray = Array.isArray(goals) ? goals : [];
+  const groupedGoals = goalsArray.reduce((acc, goal) => {
     const category = goal.category || 'other';
     if (!acc[category]) {
       acc[category] = [];
@@ -195,7 +196,7 @@ const GoalList = ({ showSuccess }) => {
         />
       )}
 
-      {goals.length === 0 ? (
+      {(Array.isArray(goals) ? goals : []).length === 0 ? (
         <div className="text-center py-16">
           <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
             <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

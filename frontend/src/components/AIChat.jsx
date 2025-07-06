@@ -10,6 +10,7 @@ const AIChat = () => {
   const [conversationThreads, setConversationThreads] = useState([]);
   const [currentThreadId, setCurrentThreadId] = useState(null);
   const [isLoadingThreads, setIsLoadingThreads] = useState(false);
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const messagesEndRef = useRef(null);
 
   // Load user data and conversation threads
@@ -26,7 +27,7 @@ const AIChat = () => {
           goals: goalsResponse.data || [],
           tasks: tasksResponse.data || []
         });
-        setConversationThreads(threadsResponse.data || []);
+        setConversationThreads(Array.isArray(threadsResponse.data) ? threadsResponse.data : []);
         setHasLoadedData(true);
       } catch (error) {
         console.error('Error loading user data:', error);
@@ -40,8 +41,8 @@ const AIChat = () => {
   // Initialize welcome message based on user data
   useEffect(() => {
     if (hasLoadedData) {
-      const hasGoals = userData.goals.length > 0;
-      const hasTasks = userData.tasks.length > 0;
+      const hasGoals = Array.isArray(userData.goals) ? userData.goals.length > 0 : false;
+      const hasTasks = Array.isArray(userData.tasks) ? userData.tasks.length > 0 : false;
       
       let welcomeMessage = '';
       
@@ -59,7 +60,8 @@ const AIChat = () => {
 **What would you like to work on today?** You can start by telling me about a goal you have, or I can help you get organized!`;
       } else if (hasGoals && !hasTasks) {
         // Has goals but no tasks
-        welcomeMessage = `🎯 **Welcome back!** I see you have ${userData.goals.length} goal${userData.goals.length !== 1 ? 's' : ''} set up. 
+        const goalsCount = Array.isArray(userData.goals) ? userData.goals.length : 0;
+        welcomeMessage = `🎯 **Welcome back!** I see you have ${goalsCount} goal${goalsCount !== 1 ? 's' : ''} set up. 
 
 **Let's make progress!** I can help you:
 
@@ -71,10 +73,12 @@ const AIChat = () => {
 **What would you like to focus on today?**`;
       } else if (hasGoals && hasTasks) {
         // Has both goals and tasks
-        const completedTasks = userData.tasks.filter(task => task.completed).length;
-        const totalTasks = userData.tasks.length;
+        const goalsCount = Array.isArray(userData.goals) ? userData.goals.length : 0;
+        const tasksArray = Array.isArray(userData.tasks) ? userData.tasks : [];
+        const completedTasks = tasksArray.filter(task => task.completed).length;
+        const totalTasks = tasksArray.length;
         
-        welcomeMessage = `🎯 **Welcome back!** Great progress - you have ${userData.goals.length} goal${userData.goals.length !== 1 ? 's' : ''} and ${totalTasks} task${totalTasks !== 1 ? 's' : ''} (${completedTasks} completed).
+        welcomeMessage = `🎯 **Welcome back!** Great progress - you have ${goalsCount} goal${goalsCount !== 1 ? 's' : ''} and ${totalTasks} task${totalTasks !== 1 ? 's' : ''} (${completedTasks} completed).
 
 **Let's keep the momentum going!** I can help you:
 
@@ -86,7 +90,8 @@ const AIChat = () => {
 **What's your focus for today?**`;
       } else {
         // Has tasks but no goals
-        welcomeMessage = `📝 **Welcome back!** I see you have ${userData.tasks.length} task${userData.tasks.length !== 1 ? 's' : ''} to work on.
+        const tasksCount = Array.isArray(userData.tasks) ? userData.tasks.length : 0;
+        welcomeMessage = `📝 **Welcome back!** I see you have ${tasksCount} task${tasksCount !== 1 ? 's' : ''} to work on.
 
 **Let's get organized!** I can help you:
 
@@ -161,7 +166,7 @@ const AIChat = () => {
       const response = await conversationsAPI.createThread(title);
       const newThread = response.data;
       
-      setConversationThreads(prev => [newThread, ...prev]);
+      setConversationThreads(prev => Array.isArray(prev) ? [newThread, ...prev] : [newThread]);
       setCurrentThreadId(newThread.id);
       setMessages([]);
       
@@ -197,8 +202,8 @@ const AIChat = () => {
   };
 
   const generateWelcomeMessage = () => {
-    const hasGoals = userData.goals.length > 0;
-    const hasTasks = userData.tasks.length > 0;
+    const hasGoals = Array.isArray(userData.goals) ? userData.goals.length > 0 : false;
+    const hasTasks = Array.isArray(userData.tasks) ? userData.tasks.length > 0 : false;
     
     if (!hasGoals && !hasTasks) {
       return `🎯 **Welcome to Foci!** I'm your AI-powered productivity assistant, and I'm here to help you build a focused, organized life.
@@ -212,7 +217,8 @@ const AIChat = () => {
 
 **What would you like to work on today?** You can start by telling me about a goal you have, or I can help you get organized!`;
     } else if (hasGoals && !hasTasks) {
-      return `🎯 **Welcome back!** I see you have ${userData.goals.length} goal${userData.goals.length !== 1 ? 's' : ''} set up. 
+      const goalsCount = Array.isArray(userData.goals) ? userData.goals.length : 0;
+      return `🎯 **Welcome back!** I see you have ${goalsCount} goal${goalsCount !== 1 ? 's' : ''} set up. 
 
 **Let's make progress!** I can help you:
 
@@ -223,10 +229,12 @@ const AIChat = () => {
 
 **What would you like to focus on today?**`;
     } else if (hasGoals && hasTasks) {
-      const completedTasks = userData.tasks.filter(task => task.completed).length;
-      const totalTasks = userData.tasks.length;
+      const goalsCount = Array.isArray(userData.goals) ? userData.goals.length : 0;
+      const tasksArray = Array.isArray(userData.tasks) ? userData.tasks : [];
+      const completedTasks = tasksArray.filter(task => task.completed).length;
+      const totalTasks = tasksArray.length;
       
-      return `🎯 **Welcome back!** Great progress - you have ${userData.goals.length} goal${userData.goals.length !== 1 ? 's' : ''} and ${totalTasks} task${totalTasks !== 1 ? 's' : ''} (${completedTasks} completed).
+      return `🎯 **Welcome back!** Great progress - you have ${goalsCount} goal${goalsCount !== 1 ? 's' : ''} and ${totalTasks} task${totalTasks !== 1 ? 's' : ''} (${completedTasks} completed).
 
 **Let's keep the momentum going!** I can help you:
 
@@ -237,7 +245,8 @@ const AIChat = () => {
 
 **What's your focus for today?**`;
     } else {
-      return `📝 **Welcome back!** I see you have ${userData.tasks.length} task${userData.tasks.length !== 1 ? 's' : ''} to work on.
+      const tasksCount = Array.isArray(userData.tasks) ? userData.tasks.length : 0;
+      return `📝 **Welcome back!** I see you have ${tasksCount} task${tasksCount !== 1 ? 's' : ''} to work on.
 
 **Let's get organized!** I can help you:
 
@@ -288,7 +297,7 @@ const AIChat = () => {
       // Refresh user data and conversation threads after AI response
       await Promise.all([
         refreshUserData(),
-        conversationsAPI.getThreads().then(res => setConversationThreads(res.data || []))
+        conversationsAPI.getThreads().then(res => setConversationThreads(Array.isArray(res.data) ? res.data : []))
       ]);
     } catch (error) {
       console.error('Error sending message:', error);
@@ -348,9 +357,115 @@ const AIChat = () => {
   }
 
   return (
-    <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl border border-black/10 h-[700px] flex overflow-hidden">
-      {/* Conversation Threads Sidebar */}
-      <div className="w-80 bg-gray-50/80 backdrop-blur-sm border-r border-black/10 flex flex-col">
+    <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl border border-black/10 h-[700px] flex overflow-hidden relative">
+      {/* Mobile Sidebar Overlay */}
+      {showMobileSidebar && (
+        <div className="lg:hidden fixed inset-0 bg-black/50 z-50">
+          <div className="absolute top-0 left-0 w-80 h-full bg-white/95 backdrop-blur-sm border-r border-black/10 flex flex-col">
+            <div className="p-4 border-b border-black/10">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-black">Conversations</h3>
+                <button
+                  onClick={() => setShowMobileSidebar(false)}
+                  className="p-2 text-gray-500 hover:text-black transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <button
+                onClick={() => {
+                  createNewThread();
+                  setShowMobileSidebar(false);
+                }}
+                className="w-full px-4 py-2 bg-black text-white rounded-xl hover:bg-gray-800 transition-colors text-sm font-medium"
+              >
+                <span className="flex items-center justify-center space-x-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                  <span>New Conversation</span>
+                </span>
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-4">
+              {isLoadingThreads ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-black"></div>
+                </div>
+              ) : (Array.isArray(conversationThreads) ? conversationThreads : []).length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                  </div>
+                  <p className="text-sm text-gray-500">No conversations yet</p>
+                  <p className="text-xs text-gray-400 mt-1">Start a new conversation to begin</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {(Array.isArray(conversationThreads) ? conversationThreads : []).map((thread) => (
+                    <div
+                      key={thread.id}
+                      className={`p-3 rounded-xl cursor-pointer transition-all duration-200 ${
+                        currentThreadId === thread.id
+                          ? 'bg-black text-white'
+                          : 'bg-white hover:bg-gray-100 text-black'
+                      }`}
+                      onClick={() => {
+                        loadConversationThread(thread.id);
+                        setShowMobileSidebar(false);
+                      }}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium text-sm truncate">{thread.title}</h4>
+                          {thread.last_message && (
+                            <p className={`text-xs mt-1 truncate ${
+                              currentThreadId === thread.id ? 'text-gray-300' : 'text-gray-500'
+                            }`}>
+                              {thread.last_message.content}
+                            </p>
+                          )}
+                          <div className={`flex items-center space-x-2 mt-2 text-xs ${
+                            currentThreadId === thread.id ? 'text-gray-300' : 'text-gray-400'
+                          }`}>
+                            <span>{thread.message_count} messages</span>
+                            <span>•</span>
+                            <span>{new Date(thread.updated_at).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteThread(thread.id);
+                          }}
+                          className={`p-1 rounded transition-colors ${
+                            currentThreadId === thread.id
+                              ? 'hover:bg-white/20'
+                              : 'hover:bg-gray-200'
+                          }`}
+                          title="Delete conversation"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Conversation Threads Sidebar - Hidden on mobile, shown on desktop */}
+      <div className="hidden lg:flex w-80 bg-gray-50/80 backdrop-blur-sm border-r border-black/10 flex-col">
         <div className="p-4 border-b border-black/10">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold text-black">Conversations</h3>
@@ -373,7 +488,7 @@ const AIChat = () => {
             <div className="flex justify-center py-8">
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-black"></div>
             </div>
-          ) : conversationThreads.length === 0 ? (
+          ) : (Array.isArray(conversationThreads) ? conversationThreads : []).length === 0 ? (
             <div className="text-center py-8">
               <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
                 <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -385,7 +500,7 @@ const AIChat = () => {
             </div>
           ) : (
             <div className="space-y-2">
-              {conversationThreads.map((thread) => (
+              {(Array.isArray(conversationThreads) ? conversationThreads : []).map((thread) => (
                 <div
                   key={thread.id}
                   className={`p-3 rounded-xl cursor-pointer transition-all duration-200 ${
@@ -441,16 +556,28 @@ const AIChat = () => {
       <div className="flex-1 flex flex-col">
         {/* Header */}
         <div className="bg-black text-white p-6 rounded-tr-3xl">
-          <div className="flex items-center">
-            <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mr-4 shadow-lg">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mr-4 shadow-lg">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-xl font-bold">Foci.ai</h3>
+                <p className="text-gray-200 font-medium hidden sm:block">Your intelligent productivity companion</p>
+              </div>
+            </div>
+            {/* Mobile menu button */}
+            <button
+              onClick={() => setShowMobileSidebar(!showMobileSidebar)}
+              className="lg:hidden p-2 text-white hover:bg-white/20 rounded-xl transition-colors duration-200"
+              title="Toggle Conversations"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
-            </div>
-            <div>
-              <h3 className="text-xl font-bold">Foci.ai</h3>
-              <p className="text-gray-200 font-medium">Your intelligent productivity companion</p>
-            </div>
+            </button>
           </div>
         </div>
 
@@ -481,8 +608,8 @@ const AIChat = () => {
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {(() => {
-                  const hasGoals = userData.goals.length > 0;
-                  const hasTasks = userData.tasks.length > 0;
+                  const hasGoals = Array.isArray(userData.goals) ? userData.goals.length > 0 : false;
+                  const hasTasks = Array.isArray(userData.tasks) ? userData.tasks.length > 0 : false;
                   
                   if (!hasGoals && !hasTasks) {
                     // New user suggestions
@@ -547,63 +674,23 @@ const AIChat = () => {
                         icon: "🎯"
                       },
                       {
-                        text: "Help me stay motivated",
-                        category: "Motivation",
-                        icon: "💪"
+                        text: "Plan my week",
+                        category: "Planning",
+                        icon: "📅"
                       }
                     ];
-                  } else if (hasGoals && hasTasks) {
+                  } else {
                     // Has both goals and tasks
-                    const pendingTasks = userData.tasks.filter(task => !task.completed).length;
                     return [
-                      {
-                        text: `Work on my ${pendingTasks} pending tasks`,
-                        category: "Tasks",
-                        icon: "📝"
-                      },
                       {
                         text: "Review my progress",
                         category: "Progress",
                         icon: "📊"
                       },
                       {
-                        text: "Create new tasks for my goals",
+                        text: "Create new tasks",
                         category: "Tasks",
-                        icon: "➕"
-                      },
-                      {
-                        text: "What should I focus on today?",
-                        category: "Focus",
-                        icon: "🎯"
-                      },
-                      {
-                        text: "Plan my week",
-                        category: "Planning",
-                        icon: "📅"
-                      },
-                      {
-                        text: "Celebrate my wins",
-                        category: "Motivation",
-                        icon: "🎉"
-                      }
-                    ];
-                  } else {
-                    // Has tasks but no goals
-                    return [
-                      {
-                        text: "Create goals for my tasks",
-                        category: "Goals",
-                        icon: "🎯"
-                      },
-                      {
-                        text: "Prioritize my tasks",
-                        category: "Tasks",
-                        icon: "📊"
-                      },
-                      {
-                        text: "Organize my task list",
-                        category: "Tasks",
-                        icon: "📋"
+                        icon: "📝"
                       },
                       {
                         text: "What should I focus on today?",

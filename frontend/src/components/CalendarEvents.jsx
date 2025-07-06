@@ -18,7 +18,7 @@ const CalendarEvents = () => {
     try {
       setLoading(true);
       const response = await calendarAPI.getEvents(50);
-      setEvents(response.data);
+      setEvents(Array.isArray(response.data) ? response.data : []);
       setError(null);
     } catch (err) {
       console.error('Error loading calendar events:', err);
@@ -50,7 +50,8 @@ const CalendarEvents = () => {
     const nextDate = new Date(targetDate);
     nextDate.setDate(nextDate.getDate() + 1);
 
-    return events.filter(event => {
+    const eventsArray = Array.isArray(events) ? events : [];
+    return eventsArray.filter(event => {
       const eventStart = new Date(event.start.dateTime || event.start);
       return eventStart >= targetDate && eventStart < nextDate;
     }).sort((a, b) => {
@@ -309,8 +310,9 @@ const CalendarEvents = () => {
 // Daily View Component
 const DailyView = ({ events, onEdit, onDelete, getEventColor, formatEventTime, getTimeSlots }) => {
   const timeSlots = getTimeSlots();
+  const eventsArray = Array.isArray(events) ? events : [];
 
-  if (events.length === 0) {
+  if (eventsArray.length === 0) {
     return (
       <div className="text-center py-16">
         <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -328,7 +330,7 @@ const DailyView = ({ events, onEdit, onDelete, getEventColor, formatEventTime, g
     <div className="bg-gray-50/50 rounded-2xl p-6">
       <div className="space-y-4">
         {timeSlots.map(hour => {
-          const hourEvents = events.filter(event => {
+          const hourEvents = eventsArray.filter(event => {
             const eventHour = new Date(event.start.dateTime || event.start).getHours();
             return eventHour === hour;
           });

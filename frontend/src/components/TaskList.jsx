@@ -14,7 +14,7 @@ const TaskList = ({ showSuccess }) => {
       setLoading(true);
       const response = await tasksAPI.getAll();
       console.log('Frontend received tasks data:', response.data);
-      setTasks(response.data);
+      setTasks(Array.isArray(response.data) ? response.data : []);
     } catch (err) {
       setError('Failed to load tasks');
       console.error('Error fetching tasks:', err);
@@ -31,7 +31,7 @@ const TaskList = ({ showSuccess }) => {
     if (window.confirm('Are you sure you want to delete this task?')) {
       try {
         await tasksAPI.delete(id);
-        setTasks(tasks.filter(task => task.id !== id));
+        setTasks(prev => Array.isArray(prev) ? prev.filter(task => task.id !== id) : []);
         showSuccess('Task deleted successfully!');
       } catch (err) {
         setError('Failed to delete task');
@@ -126,7 +126,7 @@ const TaskList = ({ showSuccess }) => {
         />
       )}
 
-      {tasks.length === 0 ? (
+      {(Array.isArray(tasks) ? tasks : []).length === 0 ? (
         <div className="text-center py-16">
           <div className="w-24 h-24 bg-black rounded-full flex items-center justify-center mx-auto mb-6">
             <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -138,7 +138,7 @@ const TaskList = ({ showSuccess }) => {
         </div>
       ) : (
         <div className="space-y-6">
-          {tasks.map((task) => (
+          {(Array.isArray(tasks) ? tasks : []).map((task) => (
             <div key={task.id} className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl border border-black/10 p-6 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
               <div className="flex justify-between items-start mb-4">
                 <div className="flex-1">
