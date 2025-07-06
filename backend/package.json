@@ -1,7 +1,7 @@
 {
-  "name": "mindgarden-backend",
+  "name": "foci-backend",
   "version": "1.0.0",
-  "description": "Backend API for MindGarden - AI-powered goal and task management system",
+  "description": "Backend API for Foci - AI-powered goal and task management system",
   "main": "src/server.js",
   "type": "module",
   "scripts": {
@@ -10,7 +10,7 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
-    "mindgarden",
+    "foci",
     "api",
     "goals",
     "tasks",

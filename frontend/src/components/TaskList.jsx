@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { tasksAPI } from '../services/api';
 import TaskForm from './TaskForm';
 
-const TaskList = () => {
+const TaskList = ({ showSuccess }) => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -32,6 +32,7 @@ const TaskList = () => {
       try {
         await tasksAPI.delete(id);
         setTasks(tasks.filter(task => task.id !== id));
+        showSuccess('Task deleted successfully!');
       } catch (err) {
         setError('Failed to delete task');
         console.error('Error deleting task:', err);
@@ -48,6 +49,7 @@ const TaskList = () => {
     setShowForm(false);
     setEditingTask(null);
     fetchTasks();
+    showSuccess(editingTask ? 'Task updated successfully!' : 'Task created successfully!');
   };
 
   const handleFormCancel = () => {

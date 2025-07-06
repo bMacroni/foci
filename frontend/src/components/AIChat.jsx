@@ -6,7 +6,7 @@ const AIChat = () => {
     {
       id: 1,
       type: 'ai',
-      content: "Hello! I'm your MindGarden AI assistant. I can help you manage your goals, tasks, and calendar events. Try saying something like 'Add a goal to learn React' or 'Show me my tasks for today'.",
+      content: "Hello! I'm your Foci AI assistant. I can help you manage your goals, tasks, and calendar events. Try saying something like 'Add a goal to learn React' or 'Show me my tasks for today'.",
       timestamp: new Date()
     }
   ]);
@@ -83,7 +83,7 @@ const AIChat = () => {
             </svg>
           </div>
           <div>
-            <h3 className="text-xl font-bold">MindGarden AI Assistant</h3>
+            <h3 className="text-xl font-bold">Foci AI Assistant</h3>
             <p className="text-gray-200 font-medium">Your intelligent productivity companion</p>
           </div>
         </div>

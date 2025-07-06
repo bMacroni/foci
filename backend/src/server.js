@@ -38,7 +38,7 @@ console.log('Loaded GOOGLE_REDIRECT_URI:', process.env.GOOGLE_REDIRECT_URI);
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
-    message: 'MindGarden API is running',
+    message: 'Foci API is running',
     timestamp: new Date().toISOString()
   })
 })
@@ -46,7 +46,7 @@ app.get('/api/health', (req, res) => {
 // Basic API routes
 app.get('/api', (req, res) => {
   res.json({ 
-    message: 'Welcome to MindGarden API',
+    message: 'Welcome to Foci API',
     version: '1.0.0',
     endpoints: {
       health: '/api/health',
@@ -79,6 +79,6 @@ console.log('AI router registered');
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`🚀 MindGarden API server running on port ${PORT}`)
+  console.log(`🚀 Foci API server running on port ${PORT}`)
   console.log(`📊 Health check: http://localhost:${PORT}/api/health`)
 }) 

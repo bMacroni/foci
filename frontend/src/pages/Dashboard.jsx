@@ -5,7 +5,7 @@ import CalendarStatus from '../components/CalendarStatus'
 import CalendarEvents from '../components/CalendarEvents'
 import AIChat from '../components/AIChat'
 
-function Dashboard() {
+function Dashboard({ showSuccess }) {
   const [activeTab, setActiveTab] = useState('goals');
 
   return (
@@ -21,7 +21,7 @@ function Dashboard() {
             </div>
             <div>
               <h1 className="text-4xl font-bold text-black">
-                MindGarden
+                Foci
               </h1>
               <p className="text-gray-600 font-medium">
                 Your AI-powered productivity ecosystem
@@ -91,12 +91,12 @@ function Dashboard() {
         <div className="space-y-8">
           {activeTab === 'goals' && (
             <div className="animate-fadeIn">
-              <GoalList />
+              <GoalList showSuccess={showSuccess} />
             </div>
           )}
           {activeTab === 'tasks' && (
             <div className="animate-fadeIn">
-              <TaskList />
+              <TaskList showSuccess={showSuccess} />
             </div>
           )}
           {activeTab === 'calendar' && (

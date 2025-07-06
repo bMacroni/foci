@@ -4,14 +4,22 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import Dashboard from './pages/Dashboard'
 import Signup from './components/Signup'
 import Login from './components/Login'
+import SuccessToast from './components/SuccessToast'
 import './App.css'
-
-
 
 // Main app content
 const AppContent = () => {
   const { user, login, loginWithCredentials, signup, logout, isAuthenticated } = useAuth();
   const [showSignup, setShowSignup] = useState(false);
+  const [successToast, setSuccessToast] = useState({ message: '', isVisible: false });
+
+  const showSuccess = (message) => {
+    setSuccessToast({ message, isVisible: true });
+  };
+
+  const hideSuccess = () => {
+    setSuccessToast({ message: '', isVisible: false });
+  };
 
   const handleLogin = async (emailOrToken, password) => {
     // If password is provided, it's email/password login
@@ -36,7 +44,7 @@ const AppContent = () => {
       <nav className="bg-white shadow-sm border-b">
         <div className="container mx-auto px-4 py-3">
           <div className="flex justify-between items-center">
-            <h1 className="text-xl font-bold text-gray-900">MindGarden</h1>
+            <h1 className="text-xl font-bold text-gray-900">Foci</h1>
             <button
               onClick={logout}
               className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800"
@@ -47,8 +55,13 @@ const AppContent = () => {
         </div>
       </nav>
       <Routes>
-        <Route path="/" element={<Dashboard />} />
+        <Route path="/" element={<Dashboard showSuccess={showSuccess} />} />
       </Routes>
+      <SuccessToast 
+        message={successToast.message}
+        isVisible={successToast.isVisible}
+        onClose={hideSuccess}
+      />
     </div>
   );
 };

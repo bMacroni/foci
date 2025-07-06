@@ -133,7 +133,7 @@ const CalendarStatus = () => {
           
           <div className="bg-gray-50/80 backdrop-blur-sm rounded-2xl p-6">
             <p className="text-black font-medium">
-              Connect your Google Calendar to sync events with MindGarden and stay organized.
+              Connect your Google Calendar to sync events with Foci and stay organized.
             </p>
           </div>
           

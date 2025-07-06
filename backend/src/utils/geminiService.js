@@ -19,7 +19,7 @@ export class GeminiService {
     this.conversationHistory = new Map();
     
     // System prompt that defines the AI's role and capabilities
-    this.systemPrompt = `You are MindGarden AI, an intelligent productivity assistant that helps users manage their goals, tasks, and calendar events. 
+    this.systemPrompt = `You are Foci AI, an intelligent productivity assistant that helps users manage their goals, tasks, and calendar events. 
 
 Your capabilities include:
 - Creating and managing goals with titles, descriptions, target dates, and status
@@ -53,7 +53,7 @@ For productivity advice, you can:
 
 Keep responses friendly, concise, and actionable. If you're unsure about something, ask for clarification rather than making assumptions.
 
-Current context: The user is interacting with their MindGarden productivity system.`;
+Current context: The user is interacting with their Foci productivity system.`;
   }
 
   async processMessage(message, userId) {
@@ -1491,7 +1491,7 @@ JSON response:`;
   // Help method
   async showHelp(message, userId) {
     return {
-      message: `I'm your MindGarden AI assistant! Here's what I can help you with:
+      message: `I'm your Foci AI assistant! Here's what I can help you with:
 
 🎯 **Goals:**
 • "Add a goal to learn React" (create)

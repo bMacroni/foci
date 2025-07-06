@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { goalsAPI } from '../services/api';
 import GoalForm from './GoalForm';
 
-const GoalList = () => {
+const GoalList = ({ showSuccess }) => {
   const [goals, setGoals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -103,6 +103,7 @@ const GoalList = () => {
       try {
         await goalsAPI.delete(id);
         setGoals(goals.filter(goal => goal.id !== id));
+        showSuccess('Goal deleted successfully!');
       } catch (err) {
         setError('Failed to delete goal');
         console.error('Error deleting goal:', err);
@@ -119,6 +120,7 @@ const GoalList = () => {
     setShowForm(false);
     setEditingGoal(null);
     fetchGoals();
+    showSuccess(editingGoal ? 'Goal updated successfully!' : 'Goal created successfully!');
   };
 
   const handleFormCancel = () => {

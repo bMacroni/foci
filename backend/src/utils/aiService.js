@@ -315,7 +315,7 @@ export class AIService {
 
   async showHelp(message, userId) {
     return {
-      message: `I'm your MindGarden AI assistant! Here's what I can help you with:
+      message: `I'm your Foci AI assistant! Here's what I can help you with:
 
 🎯 **Goals:**
 • "Add a goal to learn React"

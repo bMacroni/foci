@@ -1,4 +1,4 @@
-# MindGarden 🌱
+# Foci 🎯
 
 An AI-powered goal and task management system with Google Calendar integration and daily email digests.
 
@@ -29,7 +29,7 @@ An AI-powered goal and task management system with Google Calendar integration a
 ## Project Structure
 
 ```
-MindGarden/
+Foci/
 ├── frontend/          # React application
 │   ├── src/
 │   │   ├── components/    # Reusable React components
@@ -148,4 +148,4 @@ This project is licensed under the ISC License.
 
 ## Support
 
-For support, email support@mindgarden.app or create an issue in this repository. 
+For support, email support@foci.app or create an issue in this repository. 

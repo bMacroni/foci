@@ -44,7 +44,7 @@ const Login = ({ onLogin, onSwitchToSignup }) => {
           <h2 className="text-3xl font-bold text-black">
             Welcome Back
           </h2>
-          <p className="text-gray-600 mt-2">Sign in to your MindGarden account</p>
+          <p className="text-gray-600 mt-2">Sign in to your Foci account</p>
         </div>
 
         {/* Login Method Toggle */}

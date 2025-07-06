@@ -1,7 +1,7 @@
-# MindGarden Deployment Guide (Free Tier)
+# Foci Deployment Guide (Free Tier)
 
 ## Overview
-This guide will help you deploy MindGarden using free services:
+This guide will help you deploy Foci using free services:
 - **Frontend**: Vercel (Free)
 - **Backend**: Railway (Free tier with $5 credit) or Render (Free)
 
@@ -20,7 +20,7 @@ git init
 git add .
 git commit -m "Initial commit"
 git branch -M main
-git remote add origin https://github.com/YOUR_USERNAME/mindgarden.git
+git remote add origin https://github.com/YOUR_USERNAME/foci.git
 git push -u origin main
 ```
 
@@ -33,7 +33,7 @@ You'll need to set up environment variables in both frontend and backend.
 1. Go to [Railway.app](https://railway.app)
 2. Sign up with GitHub
 3. Click "New Project" → "Deploy from GitHub repo"
-4. Select your mindgarden repository
+4. Select your foci repository
 5. Set the root directory to `backend`
 
 ### 2.2 Environment Variables in Railway
