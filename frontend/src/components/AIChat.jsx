@@ -263,13 +263,6 @@ const AIChat = () => {
     e.preventDefault();
     if (!inputMessage.trim() || isLoading) return;
 
-    // Create a new thread if none exists
-    if (!currentThreadId) {
-      await createNewThread();
-      // Wait a bit for the thread to be created
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-
     const userMessage = {
       id: Date.now(),
       type: 'user',
@@ -282,7 +275,20 @@ const AIChat = () => {
     setIsLoading(true);
 
     try {
-      const response = await aiAPI.sendMessage(inputMessage, currentThreadId);
+      // Create a new thread if none exists and get the thread ID
+      let threadId = currentThreadId;
+      if (!threadId) {
+        console.log('No current thread, creating new one');
+        const title = `Conversation ${new Date().toLocaleDateString()}`;
+        const threadResponse = await conversationsAPI.createThread(title);
+        threadId = threadResponse.data.id;
+        setCurrentThreadId(threadId);
+        
+        // Add the new thread to the list
+        setConversationThreads(prev => Array.isArray(prev) ? [threadResponse.data, ...prev] : [threadResponse.data]);
+      }
+
+      const response = await aiAPI.sendMessage(inputMessage, threadId);
       
       const aiMessage = {
         id: Date.now() + 1,

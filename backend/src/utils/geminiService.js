@@ -1524,9 +1524,31 @@ JSON response:`;
       );
 
       if (!eventToUpdate) {
+        // If event doesn't exist, create it instead
+        console.log('Event not found, creating new event instead');
+        
+        // Parse the original message as a create request
+        const createParsedEvent = await this.parseCalendarEventWithGemini(message);
+        
+        if (!createParsedEvent) {
+          return {
+            message: `I couldn't find an event matching "${parsedEvent.title}" and couldn't create a new one. Please try creating the event manually in the Calendar tab.`,
+            actions: []
+          };
+        }
+
+        // Create the new event
+        const event = await createCalendarEvent(userId, {
+          summary: createParsedEvent.title,
+          description: `Event: ${createParsedEvent.title}`,
+          startTime: createParsedEvent.startTime.toISOString(),
+          endTime: createParsedEvent.endTime.toISOString(),
+          timeZone: 'America/Chicago'
+        });
+        
         return {
-          message: `I couldn't find an event matching "${parsedEvent.title}". Please check your calendar and try again, or create a new event with that name.`,
-          actions: []
+          message: `I couldn't find an existing event called "${parsedEvent.title}", so I created a new one for you! **"${createParsedEvent.title}"** has been scheduled for ${createParsedEvent.startTime.toLocaleDateString()} from ${createParsedEvent.startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} to ${createParsedEvent.endTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}. You can view it in your Google Calendar or the Calendar tab.`,
+          actions: [`Created event: ${createParsedEvent.title}`]
         };
       }
 
