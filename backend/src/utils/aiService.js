@@ -149,7 +149,7 @@ export class AIService {
       title: taskTitle,
       description: `Task: ${taskTitle}`,
       due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
-      status: 'pending'
+      status: 'not_started'
     };
 
     try {

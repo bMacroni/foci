@@ -25,10 +25,14 @@ const AIChat = ({ onNavigateToTab }) => {
         ]);
         
         setUserData({
-          goals: goalsResponse.data || [],
-          tasks: tasksResponse.data || []
+          goals: Array.isArray(goalsResponse.data) ? goalsResponse.data : [],
+          tasks: Array.isArray(tasksResponse.data) ? tasksResponse.data : []
         });
-        setConversationThreads(Array.isArray(threadsResponse.data) ? threadsResponse.data : []);
+        
+        const threads = Array.isArray(threadsResponse.data) ? threadsResponse.data : [];
+        setConversationThreads(threads);
+        
+        // Don't automatically load any threads - let user choose
         setHasLoadedData(true);
       } catch (error) {
         console.error('Error loading user data:', error);
@@ -41,7 +45,7 @@ const AIChat = ({ onNavigateToTab }) => {
 
   // Initialize welcome message based on user data
   useEffect(() => {
-    if (hasLoadedData) {
+    if (hasLoadedData && messages.length === 0) {
       const hasGoals = Array.isArray(userData.goals) ? userData.goals.length > 0 : false;
       const hasTasks = Array.isArray(userData.tasks) ? userData.tasks.length > 0 : false;
       
@@ -111,7 +115,7 @@ const AIChat = ({ onNavigateToTab }) => {
         timestamp: new Date()
       }]);
     }
-  }, [hasLoadedData, userData]);
+  }, [hasLoadedData, userData, messages.length]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -121,6 +125,8 @@ const AIChat = ({ onNavigateToTab }) => {
     scrollToBottom();
   }, [messages]);
 
+
+
   const refreshUserData = async () => {
     try {
       const [goalsResponse, tasksResponse] = await Promise.all([
@@ -128,10 +134,11 @@ const AIChat = ({ onNavigateToTab }) => {
         tasksAPI.getAll()
       ]);
       
-      setUserData({
-        goals: goalsResponse.data || [],
-        tasks: tasksResponse.data || []
-      });
+      // Only update user data, don't trigger any other effects
+      setUserData(prevData => ({
+        goals: Array.isArray(goalsResponse.data) ? goalsResponse.data : [],
+        tasks: Array.isArray(tasksResponse.data) ? tasksResponse.data : []
+      }));
     } catch (error) {
       console.error('Error refreshing user data:', error);
     }
@@ -152,8 +159,8 @@ const AIChat = ({ onNavigateToTab }) => {
         actions: msg.metadata?.actions || []
       }));
       
-      setMessages(chatMessages);
       setCurrentThreadId(threadId);
+      setMessages(chatMessages);
     } catch (error) {
       console.error('Error loading conversation thread:', error);
     } finally {
@@ -286,8 +293,13 @@ const AIChat = ({ onNavigateToTab }) => {
         threadId = threadResponse.data.id;
         setCurrentThreadId(threadId);
         
-        // Add the new thread to the list
-        setConversationThreads(prev => Array.isArray(prev) ? [threadResponse.data, ...prev] : [threadResponse.data]);
+        // Add the new thread to the list without refreshing the entire list
+        const newThread = {
+          ...threadResponse.data,
+          message_count: 0,
+          last_message: null
+        };
+        setConversationThreads(prev => Array.isArray(prev) ? [newThread, ...prev] : [newThread]);
       }
 
       const response = await aiAPI.sendMessage(inputMessage, threadId);
@@ -302,11 +314,29 @@ const AIChat = ({ onNavigateToTab }) => {
 
       setMessages(prev => [...prev, aiMessage]);
       
-      // Refresh user data and conversation threads after AI response
-      await Promise.all([
-        refreshUserData(),
-        conversationsAPI.getThreads().then(res => setConversationThreads(Array.isArray(res.data) ? res.data : []))
-      ]);
+      // Update the current thread's last message in the list without full refresh
+      if (threadId) {
+        setConversationThreads(prev => {
+          if (!Array.isArray(prev)) return prev;
+          return prev.map(thread => 
+            thread.id === threadId 
+              ? {
+                  ...thread,
+                  message_count: (thread.message_count || 0) + 2, // +2 for user and AI messages
+                  last_message: {
+                    content: aiMessage.content.substring(0, 100) + (aiMessage.content.length > 100 ? '...' : ''),
+                    role: 'assistant',
+                    created_at: aiMessage.timestamp.toISOString()
+                  },
+                  updated_at: aiMessage.timestamp.toISOString()
+                }
+              : thread
+          );
+        });
+      }
+      
+      // Only refresh user data, not conversation threads to avoid UI reset
+      await refreshUserData();
     } catch (error) {
       console.error('Error sending message:', error);
       
@@ -623,16 +653,16 @@ const AIChat = ({ onNavigateToTab }) => {
             <div className="flex items-center space-x-6 text-sm">
               <div className="flex items-center space-x-2">
                 <span className="text-gray-600">Goals:</span>
-                <span className="font-medium text-black">{userData.goals?.length || 0}</span>
+                <span className="font-medium text-black">{Array.isArray(userData.goals) ? userData.goals.length : 0}</span>
               </div>
               <div className="flex items-center space-x-2">
                 <span className="text-gray-600">Tasks:</span>
-                <span className="font-medium text-black">{userData.tasks?.length || 0}</span>
+                <span className="font-medium text-black">{Array.isArray(userData.tasks) ? userData.tasks.length : 0}</span>
               </div>
               <div className="flex items-center space-x-2">
                 <span className="text-gray-600">Completed:</span>
                 <span className="font-medium text-green-600">
-                  {userData.tasks?.filter(task => task.completed).length || 0}
+                  {Array.isArray(userData.tasks) ? userData.tasks.filter(task => task.completed).length : 0}
                 </span>
               </div>
             </div>
@@ -654,16 +684,16 @@ const AIChat = ({ onNavigateToTab }) => {
           </div>
           
           {/* Quick Stats */}
-          {userData.goals?.length > 0 || userData.tasks?.length > 0 ? (
+          {(Array.isArray(userData.goals) && userData.goals.length > 0) || (Array.isArray(userData.tasks) && userData.tasks.length > 0) ? (
             <div className="mt-3 pt-3 border-t border-black/10">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                {userData.goals?.length > 0 && (
+                {Array.isArray(userData.goals) && userData.goals.length > 0 && (
                   <div className="text-center">
                     <div className="font-semibold text-black">{userData.goals.filter(g => g.is_active).length}</div>
                     <div className="text-gray-500">Active Goals</div>
                   </div>
                 )}
-                {userData.tasks?.length > 0 && (
+                {Array.isArray(userData.tasks) && userData.tasks.length > 0 && (
                   <>
                     <div className="text-center">
                       <div className="font-semibold text-blue-600">{userData.tasks.filter(t => t.status === 'in_progress').length}</div>

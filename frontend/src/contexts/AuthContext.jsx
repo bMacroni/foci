@@ -1,8 +1,10 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { goalsAPI, tasksAPI } from '../services/api';
+import api from '../services/api';
 
 // Debug: Log the API URL being used
-console.log('AuthContext - VITE_API_URL:', import.meta.env.VITE_API_URL);
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+console.log('AuthContext - API Base URL:', API_BASE_URL);
 
 const AuthContext = createContext();
 
@@ -36,45 +38,28 @@ export const AuthProvider = ({ children }) => {
 
   const loginWithCredentials = async (email, password) => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Login failed');
+      const response = await api.post('/auth/login', { email, password });
+      
+      if (response.data.token) {
+        localStorage.setItem('jwt_token', response.data.token);
+        setUser({ token: response.data.token });
+        return { success: true };
+      } else {
+        throw new Error('No token received');
       }
-
-      const data = await response.json();
-      localStorage.setItem('jwt_token', data.token);
-      setUser({ token: data.token });
-      return { success: true };
     } catch (error) {
       console.error('Login error:', error);
-      return { success: false, error: error.message };
+      return { 
+        success: false, 
+        error: error.response?.data?.error || error.message || 'Login failed' 
+      };
     }
   };
 
   const signup = async (email, password) => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/auth/signup`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Signup failed');
-      }
-
-      const data = await response.json();
+      const response = await api.post('/auth/signup', { email, password });
+      const data = response.data;
       
       if (data.token) {
         // Auto-login succeeded
@@ -89,7 +74,10 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Signup error:', error);
-      return { success: false, error: error.message };
+      return { 
+        success: false, 
+        error: error.response?.data?.error || error.message || 'Signup failed' 
+      };
     }
   };
 

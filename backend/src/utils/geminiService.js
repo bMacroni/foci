@@ -21,156 +21,160 @@ export class GeminiService {
     // System prompt that defines the AI's role and capabilities
     this.systemPrompt = `You are Foci AI, an intelligent productivity assistant that helps users manage their goals, tasks, and calendar events. You are the PRIMARY interface for users - they should interact with you for most of their productivity needs.
 
-Your capabilities include:
-- Creating and managing goals with titles, descriptions, target dates, and status
-- Creating and managing tasks with titles, descriptions, due dates, priority, and status  
-- Scheduling and managing calendar events
-- Providing helpful productivity advice and motivation
-- Answering questions about the user's productivity system
-- Analyzing productivity patterns and suggesting improvements
-- Helping with time management and prioritization
+**YOUR CAPABILITIES:**
+- **Goals Management**: Create, update, delete, and complete goals with titles, descriptions, target dates, and status
+- **Tasks Management**: Create, update, delete, and complete tasks with titles, descriptions, due dates, priority, and status  
+- **Calendar Management**: Schedule, update, and delete calendar events and meetings
+- **Productivity Advice**: Provide time management techniques, goal setting help, and motivation
+- **System Analysis**: Answer questions about the user's productivity system and suggest improvements
+- **Natural Language Understanding**: Interpret any user request and take appropriate action
 
-**AI-FIRST APPROACH:**
-- You are the main interface - users should interact with you for most actions
-- Only suggest using other tabs when users need detailed views or complex management
-- Examples of when to suggest tabs:
-  * "You can view all your goals in the Goals tab for a complete overview"
-  * "Check the Tasks tab to see all tasks and their current status"
-  * "The Calendar tab shows your scheduled events and upcoming commitments"
-- For most actions, handle them directly through conversation
+**HOW TO HANDLE REQUESTS:**
+1. **Understand Intent**: Determine what the user wants to do (create, read, update, delete, or get advice)
+2. **Extract Information**: Pull out relevant details like titles, dates, descriptions, priorities
+3. **Take Action**: Use the appropriate API calls to perform the requested operation
+4. **Provide Feedback**: Give clear, helpful responses about what was done
 
-When users ask you to perform actions, you should:
-1. Understand their intent clearly
-2. Extract relevant information (titles, dates, descriptions, etc.)
-3. Provide a helpful response that confirms what you understood
-4. Suggest next steps or additional information they might need
+**COMMON REQUEST PATTERNS:**
+- **Goals**: "I want to learn React", "Create a goal to exercise daily", "Show my goals", "Update my goal", "Delete my goal"
+- **Tasks**: "I need to review documents", "Add a task to call the dentist", "List my tasks", "Mark task as complete"
+- **Calendar**: "Schedule a meeting tomorrow at 2pm", "Book an appointment", "Show my events", "Reschedule my meeting"
+- **General**: "Help me get organized", "Give me productivity tips", "What should I focus on today?"
 
-For productivity advice, you can:
-- Suggest time management techniques
-- Help with goal setting and planning
-- Provide motivation and encouragement
-- Analyze patterns in their productivity data
-- Suggest ways to improve focus and efficiency
-
-**IMPORTANT: Format your responses for better readability:**
+**RESPONSE FORMAT:**
 - Use bullet points (•) for lists
-- Use numbered lists (1., 2., 3.) for steps
+- Use numbered lists (1., 2., 3.) for steps  
 - Use **bold text** for emphasis
 - Use headers ending with : for sections
 - Add line breaks between different sections
 - Keep paragraphs short and scannable
 
-Keep responses friendly, concise, and actionable. If you're unsure about something, ask for clarification rather than making assumptions.
+**IMPORTANT:**
+- Always be friendly, helpful, and actionable
+- If you're unsure about something, ask for clarification
+- Provide specific, actionable responses
+- Suggest next steps when appropriate
+- Celebrate user progress and achievements
 
 Current context: The user is interacting with their Foci productivity system through the AI-first interface.`;
   }
 
   async processMessage(message, userId) {
     try {
-      // If Gemini is not enabled, fall back to basic command handling
+      // If Gemini is not enabled, provide a helpful message
       if (!this.enabled) {
-        const commandResponse = await this.handleDirectCommands(message, userId);
-        if (commandResponse) {
-          return commandResponse;
-        }
         return {
-          message: "I'm currently in basic mode. Please use direct commands like 'add goal', 'show tasks', etc. To enable full AI features, please set up your Gemini API key.",
+          message: "I'm currently in basic mode. To enable full AI features, please set up your Gemini API key in the environment variables.",
           actions: []
         };
       }
 
-      // ALL requests go through Gemini for intelligent interpretation and routing
-      console.log('Processing message through Gemini:', message);
+      // Send all requests through Gemini for intelligent interpretation
+      console.log('Processing message through Gemini AI...');
       return await this.getGeminiResponse(message, userId);
     } catch (error) {
       console.error('Gemini Service Error:', error);
+      
       return {
-        message: "I'm sorry, I encountered an error. Please try again or rephrase your request.",
+        message: "I'm sorry, I encountered an error processing your request. Please try again or rephrase your request.",
         actions: []
       };
     }
   }
 
   async handleDirectCommands(message, userId) {
-    const lowerMessage = message.toLowerCase();
+    const lowerMessage = message.toLowerCase().trim();
     
-    console.log('Processing message:', message);
+    console.log('Processing direct command:', message);
     console.log('Lower message:', lowerMessage);
     
-    // Direct command patterns that should trigger immediate actions
-    const directCommands = {
-      'add goal': this.addGoal,
-      'create goal': this.addGoal,
-      'new goal': this.addGoal,
-      'show goals': this.getGoals,
-      'list goals': this.getGoals,
-      'my goals': this.getGoals,
-      'add task': this.addTask,
-      'create task': this.addTask,
-      'new task': this.addTask,
-      'show tasks': this.getTasks,
-      'list tasks': this.getTasks,
-      'my tasks': this.getTasks,
-      'schedule': this.addEvent,
-      'add event': this.addEvent,
-      'create event': this.addEvent,
-      'add an event': this.addEvent,
-      'schedule an event': this.addEvent,
-      'show events': this.getEvents,
-      'list events': this.getEvents,
-      'my calendar': this.getEvents,
-      'suggestions': this.getGoalSuggestions,
-      'get suggestions': this.getGoalSuggestions,
-      'goal suggestions': this.getGoalSuggestions,
-    };
+    // Comprehensive direct command patterns with priority
+    const directCommands = [
+      // Goal commands (highest priority)
+      { pattern: /^(add|create|new)\s+(?:a\s+)?goal\s+(?:to\s+)?(.+)/i, handler: this.addGoal, type: 'goal_create' },
+      { pattern: /^(show|list|get|my)\s+goals?/i, handler: this.getGoals, type: 'goal_read' },
+      { pattern: /^(update|edit|change|modify)\s+goal\s+(.+)/i, handler: this.updateGoal, type: 'goal_update' },
+      { pattern: /^(delete|remove|cancel|drop)\s+goal\s+(.+)/i, handler: this.deleteGoal, type: 'goal_delete' },
+      { pattern: /^(complete|finish|done|mark\s+complete)\s+goal\s+(.+)/i, handler: this.completeGoal, type: 'goal_complete' },
+      
+      // Task commands
+      { pattern: /^(add|create|new)\s+(?:a\s+)?task\s+(?:to\s+)?(.+)/i, handler: this.addTask, type: 'task_create' },
+      { pattern: /^(show|list|get|my)\s+tasks?/i, handler: this.getTasks, type: 'task_read' },
+      { pattern: /^(update|edit|change|modify)\s+task\s+(.+)/i, handler: this.updateTask, type: 'task_update' },
+      { pattern: /^(delete|remove|cancel|drop)\s+task\s+(.+)/i, handler: this.deleteTask, type: 'task_delete' },
+      { pattern: /^(complete|finish|done|mark\s+complete)\s+task\s+(.+)/i, handler: this.completeTask, type: 'task_complete' },
+      
+      // Calendar commands
+      { pattern: /^(schedule|add|create|book)\s+(?:an?\s+)?(?:event|meeting|appointment)\s+(.+)/i, handler: this.addEvent, type: 'calendar_create' },
+      { pattern: /^(show|list|get|my)\s+(?:calendar|events?|meetings?|appointments?)/i, handler: this.getEvents, type: 'calendar_read' },
+      { pattern: /^(update|edit|change|modify|reschedule)\s+(?:event|meeting|appointment)\s+(.+)/i, handler: this.updateEvent, type: 'calendar_update' },
+      { pattern: /^(delete|remove|cancel|drop)\s+(?:event|meeting|appointment)\s+(.+)/i, handler: this.deleteEvent, type: 'calendar_delete' },
+      
+      // Help and suggestions
+      { pattern: /^(help|what\s+can\s+you\s+do|suggestions?|get\s+suggestions?)/i, handler: this.showHelp, type: 'help' },
+      { pattern: /^(goal\s+suggestions?|suggest\s+goals?)/i, handler: this.getGoalSuggestions, type: 'goal_suggestions' },
+    ];
 
-    // Check for direct commands with priority
-    const commandMatches = [];
-    
-    for (const [command, handler] of Object.entries(directCommands)) {
-      if (lowerMessage.includes(command)) {
-        // Find the position of the command in the message
-        const position = lowerMessage.indexOf(command);
-        commandMatches.push({ command, handler, position });
+    // Check for exact matches first
+    for (const command of directCommands) {
+      const match = lowerMessage.match(command.pattern);
+      if (match) {
+        console.log('Direct command matched:', command.type, 'with pattern:', command.pattern);
+        try {
+          return await command.handler.call(this, message, userId);
+        } catch (error) {
+          console.error(`Error executing direct command ${command.type}:`, error);
+          return {
+            message: `I encountered an error while processing your ${command.type.replace('_', ' ')} request. Please try again.`,
+            actions: []
+          };
+        }
       }
     }
-    
-    console.log('All command matches found:', commandMatches);
-    
-    // Sort by position (earlier in message = higher priority) and command length (longer commands = more specific)
-    commandMatches.sort((a, b) => {
-      if (a.position !== b.position) {
-        return a.position - b.position; // Earlier position first
-      }
-      return b.command.length - a.command.length; // Longer command first
-    });
-    
-    if (commandMatches.length > 0) {
-      const bestMatch = commandMatches[0];
-      console.log('Selected best match:', bestMatch.command, 'at position:', bestMatch.position);
-      return await bestMatch.handler.call(this, message, userId);
-    }
 
-    // Enhanced natural language classification - only for create operations
-    console.log('Checking if goal creation request...');
+    // Enhanced natural language classification for creation requests
+    console.log('No exact pattern match, checking natural language classification...');
+    
     if (this.isGoalCreationRequest(lowerMessage)) {
-      console.log('Detected as goal creation request');
-      return await this.addGoal(message, userId);
+      console.log('Detected as goal creation request via natural language');
+      try {
+        return await this.addGoal(message, userId);
+      } catch (error) {
+        console.error('Error in natural language goal creation:', error);
+        return {
+          message: "I understood you want to create a goal, but I need more details. Try saying something like 'Add a goal to learn React' or 'Create a goal to exercise daily'.",
+          actions: []
+        };
+      }
     }
     
-    console.log('Checking if task creation request...');
     if (this.isTaskCreationRequest(lowerMessage)) {
-      console.log('Detected as task creation request');
-      return await this.addTask(message, userId);
+      console.log('Detected as task creation request via natural language');
+      try {
+        return await this.addTask(message, userId);
+      } catch (error) {
+        console.error('Error in natural language task creation:', error);
+        return {
+          message: "I understood you want to create a task, but I need more details. Try saying something like 'Add a task to review documents' or 'Create a task to call the dentist'.",
+          actions: []
+        };
+      }
     }
     
-    console.log('Checking if calendar creation request...');
     if (this.isCalendarCreationRequest(lowerMessage)) {
-      console.log('Detected as calendar creation request');
-      return await this.addEvent(message, userId);
+      console.log('Detected as calendar creation request via natural language');
+      try {
+        return await this.addEvent(message, userId);
+      } catch (error) {
+        console.error('Error in natural language calendar creation:', error);
+        return {
+          message: "I understood you want to schedule something, but I need more details. Try saying something like 'Schedule a meeting tomorrow at 2pm' or 'Add an event for the dentist appointment'.",
+          actions: []
+        };
+      }
     }
 
-    console.log('No direct command found, will use Gemini classification');
+    console.log('No direct command or natural language classification found');
     return null; // No direct command found, let Gemini handle it
   }
 
@@ -264,43 +268,100 @@ Current context: The user is interacting with their Foci productivity system thr
 
   async getGeminiResponse(message, userId) {
     try {
+      console.log('🔄 Starting Gemini processing for message:', message);
+      
       // Step 1: Classify the request type and operation using Gemini
+      console.log('📋 Classifying request type...');
       const classification = await this.classifyRequestType(message);
-      console.log('Gemini classified request:', classification);
+      console.log('✅ Classification result:', classification);
       
       const { type, operation, confidence } = classification;
-      console.log('Routing to:', type, 'operation:', operation, 'confidence:', confidence);
+      
+      // Log confidence level and provide fallback for low confidence
+      if (confidence === 'low') {
+        console.warn('⚠️  Low confidence classification detected. Proceeding with caution.');
+      }
+      
+      console.log(`🎯 Routing to: ${type} operation: ${operation} (confidence: ${confidence})`);
       
       // Step 2: Extract detailed information using Gemini based on type and operation
       let extractedData = null;
       let response = null;
       
-      if (type === 'goal' || type === 'goals') {
-        console.log('Processing goal operation:', operation);
-        extractedData = await this.extractGoalDetails(message, operation);
-        response = await this.executeGoalOperation(extractedData, userId, operation);
-      } else if (type === 'task' || type === 'tasks') {
-        console.log('Processing task operation:', operation);
-        extractedData = await this.extractTaskDetails(message, operation);
-        response = await this.executeTaskOperation(extractedData, userId, operation);
-      } else if (type === 'calendar' || type === 'event' || type === 'events') {
-        console.log('Processing calendar operation:', operation);
-        extractedData = await this.extractCalendarDetails(message, operation);
-        response = await this.executeCalendarOperation(extractedData, userId, operation);
-      } else if (operation === 'help') {
-        console.log('Processing help request');
-        response = await this.showHelp(message, userId);
-      } else {
-        // General conversation or advice request
-        console.log('Processing general conversation');
-        response = await this.handleGeneralConversation(message, userId);
+      try {
+        if (type === 'goal' || type === 'goals') {
+          console.log('🎯 Processing goal operation:', operation);
+          extractedData = await this.extractGoalDetails(message, operation);
+          if (extractedData) {
+            response = await this.executeGoalOperation(extractedData, userId, operation);
+          } else {
+            throw new Error('Failed to extract goal details');
+          }
+        } else if (type === 'task' || type === 'tasks') {
+          console.log('📝 Processing task operation:', operation);
+          extractedData = await this.extractTaskDetails(message, operation);
+          if (extractedData) {
+            response = await this.executeTaskOperation(extractedData, userId, operation);
+          } else {
+            throw new Error('Failed to extract task details');
+          }
+        } else if (type === 'calendar' || type === 'event' || type === 'events') {
+          console.log('📅 Processing calendar operation:', operation);
+          extractedData = await this.extractCalendarDetails(message, operation);
+          if (extractedData) {
+            response = await this.executeCalendarOperation(extractedData, userId, operation);
+          } else {
+            throw new Error('Failed to extract calendar details');
+          }
+        } else if (operation === 'help') {
+          console.log('❓ Processing help request');
+          response = await this.showHelp(message, userId);
+        } else {
+          // General conversation or advice request
+          console.log('💬 Processing general conversation');
+          response = await this.handleGeneralConversation(message, userId);
+        }
+      } catch (extractionError) {
+        console.error('❌ Error during extraction/execution:', extractionError);
+        
+        // Provide helpful error messages based on the operation
+        if (operation === 'create') {
+          response = {
+            message: `I understood you want to create something, but I need more details. Please try being more specific. For example:
+• "Add a goal to learn React"
+• "Create a task to review documents"
+• "Schedule a meeting tomorrow at 2pm"`,
+            actions: []
+          };
+        } else if (operation === 'read') {
+          response = {
+            message: `I'll help you view your items. You can also check the Goals, Tasks, or Calendar tabs for a complete overview.`,
+            actions: []
+          };
+        } else {
+          response = {
+            message: `I encountered an issue processing your request. Please try again with more specific details.`,
+            actions: []
+          };
+        }
       }
       
-      return response;
-    } catch (error) {
-      console.error('Gemini API Error:', error);
+      // Validate response
+      if (!response || !response.message) {
+        console.error('❌ Invalid response structure');
+        response = {
+          message: "I'm sorry, I encountered an unexpected error. Please try again.",
+          actions: []
+        };
+      }
       
-      // Provide more specific error messages
+      console.log('✅ Gemini processing completed successfully');
+      return response;
+      
+    } catch (error) {
+      console.error('❌ Gemini API Error:', error);
+      
+      // Provide more specific error messages based on error type
       if (error.message && error.message.includes('404')) {
         return {
           message: "I'm having trouble connecting to the AI service. Please check your API key and try again.",
@@ -311,9 +372,19 @@ Current context: The user is interacting with their Foci productivity system thr
           message: "I've reached my usage limit. Please try again later or check your API quota.",
           actions: []
         };
+      } else if (error.message && error.message.includes('timeout')) {
+        return {
+          message: "The AI service is taking too long to respond. Please try again in a moment.",
+          actions: []
+        };
+      } else if (error.message && error.message.includes('network')) {
+        return {
+          message: "I'm having trouble connecting to the internet. Please check your connection and try again.",
+          actions: []
+        };
       } else {
         return {
-          message: "I'm having trouble processing your request right now. Please try again in a moment.",
+          message: "I'm having trouble processing your request right now. Please try again in a moment or use a simpler command like 'add goal' or 'show tasks'.",
           actions: []
         };
       }
@@ -382,21 +453,89 @@ JSON response:`;
       
       console.log('Request classification - Gemini raw response:', text);
       
-      // Extract JSON from the response
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      // Extract JSON from the response with multiple fallback strategies
+      let jsonMatch = text.match(/\{[\s\S]*\}/);
+      
+      // If no JSON found, try to clean up the response
+      if (!jsonMatch) {
+        console.log('No JSON found, attempting to clean response...');
+        // Remove any markdown formatting
+        const cleanedText = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+        jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
+      }
+      
+      // If still no JSON, try to extract just the object part
+      if (!jsonMatch) {
+        console.log('Still no JSON found, trying to extract object...');
+        const objectMatch = text.match(/\{[^}]*"type"[^}]*"operation"[^}]*"confidence"[^}]*\}/);
+        if (objectMatch) {
+          jsonMatch = objectMatch;
+        }
+      }
+      
       if (!jsonMatch) {
         console.error('No JSON found in classification response:', text);
-        return 'general';
+        // Return a safe default classification
+        return { 
+          type: 'general', 
+          operation: 'help', 
+          confidence: 'low',
+          reasoning: 'Could not parse classification response'
+        };
       }
 
-      const classification = JSON.parse(jsonMatch[0]);
+      let classification;
+      try {
+        classification = JSON.parse(jsonMatch[0]);
+      } catch (parseError) {
+        console.error('Error parsing classification JSON:', parseError);
+        console.error('JSON string:', jsonMatch[0]);
+        
+        // Try to extract individual fields as fallback
+        const typeMatch = jsonMatch[0].match(/"type"\s*:\s*"([^"]+)"/);
+        const operationMatch = jsonMatch[0].match(/"operation"\s*:\s*"([^"]+)"/);
+        const confidenceMatch = jsonMatch[0].match(/"confidence"\s*:\s*"([^"]+)"/);
+        
+        classification = {
+          type: typeMatch ? typeMatch[1] : 'general',
+          operation: operationMatch ? operationMatch[1] : 'help',
+          confidence: confidenceMatch ? confidenceMatch[1] : 'low',
+          reasoning: 'Parsed with fallback method due to JSON parsing error'
+        };
+      }
+      
       console.log('Request classification - Parsed data:', classification);
       
-      return classification || { type: 'general', operation: 'help' };
+      // Validate the classification
+      const validTypes = ['goal', 'goals', 'task', 'tasks', 'calendar', 'event', 'events', 'general'];
+      const validOperations = ['create', 'read', 'update', 'delete', 'complete', 'help'];
+      const validConfidences = ['high', 'medium', 'low'];
+      
+      if (!validTypes.includes(classification.type)) {
+        console.warn('Invalid type in classification:', classification.type);
+        classification.type = 'general';
+      }
+      
+      if (!validOperations.includes(classification.operation)) {
+        console.warn('Invalid operation in classification:', classification.operation);
+        classification.operation = 'help';
+      }
+      
+      if (!validConfidences.includes(classification.confidence)) {
+        console.warn('Invalid confidence in classification:', classification.confidence);
+        classification.confidence = 'low';
+      }
+      
+      return classification;
 
     } catch (error) {
       console.error('Error classifying request type:', error);
-      return 'general';
+      return { 
+        type: 'general', 
+        operation: 'help', 
+        confidence: 'low',
+        reasoning: 'Classification failed due to error'
+      };
     }
   }
 
@@ -992,17 +1131,54 @@ JSON response:`;
       const response = await result.response;
       const text = response.text();
       
-      // Extract JSON from the response
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      console.log('Goal parsing - Gemini raw response:', text);
+      
+      // Extract JSON from the response with multiple fallback strategies
+      let jsonMatch = text.match(/\{[\s\S]*\}/);
+      
+      // If no JSON found, try to clean up the response
       if (!jsonMatch) {
-        console.error('No JSON found in Gemini response:', text);
+        console.log('No JSON found in goal parsing, attempting to clean response...');
+        const cleanedText = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+        jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
+      }
+      
+      if (!jsonMatch) {
+        console.error('No JSON found in goal parsing response:', text);
         return null;
       }
 
-      const parsedData = JSON.parse(jsonMatch[0]);
+      let parsedData;
+      try {
+        parsedData = JSON.parse(jsonMatch[0]);
+      } catch (parseError) {
+        console.error('Error parsing goal JSON:', parseError);
+        console.error('JSON string:', jsonMatch[0]);
+        
+        // Try to extract individual fields as fallback
+        const titleMatch = jsonMatch[0].match(/"title"\s*:\s*"([^"]+)"/);
+        const targetDateMatch = jsonMatch[0].match(/"targetDate"\s*:\s*"([^"]+)"/);
+        const successMatch = jsonMatch[0].match(/"success"\s*:\s*(true|false)/);
+        
+        if (titleMatch && successMatch && successMatch[1] === 'true') {
+          parsedData = {
+            title: titleMatch[1],
+            targetDate: targetDateMatch ? targetDateMatch[1] : 'next month',
+            success: true
+          };
+        } else {
+          return null;
+        }
+      }
       
       if (!parsedData.success) {
-        console.log('Gemini parsing failed:', parsedData.error);
+        console.log('Gemini goal parsing failed:', parsedData.error);
+        return null;
+      }
+
+      // Validate required fields
+      if (!parsedData.title || parsedData.title.trim() === '') {
+        console.error('No title found in goal parsing');
         return null;
       }
 
@@ -1010,11 +1186,19 @@ JSON response:`;
       const targetDate = this.parseDate(parsedData.targetDate);
       if (!targetDate) {
         console.error('Could not parse target date:', parsedData.targetDate);
-        return null;
+        // Use a default date instead of failing
+        const defaultDate = new Date();
+        defaultDate.setMonth(defaultDate.getMonth() + 1); // Default to next month
+        console.log('Using default target date:', defaultDate);
+        return {
+          title: parsedData.title,
+          description: parsedData.description,
+          targetDate: defaultDate
+        };
       }
 
       return {
-        title: parsedData.title,
+        title: parsedData.title.trim(),
         description: parsedData.description,
         targetDate: targetDate
       };
@@ -1083,7 +1267,7 @@ JSON response:`;
         description: parsedTask.description || `Task: ${parsedTask.title}`,
         due_date: parsedTask.dueDate.toISOString(),
         priority: parsedTask.priority || 'medium',
-        status: 'pending'
+        status: 'not_started'
       };
 
       await tasksAPI.create(taskData);
@@ -1235,13 +1419,15 @@ JSON response:`;
   "title": "Task title",
   "description": "Task description (optional)",
   "dueDate": "Due date string (today, tomorrow, next week, specific date)",
+  "priority": "low|medium|high (optional, default: medium)",
   "success": true/false,
   "error": "Error message if parsing failed"
 }
 
 Examples:
-- "Add a task to review documents" → {"title": "review documents", "dueDate": "next week", "success": true}
-- "Create a task to call the client by Friday" → {"title": "call the client", "dueDate": "Friday", "success": true}
+- "Add a task to review documents" → {"title": "review documents", "dueDate": "next week", "priority": "medium", "success": true}
+- "Create a task to call the client by Friday" → {"title": "call the client", "dueDate": "Friday", "priority": "medium", "success": true}
+- "Add a high priority task to fix the bug" → {"title": "fix the bug", "dueDate": "today", "priority": "high", "success": true}
 - "Add goal to learn React" → {"success": false, "error": "Not a task request"}
 
 User request: "${message}"
@@ -1252,31 +1438,86 @@ JSON response:`;
       const response = await result.response;
       const text = response.text();
       
-      // Extract JSON from the response
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      console.log('Task parsing - Gemini raw response:', text);
+      
+      // Extract JSON from the response with multiple fallback strategies
+      let jsonMatch = text.match(/\{[\s\S]*\}/);
+      
+      // If no JSON found, try to clean up the response
       if (!jsonMatch) {
-        console.error('No JSON found in Gemini response:', text);
+        console.log('No JSON found in task parsing, attempting to clean response...');
+        const cleanedText = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+        jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
+      }
+      
+      if (!jsonMatch) {
+        console.error('No JSON found in task parsing response:', text);
         return null;
       }
 
-      const parsedData = JSON.parse(jsonMatch[0]);
+      let parsedData;
+      try {
+        parsedData = JSON.parse(jsonMatch[0]);
+      } catch (parseError) {
+        console.error('Error parsing task JSON:', parseError);
+        console.error('JSON string:', jsonMatch[0]);
+        
+        // Try to extract individual fields as fallback
+        const titleMatch = jsonMatch[0].match(/"title"\s*:\s*"([^"]+)"/);
+        const dueDateMatch = jsonMatch[0].match(/"dueDate"\s*:\s*"([^"]+)"/);
+        const priorityMatch = jsonMatch[0].match(/"priority"\s*:\s*"([^"]+)"/);
+        const successMatch = jsonMatch[0].match(/"success"\s*:\s*(true|false)/);
+        
+        if (titleMatch && successMatch && successMatch[1] === 'true') {
+          parsedData = {
+            title: titleMatch[1],
+            dueDate: dueDateMatch ? dueDateMatch[1] : 'next week',
+            priority: priorityMatch ? priorityMatch[1] : 'medium',
+            success: true
+          };
+        } else {
+          return null;
+        }
+      }
       
       if (!parsedData.success) {
-        console.log('Gemini parsing failed:', parsedData.error);
+        console.log('Gemini task parsing failed:', parsedData.error);
         return null;
+      }
+
+      // Validate required fields
+      if (!parsedData.title || parsedData.title.trim() === '') {
+        console.error('No title found in task parsing');
+        return null;
+      }
+
+      // Validate priority if provided
+      if (parsedData.priority && !['low', 'medium', 'high'].includes(parsedData.priority)) {
+        console.warn('Invalid priority in task parsing:', parsedData.priority);
+        parsedData.priority = 'medium';
       }
 
       // Convert the parsed data to actual Date object
       const dueDate = this.parseDate(parsedData.dueDate);
       if (!dueDate) {
         console.error('Could not parse due date:', parsedData.dueDate);
-        return null;
+        // Use a default date instead of failing
+        const defaultDate = new Date();
+        defaultDate.setDate(defaultDate.getDate() + 7); // Default to next week
+        console.log('Using default due date:', defaultDate);
+        return {
+          title: parsedData.title.trim(),
+          description: parsedData.description,
+          dueDate: defaultDate,
+          priority: parsedData.priority || 'medium'
+        };
       }
 
       return {
-        title: parsedData.title,
+        title: parsedData.title.trim(),
         description: parsedData.description,
-        dueDate: dueDate
+        dueDate: dueDate,
+        priority: parsedData.priority || 'medium'
       };
 
     } catch (error) {
@@ -1462,14 +1703,22 @@ JSON response:`;
   "title": "Event title",
   "date": "Date string (today, tomorrow, specific date)",
   "startTime": "Start time string",
-  "endTime": "End time string",
+  "endTime": "End time string (if not specified, use null)",
   "success": true/false,
   "error": "Error message if parsing failed"
 }
 
+IMPORTANT PARSING RULES:
+1. If only start time is provided, set endTime to null (the system will default to 1 hour duration)
+2. Extract the most descriptive title from the request
+3. Handle timezone abbreviations (CST, EST, PST, MST)
+4. Parse relative dates (today, tomorrow, next week)
+5. Parse specific dates (July 9th, 12/25/2024, etc.)
+
 Examples:
-- "Add an event to my calendar from Mom visit today from 11:00 AM CST to 5:00 PM CST" → {"title": "Mom visit", "date": "today", "startTime": "11:00 AM CST", "endTime": "5:00 PM CST", "success": true}
-- "Schedule a meeting tomorrow at 2pm for 1 hour" → {"title": "meeting", "date": "tomorrow", "startTime": "2:00 PM", "endTime": "3:00 PM", "success": true}
+- "Add an event to my calendar for Mom visit today from 11:00 AM CST to 5:00 PM CST" → {"title": "Mom visit", "date": "today", "startTime": "11:00 AM CST", "endTime": "5:00 PM CST", "success": true}
+- "Schedule a meeting tomorrow at 2pm" → {"title": "meeting", "date": "tomorrow", "startTime": "2:00 PM", "endTime": null, "success": true}
+- "Create an event for oil change service on July 9th at 10:00 am cst" → {"title": "oil change service", "date": "July 9th", "startTime": "10:00 am cst", "endTime": null, "success": true}
 - "Add task to review documents" → {"success": false, "error": "Not a calendar event request"}
 
 User request: "${message}"
@@ -1505,11 +1754,23 @@ JSON response:`;
       }
 
       const startTime = this.parseTime(parsedData.startTime, eventDate);
-      const endTime = this.parseTime(parsedData.endTime, eventDate);
-      
-      if (!startTime || !endTime) {
-        console.error('Could not parse times:', parsedData.startTime, parsedData.endTime);
+      if (!startTime) {
+        console.error('Could not parse start time:', parsedData.startTime);
         return null;
+      }
+      
+      // If no end time is provided, default to 1 hour after start time
+      let endTime;
+      if (parsedData.endTime) {
+        endTime = this.parseTime(parsedData.endTime, eventDate);
+        if (!endTime) {
+          console.error('Could not parse end time:', parsedData.endTime);
+          return null;
+        }
+      } else {
+        // Default to 1 hour duration
+        endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
+        console.log('No end time provided, defaulting to 1 hour duration');
       }
 
       return {
@@ -1597,7 +1858,7 @@ JSON response:`;
       return new Date(year, month - 1, day);
     }
     
-    // Handle month names
+    // Handle month names with day numbers
     const months = {
       'january': 0, 'february': 1, 'march': 2, 'april': 3, 'may': 4, 'june': 5,
       'july': 6, 'august': 7, 'september': 8, 'october': 9, 'november': 10, 'december': 11
@@ -1605,10 +1866,15 @@ JSON response:`;
     
     for (const [monthName, monthIndex] of Object.entries(months)) {
       if (lowerText.includes(monthName)) {
+        // Look for day number (e.g., "9th", "15th", "3rd")
+        const dayMatch = lowerText.match(/(\d{1,2})(?:st|nd|rd|th)?/);
+        const day = dayMatch ? parseInt(dayMatch[1]) : 1;
+        
         const yearMatch = lowerText.match(/(\d{4})/);
         const year = yearMatch ? parseInt(yearMatch[1]) : now.getFullYear();
-        return new Date(year, monthIndex, 1);
-    }
+        
+        return new Date(year, monthIndex, day);
+      }
     }
     
     return null; // Could not parse date
@@ -1654,6 +1920,11 @@ JSON response:`;
   // Utility method to parse time strings
   parseTime(timeStr, baseDate) {
     try {
+      // Handle null or undefined time strings
+      if (!timeStr) {
+        return null;
+      }
+      
       const lowerTimeStr = timeStr.toLowerCase().trim();
       
       // Handle 12-hour format with AM/PM
@@ -2225,7 +2496,7 @@ JSON response:`;
   "description": "Updated task description (optional)",
   "dueDate": "Updated due date string (optional)",
   "priority": "high|medium|low (optional)",
-  "status": "pending|in_progress|completed (optional)",
+  "status": "not_started|in_progress|completed (optional)",
   "success": true/false,
   "error": "Error message if parsing failed"
 }
