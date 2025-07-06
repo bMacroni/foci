@@ -443,7 +443,7 @@ const AIChat = ({ onNavigateToTab }) => {
   }
 
   return (
-    <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl border border-black/10 h-[700px] flex overflow-hidden relative">
+    <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl border border-black/10 h-full flex overflow-hidden relative">
       {/* Mobile Sidebar Overlay */}
       {showMobileSidebar && (
         <div className="lg:hidden fixed inset-0 bg-black/50 z-50">
@@ -647,72 +647,7 @@ const AIChat = ({ onNavigateToTab }) => {
           </div>
         </div>
 
-        {/* Contextual Information Bar */}
-        <div className="bg-gray-50 border-b border-black/10 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-6 text-sm">
-              <div className="flex items-center space-x-2">
-                <span className="text-gray-600">Goals:</span>
-                <span className="font-medium text-black">{Array.isArray(userData.goals) ? userData.goals.length : 0}</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <span className="text-gray-600">Tasks:</span>
-                <span className="font-medium text-black">{Array.isArray(userData.tasks) ? userData.tasks.length : 0}</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <span className="text-gray-600">Completed:</span>
-                <span className="font-medium text-green-600">
-                  {Array.isArray(userData.tasks) ? userData.tasks.filter(task => task.completed).length : 0}
-                </span>
-              </div>
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => onNavigateToTab('goals')}
-                className="px-3 py-1 text-xs bg-white border border-black/20 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                View Goals
-              </button>
-              <button
-                onClick={() => onNavigateToTab('tasks')}
-                className="px-3 py-1 text-xs bg-white border border-black/20 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                View Tasks
-              </button>
-            </div>
-          </div>
-          
-          {/* Quick Stats */}
-          {(Array.isArray(userData.goals) && userData.goals.length > 0) || (Array.isArray(userData.tasks) && userData.tasks.length > 0) ? (
-            <div className="mt-3 pt-3 border-t border-black/10">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                {Array.isArray(userData.goals) && userData.goals.length > 0 && (
-                  <div className="text-center">
-                    <div className="font-semibold text-black">{userData.goals.filter(g => g.is_active).length}</div>
-                    <div className="text-gray-500">Active Goals</div>
-                  </div>
-                )}
-                {Array.isArray(userData.tasks) && userData.tasks.length > 0 && (
-                  <>
-                    <div className="text-center">
-                      <div className="font-semibold text-blue-600">{userData.tasks.filter(t => t.status === 'in_progress').length}</div>
-                      <div className="text-gray-500">In Progress</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="font-semibold text-orange-600">{userData.tasks.filter(t => t.due_date && new Date(t.due_date) < new Date() && t.status !== 'completed').length}</div>
-                      <div className="text-gray-500">Overdue</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="font-semibold text-green-600">{userData.tasks.filter(t => t.status === 'completed').length}</div>
-                      <div className="text-gray-500">Completed</div>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          ) : null}
-        </div>
+
 
         {/* Messages Area */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
