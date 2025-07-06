@@ -255,70 +255,39 @@ Current context: The user is interacting with their Foci productivity system.`;
 
   async getGeminiResponse(message, userId) {
     try {
-      // First, try to classify the request type using Gemini
+      // Step 1: Classify the request type and operation using Gemini
       const classification = await this.classifyRequestType(message);
       console.log('Gemini classified request:', classification);
       
-      const { type, operation } = classification;
-      console.log('Routing to:', type, 'operation:', operation);
+      const { type, operation, confidence } = classification;
+      console.log('Routing to:', type, 'operation:', operation, 'confidence:', confidence);
       
-      // Route to appropriate handler based on classification
+      // Step 2: Extract detailed information using Gemini based on type and operation
+      let extractedData = null;
+      let response = null;
+      
       if (type === 'goal' || type === 'goals') {
-        console.log('Routing to goal operation:', operation);
-        return await this.routeGoalOperation(message, userId, operation);
+        console.log('Processing goal operation:', operation);
+        extractedData = await this.extractGoalDetails(message, operation);
+        response = await this.executeGoalOperation(extractedData, userId, operation);
       } else if (type === 'task' || type === 'tasks') {
-        console.log('Routing to task operation:', operation);
-        return await this.routeTaskOperation(message, userId, operation);
+        console.log('Processing task operation:', operation);
+        extractedData = await this.extractTaskDetails(message, operation);
+        response = await this.executeTaskOperation(extractedData, userId, operation);
       } else if (type === 'calendar' || type === 'event' || type === 'events') {
-        console.log('Routing to calendar operation:', operation);
-        return await this.routeCalendarOperation(message, userId, operation);
+        console.log('Processing calendar operation:', operation);
+        extractedData = await this.extractCalendarDetails(message, operation);
+        response = await this.executeCalendarOperation(extractedData, userId, operation);
       } else if (operation === 'help') {
-        console.log('Routing to help');
-        return await this.showHelp(message, userId);
+        console.log('Processing help request');
+        response = await this.showHelp(message, userId);
+      } else {
+        // General conversation or advice request
+        console.log('Processing general conversation');
+        response = await this.handleGeneralConversation(message, userId);
       }
       
-      // If no specific type identified, provide general response
-      const context = await this.getUserContext(userId);
-      
-      // Get conversation history for this user
-      const history = this.conversationHistory.get(userId) || [];
-      const recentHistory = history.slice(-5); // Keep last 5 exchanges for context
-      
-      const historyText = recentHistory.length > 0 
-        ? `\nRecent conversation:\n${recentHistory.map(h => `${h.role}: ${h.content}`).join('\n')}`
-        : '';
-      
-      const prompt = `${this.systemPrompt}
-
-User Context:
-${context}${historyText}
-
-User Message: "${message}"
-
-Please provide a helpful response. If the user is asking to create or manage something, extract the relevant information and provide a clear response about what you understood. If they're asking for advice or information, provide helpful guidance.
-
-Response:`;
-
-      const result = await this.model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
-
-      // Update conversation history
-      const userHistory = this.conversationHistory.get(userId) || [];
-      userHistory.push({ role: 'user', content: message });
-      userHistory.push({ role: 'assistant', content: text });
-      
-      // Keep only last 20 exchanges to prevent memory bloat
-      if (userHistory.length > 20) {
-        userHistory.splice(0, userHistory.length - 20);
-      }
-      
-      this.conversationHistory.set(userId, userHistory);
-
-      return {
-        message: text,
-        actions: []
-      };
+      return response;
     } catch (error) {
       console.error('Gemini API Error:', error);
       
@@ -453,6 +422,217 @@ JSON response:`;
     }
   }
 
+  // New unified extraction and execution methods
+  async extractGoalDetails(message, operation) {
+    try {
+      switch (operation) {
+        case 'create':
+          return await this.parseGoalWithGemini(message);
+        case 'update':
+          return await this.parseGoalUpdateWithGemini(message);
+        case 'delete':
+          return await this.parseGoalDeleteWithGemini(message);
+        case 'complete':
+          return await this.parseGoalCompleteWithGemini(message);
+        case 'read':
+          return { operation: 'read' }; // No specific details needed for read
+        default:
+          return await this.parseGoalWithGemini(message); // Default to create
+      }
+    } catch (error) {
+      console.error('Error extracting goal details:', error);
+      return null;
+    }
+  }
+
+  async extractTaskDetails(message, operation) {
+    try {
+      switch (operation) {
+        case 'create':
+          return await this.parseTaskWithGemini(message);
+        case 'update':
+          return await this.parseTaskUpdateWithGemini(message);
+        case 'delete':
+          return await this.parseTaskDeleteWithGemini(message);
+        case 'complete':
+          return await this.parseTaskCompleteWithGemini(message);
+        case 'read':
+          return { operation: 'read' }; // No specific details needed for read
+        default:
+          return await this.parseTaskWithGemini(message); // Default to create
+      }
+    } catch (error) {
+      console.error('Error extracting task details:', error);
+      return null;
+    }
+  }
+
+  async extractCalendarDetails(message, operation) {
+    try {
+      switch (operation) {
+        case 'create':
+          return await this.parseCalendarEventWithGemini(message);
+        case 'update':
+          return await this.parseEventUpdateWithGemini(message);
+        case 'delete':
+          return await this.parseEventDeleteWithGemini(message);
+        case 'read':
+          return { operation: 'read' }; // No specific details needed for read
+        default:
+          return await this.parseCalendarEventWithGemini(message); // Default to create
+      }
+    } catch (error) {
+      console.error('Error extracting calendar details:', error);
+      return null;
+    }
+  }
+
+  async executeGoalOperation(extractedData, userId, operation) {
+    try {
+      if (!extractedData) {
+        return {
+          message: `I couldn't understand the goal ${operation} request. Please try again with more details.`,
+          actions: []
+        };
+      }
+
+      switch (operation) {
+        case 'create':
+          return await this.addGoalWithData(extractedData, userId);
+        case 'read':
+          return await this.getGoals(null, userId);
+        case 'update':
+          return await this.updateGoalWithData(extractedData, userId);
+        case 'delete':
+          return await this.deleteGoalWithData(extractedData, userId);
+        case 'complete':
+          return await this.completeGoalWithData(extractedData, userId);
+        default:
+          return await this.addGoalWithData(extractedData, userId);
+      }
+    } catch (error) {
+      console.error('Error executing goal operation:', error);
+      return {
+        message: `I couldn't ${operation} the goal. Please try again or check the Goals tab.`,
+        actions: []
+      };
+    }
+  }
+
+  async executeTaskOperation(extractedData, userId, operation) {
+    try {
+      if (!extractedData) {
+        return {
+          message: `I couldn't understand the task ${operation} request. Please try again with more details.`,
+          actions: []
+        };
+      }
+
+      switch (operation) {
+        case 'create':
+          return await this.addTaskWithData(extractedData, userId);
+        case 'read':
+          return await this.getTasks(null, userId);
+        case 'update':
+          return await this.updateTaskWithData(extractedData, userId);
+        case 'delete':
+          return await this.deleteTaskWithData(extractedData, userId);
+        case 'complete':
+          return await this.completeTaskWithData(extractedData, userId);
+        default:
+          return await this.addTaskWithData(extractedData, userId);
+      }
+    } catch (error) {
+      console.error('Error executing task operation:', error);
+      return {
+        message: `I couldn't ${operation} the task. Please try again or check the Tasks tab.`,
+        actions: []
+      };
+    }
+  }
+
+  async executeCalendarOperation(extractedData, userId, operation) {
+    try {
+      if (!extractedData) {
+        return {
+          message: `I couldn't understand the calendar ${operation} request. Please try again with more details.`,
+          actions: []
+        };
+      }
+
+      switch (operation) {
+        case 'create':
+          return await this.addEventWithData(extractedData, userId);
+        case 'read':
+          return await this.getEvents(null, userId);
+        case 'update':
+          return await this.updateEventWithData(extractedData, userId);
+        case 'delete':
+          return await this.deleteEventWithData(extractedData, userId);
+        default:
+          return await this.addEventWithData(extractedData, userId);
+      }
+    } catch (error) {
+      console.error('Error executing calendar operation:', error);
+      return {
+        message: `I couldn't ${operation} the event. Please try again or check the Calendar tab.`,
+        actions: []
+      };
+    }
+  }
+
+  async handleGeneralConversation(message, userId) {
+    try {
+      const context = await this.getUserContext(userId);
+      
+      // Get conversation history for this user
+      const history = this.conversationHistory.get(userId) || [];
+      const recentHistory = history.slice(-5); // Keep last 5 exchanges for context
+      
+      const historyText = recentHistory.length > 0 
+        ? `\nRecent conversation:\n${recentHistory.map(h => `${h.role}: ${h.content}`).join('\n')}`
+        : '';
+      
+      const prompt = `${this.systemPrompt}
+
+User Context:
+${context}${historyText}
+
+User Message: "${message}"
+
+Please provide a helpful response. If the user is asking to create or manage something, extract the relevant information and provide a clear response about what you understood. If they're asking for advice or information, provide helpful guidance.
+
+Response:`;
+
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+
+      // Update conversation history
+      const userHistory = this.conversationHistory.get(userId) || [];
+      userHistory.push({ role: 'user', content: message });
+      userHistory.push({ role: 'assistant', content: text });
+      
+      // Keep only last 20 exchanges to prevent memory bloat
+      if (userHistory.length > 20) {
+        userHistory.splice(0, userHistory.length - 20);
+      }
+      
+      this.conversationHistory.set(userId, userHistory);
+
+      return {
+        message: text,
+        actions: []
+      };
+    } catch (error) {
+      console.error('Error handling general conversation:', error);
+      return {
+        message: "I'm having trouble processing your request right now. Please try again in a moment.",
+        actions: []
+      };
+    }
+  }
+
   // Goal handlers
   async addGoal(message, userId) {
     try {
@@ -471,7 +651,19 @@ JSON response:`;
         };
       }
 
-      console.log('Parsed goal data:', parsedGoal);
+      return await this.addGoalWithData(parsedGoal, userId);
+    } catch (error) {
+      return {
+        message: "I couldn't create the goal. Please try again or check the Goals tab to create it manually.",
+        actions: []
+      };
+    }
+  }
+
+  // New execution methods that work with extracted data
+  async addGoalWithData(parsedGoal, userId) {
+    try {
+      console.log('Adding goal with data:', parsedGoal);
 
       const goalData = {
         user_id: userId,
@@ -487,8 +679,136 @@ JSON response:`;
         actions: [`Created goal: ${parsedGoal.title}`]
       };
     } catch (error) {
+      console.error('Error adding goal with data:', error);
       return {
         message: "I couldn't create the goal. Please try again or check the Goals tab to create it manually.",
+        actions: []
+      };
+    }
+  }
+
+  async updateGoalWithData(parsedGoal, userId) {
+    try {
+      console.log('Updating goal with data:', parsedGoal);
+
+      // First, find the goal by title to get the actual UUID
+      const goalsResponse = await goalsAPI.getAll();
+      const goals = goalsResponse.data;
+      
+      // Find the goal that matches the title (case-insensitive)
+      const goalToUpdate = goals.find(goal => 
+        goal.title.toLowerCase().includes(parsedGoal.title.toLowerCase()) ||
+        parsedGoal.title.toLowerCase().includes(goal.title.toLowerCase())
+      );
+
+      if (!goalToUpdate) {
+        return {
+          message: `I couldn't find a goal matching "${parsedGoal.title}". Please check your goals and try again.`,
+          actions: []
+        };
+      }
+
+      console.log('Found goal to update:', goalToUpdate);
+
+      const goalData = {
+        title: parsedGoal.title || goalToUpdate.title,
+        description: parsedGoal.description || goalToUpdate.description,
+        target_completion_date: parsedGoal.targetDate ? parsedGoal.targetDate.toISOString().split('T')[0] : goalToUpdate.target_completion_date,
+        is_active: parsedGoal.isActive !== undefined ? parsedGoal.isActive : goalToUpdate.is_active
+      };
+
+      // Remove undefined values
+      Object.keys(goalData).forEach(key => goalData[key] === undefined && delete goalData[key]);
+
+      await goalsAPI.update(goalToUpdate.id, goalData);
+      
+      return {
+        message: `Great! I've updated your goal: **"${goalToUpdate.title}"**. You can view the changes in the Goals tab.`,
+        actions: [`Updated goal: ${goalToUpdate.title}`]
+      };
+    } catch (error) {
+      console.error('Error updating goal with data:', error);
+      return {
+        message: "I couldn't update the goal. Please try again or check the Goals tab to update it manually.",
+        actions: []
+      };
+    }
+  }
+
+  async deleteGoalWithData(parsedGoal, userId) {
+    try {
+      console.log('Deleting goal with data:', parsedGoal);
+
+      // First, find the goal by title to get the actual UUID
+      const goalsResponse = await goalsAPI.getAll();
+      const goals = goalsResponse.data;
+      
+      // Find the goal that matches the title (case-insensitive)
+      const goalToDelete = goals.find(goal => 
+        goal.title.toLowerCase().includes(parsedGoal.title.toLowerCase()) ||
+        parsedGoal.title.toLowerCase().includes(goal.title.toLowerCase())
+      );
+
+      if (!goalToDelete) {
+        return {
+          message: `I couldn't find a goal matching "${parsedGoal.title}". Please check your goals and try again.`,
+          actions: []
+        };
+      }
+
+      console.log('Found goal to delete:', goalToDelete);
+
+      await goalsAPI.delete(goalToDelete.id);
+      return {
+        message: `I've deleted your goal: **"${goalToDelete.title}"**.`,
+        actions: [`Deleted goal: ${goalToDelete.title}`]
+      };
+    } catch (error) {
+      console.error('Error deleting goal with data:', error);
+      return {
+        message: "I couldn't delete the goal. Please try again or check the Goals tab to delete it manually.",
+        actions: []
+      };
+    }
+  }
+
+  async completeGoalWithData(parsedGoal, userId) {
+    try {
+      console.log('Completing goal with data:', parsedGoal);
+
+      // First, find the goal by title to get the actual UUID
+      const goalsResponse = await goalsAPI.getAll();
+      const goals = goalsResponse.data;
+      
+      // Find the goal that matches the title (case-insensitive)
+      const goalToComplete = goals.find(goal => 
+        goal.title.toLowerCase().includes(parsedGoal.title.toLowerCase()) ||
+        parsedGoal.title.toLowerCase().includes(goal.title.toLowerCase())
+      );
+
+      if (!goalToComplete) {
+        return {
+          message: `I couldn't find a goal matching "${parsedGoal.title}". Please check your goals and try again.`,
+          actions: []
+        };
+      }
+
+      console.log('Found goal to complete:', goalToComplete);
+
+      const goalData = {
+        is_active: false,
+        progress_percentage: 100
+      };
+
+      await goalsAPI.update(goalToComplete.id, goalData);
+      return {
+        message: `Congratulations! I've marked your goal as complete: **"${goalToComplete.title}"**. Great job!`,
+        actions: [`Completed goal: ${goalToComplete.title}`]
+      };
+    } catch (error) {
+      console.error('Error completing goal with data:', error);
+      return {
+        message: "I couldn't complete the goal. Please try again or check the Goals tab to mark it as complete manually.",
         actions: []
       };
     }
@@ -729,12 +1049,26 @@ JSON response:`;
         };
       }
 
-      console.log('Parsed task data:', parsedTask);
+      return await this.addTaskWithData(parsedTask, userId);
+    } catch (error) {
+      return {
+        message: "I couldn't create the task. Please try again or check the Tasks tab to create it manually.",
+        actions: []
+      };
+    }
+  }
+
+  // Task execution methods that work with extracted data
+  async addTaskWithData(parsedTask, userId) {
+    try {
+      console.log('Adding task with data:', parsedTask);
 
       const taskData = {
+        user_id: userId,
         title: parsedTask.title,
         description: parsedTask.description || `Task: ${parsedTask.title}`,
         due_date: parsedTask.dueDate.toISOString(),
+        priority: parsedTask.priority || 'medium',
         status: 'pending'
       };
 
@@ -744,8 +1078,135 @@ JSON response:`;
         actions: [`Created task: ${parsedTask.title}`]
       };
     } catch (error) {
+      console.error('Error adding task with data:', error);
       return {
         message: "I couldn't create the task. Please try again or check the Tasks tab to create it manually.",
+        actions: []
+      };
+    }
+  }
+
+  async updateTaskWithData(parsedTask, userId) {
+    try {
+      console.log('Updating task with data:', parsedTask);
+
+      // First, find the task by title to get the actual UUID
+      const tasksResponse = await tasksAPI.getAll();
+      const tasks = tasksResponse.data;
+      
+      // Find the task that matches the title (case-insensitive)
+      const taskToUpdate = tasks.find(task => 
+        task.title.toLowerCase().includes(parsedTask.title.toLowerCase()) ||
+        parsedTask.title.toLowerCase().includes(task.title.toLowerCase())
+      );
+
+      if (!taskToUpdate) {
+        return {
+          message: `I couldn't find a task matching "${parsedTask.title}". Please check your tasks and try again.`,
+          actions: []
+        };
+      }
+
+      console.log('Found task to update:', taskToUpdate);
+
+      const taskData = {
+        title: parsedTask.title || taskToUpdate.title,
+        description: parsedTask.description || taskToUpdate.description,
+        due_date: parsedTask.dueDate ? parsedTask.dueDate.toISOString() : taskToUpdate.due_date,
+        priority: parsedTask.priority || taskToUpdate.priority,
+        status: parsedTask.status || taskToUpdate.status
+      };
+
+      // Remove undefined values
+      Object.keys(taskData).forEach(key => taskData[key] === undefined && delete taskData[key]);
+
+      await tasksAPI.update(taskToUpdate.id, taskData);
+      return {
+        message: `Perfect! I've updated your task: **"${taskToUpdate.title}"**. You can view the changes in the Tasks tab.`,
+        actions: [`Updated task: ${taskToUpdate.title}`]
+      };
+    } catch (error) {
+      console.error('Error updating task with data:', error);
+      return {
+        message: "I couldn't update the task. Please try again or check the Tasks tab to update it manually.",
+        actions: []
+      };
+    }
+  }
+
+  async deleteTaskWithData(parsedTask, userId) {
+    try {
+      console.log('Deleting task with data:', parsedTask);
+
+      // First, find the task by title to get the actual UUID
+      const tasksResponse = await tasksAPI.getAll();
+      const tasks = tasksResponse.data;
+      
+      // Find the task that matches the title (case-insensitive)
+      const taskToDelete = tasks.find(task => 
+        task.title.toLowerCase().includes(parsedTask.title.toLowerCase()) ||
+        parsedTask.title.toLowerCase().includes(task.title.toLowerCase())
+      );
+
+      if (!taskToDelete) {
+        return {
+          message: `I couldn't find a task matching "${parsedTask.title}". Please check your tasks and try again.`,
+          actions: []
+        };
+      }
+
+      console.log('Found task to delete:', taskToDelete);
+
+      await tasksAPI.delete(taskToDelete.id);
+      return {
+        message: `I've deleted your task: **"${taskToDelete.title}"**.`,
+        actions: [`Deleted task: ${taskToDelete.title}`]
+      };
+    } catch (error) {
+      console.error('Error deleting task with data:', error);
+      return {
+        message: "I couldn't delete the task. Please try again or check the Tasks tab to delete it manually.",
+        actions: []
+      };
+    }
+  }
+
+  async completeTaskWithData(parsedTask, userId) {
+    try {
+      console.log('Completing task with data:', parsedTask);
+
+      // First, find the task by title to get the actual UUID
+      const tasksResponse = await tasksAPI.getAll();
+      const tasks = tasksResponse.data;
+      
+      // Find the task that matches the title (case-insensitive)
+      const taskToComplete = tasks.find(task => 
+        task.title.toLowerCase().includes(parsedTask.title.toLowerCase()) ||
+        parsedTask.title.toLowerCase().includes(task.title.toLowerCase())
+      );
+
+      if (!taskToComplete) {
+        return {
+          message: `I couldn't find a task matching "${parsedTask.title}". Please check your tasks and try again.`,
+          actions: []
+        };
+      }
+
+      console.log('Found task to complete:', taskToComplete);
+
+      const taskData = {
+        status: 'completed'
+      };
+
+      await tasksAPI.update(taskToComplete.id, taskData);
+      return {
+        message: `Great job! I've marked your task as complete: **"${taskToComplete.title}"**.`,
+        actions: [`Completed task: ${taskToComplete.title}`]
+      };
+    } catch (error) {
+      console.error('Error completing task with data:', error);
+      return {
+        message: "I couldn't complete the task. Please try again or check the Tasks tab to mark it as complete manually.",
         actions: []
       };
     }
@@ -848,7 +1309,26 @@ JSON response:`;
         };
       }
 
-      console.log('Parsed event data:', parsedEvent);
+      return await this.addEventWithData(parsedEvent, userId);
+    } catch (error) {
+      console.error('Calendar API Error:', error);
+      if (error.message && error.message.includes('No Google tokens found')) {
+        return {
+          message: "I couldn't schedule the event because your Google Calendar isn't connected. Please connect your Google account in the Calendar tab first.",
+          actions: []
+        };
+      }
+      return {
+        message: "I couldn't schedule the event. Please make sure your Google Calendar is connected or try creating it manually in the Calendar tab.",
+        actions: []
+      };
+    }
+  }
+
+  // Calendar execution methods that work with extracted data
+  async addEventWithData(parsedEvent, userId) {
+    try {
+      console.log('Adding event with data:', parsedEvent);
 
       // Create the event using the real calendar service
       const event = await createCalendarEvent(userId, {
@@ -864,7 +1344,7 @@ JSON response:`;
         actions: [`Scheduled event: ${parsedEvent.title}`]
       };
     } catch (error) {
-      console.error('Calendar API Error:', error);
+      console.error('Error adding event with data:', error);
       if (error.message && error.message.includes('No Google tokens found')) {
         return {
           message: "I couldn't schedule the event because your Google Calendar isn't connected. Please connect your Google account in the Calendar tab first.",
@@ -873,6 +1353,87 @@ JSON response:`;
       }
       return {
         message: "I couldn't schedule the event. Please make sure your Google Calendar is connected or try creating it manually in the Calendar tab.",
+        actions: []
+      };
+    }
+  }
+
+  async updateEventWithData(parsedEvent, userId) {
+    try {
+      console.log('Updating event with data:', parsedEvent);
+
+      // First, find the event by title to get the actual event ID
+      const events = await listCalendarEvents(userId, 50);
+      
+      // Find the event that matches the title (case-insensitive)
+      const eventToUpdate = events.find(event => 
+        event.summary.toLowerCase().includes(parsedEvent.title.toLowerCase()) ||
+        parsedEvent.title.toLowerCase().includes(event.summary.toLowerCase())
+      );
+
+      if (!eventToUpdate) {
+        // If event doesn't exist, create it instead
+        console.log('Event not found, creating new event instead');
+        return await this.addEventWithData(parsedEvent, userId);
+      }
+
+      console.log('Found event to update:', eventToUpdate);
+
+      // Update the event using the real calendar service
+      const updatedEvent = await updateCalendarEvent(userId, eventToUpdate.id, {
+        summary: parsedEvent.title || eventToUpdate.summary,
+        description: parsedEvent.description || eventToUpdate.description || `Event: ${parsedEvent.title || eventToUpdate.summary}`,
+        startTime: parsedEvent.startTime ? parsedEvent.startTime.toISOString() : eventToUpdate.start.dateTime,
+        endTime: parsedEvent.endTime ? parsedEvent.endTime.toISOString() : eventToUpdate.end.dateTime,
+        timeZone: 'America/Chicago'
+      });
+      
+      return {
+        message: `Perfect! I've updated your event: **"${eventToUpdate.summary}"**. You can view the changes in your Google Calendar or the Calendar tab.`,
+        actions: [`Updated event: ${eventToUpdate.summary}`]
+      };
+    } catch (error) {
+      console.error('Error updating event with data:', error);
+      return {
+        message: "I couldn't update the event. Please try again or check the Calendar tab to update it manually.",
+        actions: []
+      };
+    }
+  }
+
+  async deleteEventWithData(parsedEvent, userId) {
+    try {
+      console.log('Deleting event with data:', parsedEvent);
+
+      // First, find the event by title to get the actual event ID
+      const events = await listCalendarEvents(userId, 50);
+      
+      // Find the event that matches the title (case-insensitive)
+      const eventToDelete = events.find(event => 
+        event.summary.toLowerCase().includes(parsedEvent.title.toLowerCase()) ||
+        parsedEvent.title.toLowerCase().includes(event.summary.toLowerCase())
+      );
+
+      if (!eventToDelete) {
+        return {
+          message: `I couldn't find an event matching "${parsedEvent.title}". Please check your calendar and try again.`,
+          actions: []
+        };
+      }
+
+      console.log('Found event to delete:', eventToDelete);
+
+      // Delete the event using the real calendar service
+      await deleteCalendarEvent(userId, eventToDelete.id);
+      
+      return {
+        message: `I've deleted your event: **"${eventToDelete.summary}"**.`,
+        actions: [`Deleted event: ${eventToDelete.summary}`]
+      };
+    } catch (error) {
+      console.error('Error deleting event with data:', error);
+      return {
+        message: "I couldn't delete the event. Please try again or check the Calendar tab to delete it manually.",
         actions: []
       };
     }
@@ -1136,218 +1697,9 @@ JSON response:`;
     }
   }
 
-  // Routing methods for different operations
-  async routeGoalOperation(message, userId, operation) {
-    console.log('routeGoalOperation called with operation:', operation);
-    switch (operation) {
-      case 'create':
-        console.log('Calling addGoal');
-        return await this.addGoal(message, userId);
-      case 'read':
-        console.log('Calling getGoals');
-        return await this.getGoals(message, userId);
-      case 'update':
-        console.log('Calling updateGoal');
-        return await this.updateGoal(message, userId);
-      case 'delete':
-        console.log('Calling deleteGoal');
-        return await this.deleteGoal(message, userId);
-      case 'complete':
-        console.log('Calling completeGoal');
-        return await this.completeGoal(message, userId);
-      default:
-        console.log('Defaulting to addGoal for operation:', operation);
-        return await this.addGoal(message, userId); // Default to create
-    }
-  }
 
-  async routeTaskOperation(message, userId, operation) {
-    switch (operation) {
-      case 'create':
-        return await this.addTask(message, userId);
-      case 'read':
-        return await this.getTasks(message, userId);
-      case 'update':
-        return await this.updateTask(message, userId);
-      case 'delete':
-        return await this.deleteTask(message, userId);
-      case 'complete':
-        return await this.completeTask(message, userId);
-      default:
-        return await this.addTask(message, userId); // Default to create
-    }
-  }
 
-  async routeCalendarOperation(message, userId, operation) {
-    switch (operation) {
-      case 'create':
-        return await this.addEvent(message, userId);
-      case 'read':
-        return await this.getEvents(message, userId);
-      case 'update':
-        return await this.updateEvent(message, userId);
-      case 'delete':
-        return await this.deleteEvent(message, userId);
-      default:
-        return await this.addEvent(message, userId); // Default to create
-    }
-  }
 
-  // Goal CRUD operations
-  async updateGoal(message, userId) {
-    try {
-      const parsedGoal = await this.parseGoalUpdateWithGemini(message);
-      
-      if (!parsedGoal) {
-        return {
-          message: "I'd be happy to help you update a goal! Please specify which goal you'd like to update and what changes to make. For example: 'Update my goal to exercise daily with a new target date of next month'",
-          actions: []
-        };
-      }
-
-      console.log('Parsed goal update data:', parsedGoal);
-
-      // First, find the goal by title to get the actual UUID
-      const goalsResponse = await goalsAPI.getAll();
-      const goals = goalsResponse.data;
-      
-      // Find the goal that matches the title (case-insensitive)
-      const goalToUpdate = goals.find(goal => 
-        goal.title.toLowerCase().includes(parsedGoal.title.toLowerCase()) ||
-        parsedGoal.title.toLowerCase().includes(goal.title.toLowerCase())
-      );
-
-      if (!goalToUpdate) {
-        return {
-          message: `I couldn't find a goal matching "${parsedGoal.title}". Please check your goals and try again.`,
-          actions: []
-        };
-      }
-
-      console.log('Found goal to update:', goalToUpdate);
-
-      // Check if user wants AI suggestions
-      const wantsSuggestions = message.toLowerCase().includes('suggestion') || 
-                              message.toLowerCase().includes('suggest') ||
-                              message.toLowerCase().includes('advice') ||
-                              message.toLowerCase().includes('help');
-
-      let updatedDescription = parsedGoal.description || goalToUpdate.description;
-
-      if (wantsSuggestions) {
-        // Generate AI suggestions for the goal
-        const suggestions = await this.generateGoalSuggestions(goalToUpdate.title);
-        updatedDescription = `${updatedDescription}\n\n**AI Suggestions for Success:**\n${suggestions}`;
-      }
-
-      const goalData = {
-        title: parsedGoal.title || goalToUpdate.title,
-        description: updatedDescription,
-        target_completion_date: parsedGoal.targetDate ? parsedGoal.targetDate.toISOString().split('T')[0] : goalToUpdate.target_completion_date,
-        is_active: parsedGoal.isActive !== undefined ? parsedGoal.isActive : goalToUpdate.is_active
-      };
-
-      // Remove undefined values
-      Object.keys(goalData).forEach(key => goalData[key] === undefined && delete goalData[key]);
-
-      await goalsAPI.update(goalToUpdate.id, goalData);
-      
-      let responseMessage = `Great! I've updated your goal: **"${goalToUpdate.title}"**.`;
-      if (wantsSuggestions) {
-        responseMessage += ` I've added some AI-powered suggestions to help you achieve this goal.`;
-      }
-      responseMessage += ` You can view the changes in the Goals tab.`;
-
-      return {
-        message: responseMessage,
-        actions: [`Updated goal: ${goalToUpdate.title}`]
-      };
-    } catch (error) {
-      console.error('Error updating goal:', error);
-      return {
-        message: "I couldn't update the goal. Please try again or check the Goals tab to update it manually.",
-        actions: []
-      };
-    }
-  }
-
-  async deleteGoal(message, userId) {
-    try {
-      const parsedGoal = await this.parseGoalDeleteWithGemini(message);
-      
-      if (!parsedGoal) {
-        return {
-          message: "I'd be happy to help you delete a goal! Please specify which goal you'd like to delete. For example: 'Delete my goal to learn React'",
-          actions: []
-        };
-      }
-
-      console.log('Parsed goal delete data:', parsedGoal);
-
-      // First, find the goal by title to get the actual UUID
-      const goalsResponse = await goalsAPI.getAll();
-      const goals = goalsResponse.data;
-      
-      // Find the goal that matches the title (case-insensitive)
-      const goalToDelete = goals.find(goal => 
-        goal.title.toLowerCase().includes(parsedGoal.title.toLowerCase()) ||
-        parsedGoal.title.toLowerCase().includes(goal.title.toLowerCase())
-      );
-
-      if (!goalToDelete) {
-        return {
-          message: `I couldn't find a goal matching "${parsedGoal.title}". Please check your goals and try again.`,
-          actions: []
-        };
-      }
-
-      console.log('Found goal to delete:', goalToDelete);
-
-      // Delete using the actual UUID
-      await goalsAPI.delete(goalToDelete.id);
-      return {
-        message: `I've deleted your goal: **"${goalToDelete.title}"**.`,
-        actions: [`Deleted goal: ${goalToDelete.title}`]
-      };
-    } catch (error) {
-      console.error('Error deleting goal:', error);
-      return {
-        message: "I couldn't delete the goal. Please try again or check the Goals tab to delete it manually.",
-        actions: []
-      };
-    }
-  }
-
-  async completeGoal(message, userId) {
-    try {
-      const parsedGoal = await this.parseGoalCompleteWithGemini(message);
-      
-      if (!parsedGoal) {
-        return {
-          message: "I'd be happy to help you complete a goal! Please specify which goal you'd like to mark as complete. For example: 'Complete my goal to learn React'",
-          actions: []
-        };
-      }
-
-      console.log('Parsed goal complete data:', parsedGoal);
-
-      const goalData = {
-        is_active: false,
-        progress_percentage: 100
-      };
-
-      await goalsAPI.update(parsedGoal.goalId, goalData);
-      return {
-        message: `Congratulations! I've marked your goal as complete: **"${parsedGoal.title}"**. Great job!`,
-        actions: [`Completed goal: ${parsedGoal.title}`]
-      };
-    } catch (error) {
-      return {
-        message: "I couldn't complete the goal. Please try again or check the Goals tab to mark it as complete manually.",
-        actions: []
-      };
-    }
-  }
 
   // Task CRUD operations
   async updateTask(message, userId) {
