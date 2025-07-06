@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { aiAPI, goalsAPI, tasksAPI, conversationsAPI } from '../services/api';
 
-const AIChat = () => {
+const AIChat = ({ onNavigateToTab }) => {
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -11,6 +11,7 @@ const AIChat = () => {
   const [currentThreadId, setCurrentThreadId] = useState(null);
   const [isLoadingThreads, setIsLoadingThreads] = useState(false);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(true);
   const messagesEndRef = useRef(null);
 
   // Load user data and conversation threads
@@ -273,6 +274,7 @@ const AIChat = () => {
     setMessages(prev => [...prev, userMessage]);
     setInputMessage('');
     setIsLoading(true);
+    setShowSuggestions(false); // Hide suggestions when user starts typing
 
     try {
       // Create a new thread if none exists and get the thread ID
@@ -326,6 +328,54 @@ const AIChat = () => {
       e.preventDefault();
       handleSubmit(e);
     }
+  };
+
+  // Generate smart suggestions based on user data
+  const generateSuggestions = () => {
+    const hasGoals = Array.isArray(userData.goals) ? userData.goals.length > 0 : false;
+    const hasTasks = Array.isArray(userData.tasks) ? userData.tasks.length > 0 : false;
+    const tasksArray = Array.isArray(userData.tasks) ? userData.tasks : [];
+    const incompleteTasks = tasksArray.filter(task => !task.completed);
+
+    const suggestions = [];
+
+    if (!hasGoals) {
+      suggestions.push({
+        text: "Create my first goal",
+        action: () => setInputMessage("I want to create a goal to improve my productivity"),
+        icon: "🎯"
+      });
+    }
+
+    if (hasGoals && !hasTasks) {
+      suggestions.push({
+        text: "Break down my goals into tasks",
+        action: () => setInputMessage("Help me break down my goals into actionable tasks"),
+        icon: "📋"
+      });
+    }
+
+    if (incompleteTasks.length > 0) {
+      suggestions.push({
+        text: `Review my ${incompleteTasks.length} incomplete tasks`,
+        action: () => setInputMessage("Show me my incomplete tasks and help me prioritize them"),
+        icon: "📝"
+      });
+    }
+
+    suggestions.push({
+      text: "Schedule something for today",
+      action: () => setInputMessage("I want to schedule an event for today"),
+      icon: "📅"
+    });
+
+    suggestions.push({
+      text: "Get productivity advice",
+      action: () => setInputMessage("Give me some productivity tips for today"),
+      icon: "💡"
+    });
+
+    return suggestions;
   };
 
   // Show loading state while fetching user data
@@ -398,65 +448,49 @@ const AIChat = () => {
             
             <div className="flex-1 overflow-y-auto p-4">
               {isLoadingThreads ? (
-                <div className="flex justify-center py-8">
+                <div className="flex items-center justify-center py-8">
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-black"></div>
-                </div>
-              ) : (Array.isArray(conversationThreads) ? conversationThreads : []).length === 0 ? (
-                <div className="text-center py-8">
-                  <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                    </svg>
-                  </div>
-                  <p className="text-sm text-gray-500">No conversations yet</p>
-                  <p className="text-xs text-gray-400 mt-1">Start a new conversation to begin</p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {(Array.isArray(conversationThreads) ? conversationThreads : []).map((thread) => (
+                  {conversationThreads.map((thread) => (
                     <div
                       key={thread.id}
-                      className={`p-3 rounded-xl cursor-pointer transition-all duration-200 ${
+                      className={`p-3 rounded-xl cursor-pointer transition-colors ${
                         currentThreadId === thread.id
                           ? 'bg-black text-white'
-                          : 'bg-white hover:bg-gray-100 text-black'
+                          : 'hover:bg-gray-100'
                       }`}
                       onClick={() => {
                         loadConversationThread(thread.id);
                         setShowMobileSidebar(false);
                       }}
                     >
-                      <div className="flex items-start justify-between">
+                      <div className="flex items-center justify-between">
                         <div className="flex-1 min-w-0">
-                          <h4 className="font-medium text-sm truncate">{thread.title}</h4>
-                          {thread.last_message && (
-                            <p className={`text-xs mt-1 truncate ${
-                              currentThreadId === thread.id ? 'text-gray-300' : 'text-gray-500'
-                            }`}>
-                              {thread.last_message.content}
-                            </p>
-                          )}
-                          <div className={`flex items-center space-x-2 mt-2 text-xs ${
-                            currentThreadId === thread.id ? 'text-gray-300' : 'text-gray-400'
+                          <p className={`text-sm font-medium truncate ${
+                            currentThreadId === thread.id ? 'text-white' : 'text-black'
                           }`}>
-                            <span>{thread.message_count} messages</span>
-                            <span>•</span>
-                            <span>{new Date(thread.updated_at).toLocaleDateString()}</span>
-                          </div>
+                            {thread.title}
+                          </p>
+                          <p className={`text-xs truncate ${
+                            currentThreadId === thread.id ? 'text-gray-200' : 'text-gray-500'
+                          }`}>
+                            {new Date(thread.created_at).toLocaleDateString()}
+                          </p>
                         </div>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             deleteThread(thread.id);
                           }}
-                          className={`p-1 rounded transition-colors ${
+                          className={`p-1 rounded ${
                             currentThreadId === thread.id
                               ? 'hover:bg-white/20'
                               : 'hover:bg-gray-200'
                           }`}
-                          title="Delete conversation"
                         >
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
                         </button>
@@ -470,98 +504,94 @@ const AIChat = () => {
         </div>
       )}
 
-      {/* Conversation Threads Sidebar - Hidden on mobile, shown on desktop */}
-      <div className="hidden lg:flex w-80 bg-gray-50/80 backdrop-blur-sm border-r border-black/10 flex-col">
-        <div className="p-4 border-b border-black/10">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-black">Conversations</h3>
-          </div>
-          <button
-            onClick={createNewThread}
-            className="w-full px-4 py-2 bg-black text-white rounded-xl hover:bg-gray-800 transition-colors text-sm font-medium"
-          >
-            <span className="flex items-center justify-center space-x-2">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              <span>New Conversation</span>
-            </span>
-          </button>
-        </div>
-        
-        <div className="flex-1 overflow-y-auto p-4">
-          {isLoadingThreads ? (
-            <div className="flex justify-center py-8">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-black"></div>
-            </div>
-          ) : (Array.isArray(conversationThreads) ? conversationThreads : []).length === 0 ? (
-            <div className="text-center py-8">
-              <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+      {/* Desktop Sidebar */}
+      <div className="hidden lg:flex lg:w-80 flex-shrink-0 border-r border-black/10">
+        <div className="w-full flex flex-col">
+          {/* Sidebar Header */}
+          <div className="p-4 border-b border-black/10">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-black">Conversations</h3>
+              <button
+                onClick={createNewThread}
+                className="p-2 text-gray-500 hover:text-black transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                 </svg>
+              </button>
+            </div>
+            <button
+              onClick={createNewThread}
+              className="w-full px-4 py-2 bg-black text-white rounded-xl hover:bg-gray-800 transition-colors text-sm font-medium"
+            >
+              <span className="flex items-center justify-center space-x-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                <span>New Conversation</span>
+              </span>
+            </button>
+          </div>
+          
+          {/* Conversation Threads */}
+          <div className="flex-1 overflow-y-auto p-4">
+            {isLoadingThreads ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-black"></div>
               </div>
-              <p className="text-sm text-gray-500">No conversations yet</p>
-              <p className="text-xs text-gray-400 mt-1">Start a new conversation to begin</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {(Array.isArray(conversationThreads) ? conversationThreads : []).map((thread) => (
-                <div
-                  key={thread.id}
-                  className={`p-3 rounded-xl cursor-pointer transition-all duration-200 ${
-                    currentThreadId === thread.id
-                      ? 'bg-black text-white'
-                      : 'bg-white hover:bg-gray-100 text-black'
-                  }`}
-                  onClick={() => loadConversationThread(thread.id)}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-medium text-sm truncate">{thread.title}</h4>
-                      {thread.last_message && (
-                        <p className={`text-xs mt-1 truncate ${
-                          currentThreadId === thread.id ? 'text-gray-300' : 'text-gray-500'
+            ) : (
+              <div className="space-y-2">
+                {conversationThreads.map((thread) => (
+                  <div
+                    key={thread.id}
+                    className={`p-3 rounded-xl cursor-pointer transition-colors ${
+                      currentThreadId === thread.id
+                        ? 'bg-black text-white'
+                        : 'hover:bg-gray-100'
+                    }`}
+                    onClick={() => loadConversationThread(thread.id)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium truncate ${
+                          currentThreadId === thread.id ? 'text-white' : 'text-black'
                         }`}>
-                          {thread.last_message.content}
+                          {thread.title}
                         </p>
-                      )}
-                      <div className={`flex items-center space-x-2 mt-2 text-xs ${
-                        currentThreadId === thread.id ? 'text-gray-300' : 'text-gray-400'
-                      }`}>
-                        <span>{thread.message_count} messages</span>
-                        <span>•</span>
-                        <span>{new Date(thread.updated_at).toLocaleDateString()}</span>
+                        <p className={`text-xs truncate ${
+                          currentThreadId === thread.id ? 'text-gray-200' : 'text-gray-500'
+                        }`}>
+                          {new Date(thread.created_at).toLocaleDateString()}
+                        </p>
                       </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteThread(thread.id);
+                        }}
+                        className={`p-1 rounded ${
+                          currentThreadId === thread.id
+                            ? 'hover:bg-white/20'
+                            : 'hover:bg-gray-200'
+                        }`}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
                     </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteThread(thread.id);
-                      }}
-                      className={`p-1 rounded transition-colors ${
-                        currentThreadId === thread.id
-                          ? 'hover:bg-white/20'
-                          : 'hover:bg-gray-200'
-                      }`}
-                      title="Delete conversation"
-                    >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <div className="bg-black text-white p-6 rounded-tr-3xl">
+        {/* Chat Header */}
+        <div className="bg-black text-white p-6 rounded-t-3xl">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
               <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mr-4 shadow-lg">
@@ -571,14 +601,14 @@ const AIChat = () => {
               </div>
               <div>
                 <h3 className="text-xl font-bold">Foci.ai</h3>
-                <p className="text-gray-200 font-medium hidden sm:block">Your intelligent productivity companion</p>
+                <p className="text-gray-200 font-medium">Your intelligent productivity companion</p>
               </div>
             </div>
+            
             {/* Mobile menu button */}
             <button
-              onClick={() => setShowMobileSidebar(!showMobileSidebar)}
-              className="lg:hidden p-2 text-white hover:bg-white/20 rounded-xl transition-colors duration-200"
-              title="Toggle Conversations"
+              onClick={() => setShowMobileSidebar(true)}
+              className="lg:hidden p-2 text-gray-300 hover:text-white transition-colors"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -587,315 +617,184 @@ const AIChat = () => {
           </div>
         </div>
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-white/80">
-        {messages.map((message, index) => (
-          <div 
-            key={message.id} 
-            className="animate-fadeIn"
-            style={{ 
-              animationDelay: `${index * 0.1}s`,
-              animationFillMode: 'both'
-            }}
-          >
-            <MessageBubble message={message} />
+        {/* Contextual Information Bar */}
+        <div className="bg-gray-50 border-b border-black/10 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-6 text-sm">
+              <div className="flex items-center space-x-2">
+                <span className="text-gray-600">Goals:</span>
+                <span className="font-medium text-black">{userData.goals?.length || 0}</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="text-gray-600">Tasks:</span>
+                <span className="font-medium text-black">{userData.tasks?.length || 0}</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="text-gray-600">Completed:</span>
+                <span className="font-medium text-green-600">
+                  {userData.tasks?.filter(task => task.completed).length || 0}
+                </span>
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => onNavigateToTab('goals')}
+                className="px-3 py-1 text-xs bg-white border border-black/20 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                View Goals
+              </button>
+              <button
+                onClick={() => onNavigateToTab('tasks')}
+                className="px-3 py-1 text-xs bg-white border border-black/20 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                View Tasks
+              </button>
+            </div>
           </div>
-        ))}
-        
-        {/* Quick action suggestions - show for new users or when there's only the welcome message */}
-        {messages.length === 1 && hasLoadedData && (
-          <div className="animate-fadeIn" style={{ animationDelay: '0.5s' }}>
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50/80 backdrop-blur-sm rounded-2xl p-6 border border-blue-200/50 shadow-lg">
-              <p className="text-sm text-blue-800 font-medium mb-4 flex items-center space-x-2">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                <span className="text-base">Quick Start Suggestions</span>
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {(() => {
-                  const hasGoals = Array.isArray(userData.goals) ? userData.goals.length > 0 : false;
-                  const hasTasks = Array.isArray(userData.tasks) ? userData.tasks.length > 0 : false;
-                  
-                  if (!hasGoals && !hasTasks) {
-                    // New user suggestions
-                    return [
-                      {
-                        text: "Help me set up my first goal",
-                        category: "Goals",
-                        icon: "🎯"
-                      },
-                      {
-                        text: "Create a task for today",
-                        category: "Tasks", 
-                        icon: "📝"
-                      },
-                      {
-                        text: "Show me productivity tips",
-                        category: "Advice",
-                        icon: "💡"
-                      },
-                      {
-                        text: "Help me organize my week",
-                        category: "Planning",
-                        icon: "📅"
-                      },
-                      {
-                        text: "What should I focus on today?",
-                        category: "Focus",
-                        icon: "🎯"
-                      },
-                      {
-                        text: "Help me break down a big project",
-                        category: "Planning",
-                        icon: "📋"
-                      }
-                    ];
-                  } else if (hasGoals && !hasTasks) {
-                    // Has goals but no tasks
-                    return [
-                      {
-                        text: "Break down my goals into tasks",
-                        category: "Tasks",
-                        icon: "📋"
-                      },
-                      {
-                        text: "Create tasks for today",
-                        category: "Tasks",
-                        icon: "📝"
-                      },
-                      {
-                        text: "Review my goals",
-                        category: "Goals",
-                        icon: "🎯"
-                      },
-                      {
-                        text: "Plan my week around my goals",
-                        category: "Planning",
-                        icon: "📅"
-                      },
-                      {
-                        text: "What's my next priority?",
-                        category: "Focus",
-                        icon: "🎯"
-                      },
-                      {
-                        text: "Plan my week",
-                        category: "Planning",
-                        icon: "📅"
-                      }
-                    ];
-                  } else {
-                    // Has both goals and tasks
-                    return [
-                      {
-                        text: "Review my progress",
-                        category: "Progress",
-                        icon: "📊"
-                      },
-                      {
-                        text: "Create new tasks",
-                        category: "Tasks",
-                        icon: "📝"
-                      },
-                      {
-                        text: "What should I focus on today?",
-                        category: "Focus",
-                        icon: "🎯"
-                      },
-                      {
-                        text: "Plan my week",
-                        category: "Planning",
-                        icon: "📅"
-                      },
-                      {
-                        text: "Show me productivity tips",
-                        category: "Advice",
-                        icon: "💡"
-                      }
-                    ];
-                  }
-                })().map((suggestion, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setInputMessage(suggestion.text)}
-                    className="text-left text-sm text-blue-700 hover:text-blue-900 hover:bg-blue-100/50 rounded-xl px-4 py-3 transition-all duration-200 border border-blue-200/30 hover:border-blue-300/50 group"
-                  >
-                    <div className="flex items-center space-x-2">
-                      <span className="text-lg">{suggestion.icon}</span>
-                      <div>
-                        <div className="font-medium group-hover:underline">{suggestion.text}</div>
-                        <div className="text-xs text-blue-600 opacity-75">{suggestion.category}</div>
-                      </div>
+          
+          {/* Quick Stats */}
+          {userData.goals?.length > 0 || userData.tasks?.length > 0 ? (
+            <div className="mt-3 pt-3 border-t border-black/10">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                {userData.goals?.length > 0 && (
+                  <div className="text-center">
+                    <div className="font-semibold text-black">{userData.goals.filter(g => g.is_active).length}</div>
+                    <div className="text-gray-500">Active Goals</div>
+                  </div>
+                )}
+                {userData.tasks?.length > 0 && (
+                  <>
+                    <div className="text-center">
+                      <div className="font-semibold text-blue-600">{userData.tasks.filter(t => t.status === 'in_progress').length}</div>
+                      <div className="text-gray-500">In Progress</div>
                     </div>
-                  </button>
-                ))}
+                    <div className="text-center">
+                      <div className="font-semibold text-orange-600">{userData.tasks.filter(t => t.due_date && new Date(t.due_date) < new Date() && t.status !== 'completed').length}</div>
+                      <div className="text-gray-500">Overdue</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="font-semibold text-green-600">{userData.tasks.filter(t => t.status === 'completed').length}</div>
+                      <div className="text-gray-500">Completed</div>
+                    </div>
+                  </>
+                )}
               </div>
-              <div className="mt-4 pt-4 border-t border-blue-200/50">
-                <p className="text-xs text-blue-700 opacity-80">
-                  💡 <strong>Pro tip:</strong> You can also just tell me what's on your mind - I'll help you turn it into actionable goals and tasks!
-                </p>
-              </div>
             </div>
-          </div>
-        )}
-        
-        {isLoading && (
-          <div className="flex items-center space-x-3 text-gray-600 bg-white/60 backdrop-blur-sm rounded-2xl p-4 shadow-sm animate-fadeIn">
-            <div className="flex space-x-1">
-              <div className="w-3 h-3 bg-blue-500 rounded-full animate-bounce"></div>
-              <div className="w-3 h-3 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-              <div className="w-3 h-3 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-            </div>
-            <span className="font-medium">AI is thinking...</span>
-            <div className="flex space-x-1 ml-2">
-              <div className="w-1 h-1 bg-gray-400 rounded-full animate-pulse"></div>
-              <div className="w-1 h-1 bg-gray-400 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
-              <div className="w-1 h-1 bg-gray-400 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
-            </div>
-          </div>
-        )}
-        
-        <div ref={messagesEndRef} />
-      </div>
+          ) : null}
+        </div>
 
-      {/* Input */}
-      <div className="bg-white/90 backdrop-blur-sm border-t border-black/10 p-6">
-        <form onSubmit={handleSubmit} className="flex space-x-4">
-          <div className="flex-1">
-            <textarea
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Tell me what you'd like to work on today, or ask me to help you get organized..."
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 resize-none bg-white/80 backdrop-blur-sm shadow-sm transition-all duration-200"
-              rows="2"
-              disabled={isLoading}
-            />
+        {/* Messages Area */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          {messages.map((message) => (
+            <MessageBubble key={message.id} message={message} />
+          ))}
+          
+          {isLoading && (
+            <div className="flex items-center space-x-2 text-gray-500">
+              <div className="flex space-x-1">
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+              </div>
+              <span className="text-sm">Foci.ai is thinking...</span>
+            </div>
+          )}
+          
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Smart Suggestions */}
+        {showSuggestions && messages.length <= 1 && (
+          <div className="border-t border-black/10 p-4 bg-gray-50">
+            <div className="mb-3">
+              <h4 className="text-sm font-semibold text-gray-700 mb-2">Quick Actions</h4>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {generateSuggestions().map((suggestion, index) => (
+                <button
+                  key={index}
+                  onClick={() => {
+                    suggestion.action();
+                    setShowSuggestions(false);
+                  }}
+                  className="px-3 py-2 bg-white border border-black/20 rounded-lg hover:bg-gray-50 transition-colors text-sm flex items-center space-x-2"
+                >
+                  <span>{suggestion.icon}</span>
+                  <span>{suggestion.text}</span>
+                </button>
+              ))}
+            </div>
           </div>
-          <button
-            type="submit"
-            disabled={!inputMessage.trim() || isLoading}
-            className="px-6 py-3 bg-black text-white rounded-2xl hover:bg-gray-800 focus:outline-none focus:ring-4 focus:ring-black/20 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg transition-all duration-200 transform hover:scale-105"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-            </svg>
-          </button>
-        </form>
-        
-        <div className="mt-3 text-sm text-gray-500 font-medium text-center">
-          Press Enter to send, Shift+Enter for new line
+        )}
+
+        {/* Input Area */}
+        <div className="border-t border-black/10 p-4">
+          <form onSubmit={handleSubmit} className="flex space-x-4">
+            <div className="flex-1 relative">
+              <textarea
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Tell me what you'd like to work on today..."
+                className="w-full px-4 py-3 border border-black/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 focus:border-transparent resize-none"
+                rows="1"
+                style={{ minHeight: '48px', maxHeight: '120px' }}
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={!inputMessage.trim() || isLoading}
+              className="px-6 py-3 bg-black text-white rounded-xl hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+              <span>Send</span>
+            </button>
+          </form>
         </div>
       </div>
     </div>
-  </div>
   );
 };
 
-// Message Bubble Component
 const MessageBubble = ({ message }) => {
-  const isUser = message.type === 'user';
-  
-  // Function to format AI message content
   const formatAIContent = (content) => {
-    if (isUser) return content; // Don't format user messages
-    
-    // Split content into lines
-    const lines = content.split('\n');
-    
-    return lines.map((line, index) => {
-      const trimmedLine = line.trim();
-      
-      // Handle bullet points
-      if (trimmedLine.startsWith('•') || trimmedLine.startsWith('-') || trimmedLine.startsWith('*')) {
-        return (
-          <div key={index} className="flex items-start space-x-2 mb-1">
-            <span className="text-blue-600 font-bold mt-1">•</span>
-            <span className="flex-1">{trimmedLine.substring(1).trim()}</span>
-          </div>
-        );
-      }
-      
-      // Handle numbered lists
-      if (/^\d+\./.test(trimmedLine)) {
-        const match = trimmedLine.match(/^(\d+)\.\s*(.*)/);
-        if (match) {
-          return (
-            <div key={index} className="flex items-start space-x-2 mb-1">
-              <span className="text-blue-600 font-bold text-xs mt-1 min-w-[20px]">{match[1]}.</span>
-              <span className="flex-1">{match[2]}</span>
-            </div>
-          );
-        }
-      }
-      
-      // Handle headers (lines that end with :)
-      if (trimmedLine.endsWith(':') && trimmedLine.length < 50) {
-        return (
-          <div key={index} className="font-semibold text-blue-800 mb-2 mt-3 first:mt-0">
-            {trimmedLine}
-          </div>
-        );
-      }
-      
-      // Handle bold text (text between **)
-      if (trimmedLine.includes('**')) {
-        const parts = trimmedLine.split('**');
-        return (
-          <div key={index} className="mb-2">
-            {parts.map((part, partIndex) => 
-              partIndex % 2 === 1 ? (
-                <span key={partIndex} className="font-semibold">{part}</span>
-              ) : (
-                part
-              )
-            )}
-          </div>
-        );
-      }
-      
-      // Handle empty lines
-      if (trimmedLine === '') {
-        return <div key={index} className="h-2"></div>;
-      }
-      
-      // Regular text
-      return (
-        <div key={index} className="mb-2 last:mb-0">
-          {trimmedLine}
-        </div>
-      );
-    });
+    // Convert markdown-style formatting to HTML
+    return content
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/•/g, '• ')
+      .replace(/\n/g, '<br>');
   };
-  
+
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
-      <div className={`max-w-xs lg:max-w-lg xl:max-w-xl px-6 py-4 rounded-3xl shadow-lg backdrop-blur-sm ${
-        isUser 
-          ? 'bg-black text-white' 
-          : 'bg-white/90 text-black border border-black/10'
-      }`}>
-        <div className="text-sm leading-relaxed">
-          {formatAIContent(message.content)}
-        </div>
+    <div className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+      <div
+        className={`max-w-[80%] px-4 py-3 rounded-2xl ${
+          message.type === 'user'
+            ? 'bg-black text-white'
+            : 'bg-gray-100 text-black'
+        }`}
+      >
+        <div
+          className="prose prose-sm max-w-none"
+          dangerouslySetInnerHTML={{ __html: formatAIContent(message.content) }}
+        />
         
         {message.actions && message.actions.length > 0 && (
-          <div className="mt-3 space-y-1">
-            {message.actions.map((action, index) => (
-              <div key={index} className="text-xs flex items-center space-x-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span className={isUser ? 'text-blue-100' : 'text-gray-600'}>{action}</span>
-              </div>
-            ))}
+          <div className="mt-3 pt-3 border-t border-black/10">
+            <div className="text-xs text-gray-500 mb-2">Actions taken:</div>
+            <div className="space-y-1">
+              {message.actions.map((action, index) => (
+                <div key={index} className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                  ✓ {action}
+                </div>
+              ))}
+            </div>
           </div>
         )}
-        
-        <div className={`text-xs mt-3 opacity-70 ${
-          isUser ? 'text-blue-100' : 'text-gray-500'
-        }`}>
-          {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </div>
       </div>
     </div>
   );

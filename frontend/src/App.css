@@ -1,3 +1,188 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom animations for AI-first interface */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes bounce {
+  0%, 20%, 53%, 80%, 100% {
+    transform: translate3d(0,0,0);
+  }
+  40%, 43% {
+    transform: translate3d(0, -30px, 0);
+  }
+  70% {
+    transform: translate3d(0, -15px, 0);
+  }
+  90% {
+    transform: translate3d(0, -4px, 0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.5s ease-out;
+}
+
+.animate-slideIn {
+  animation: slideIn 0.3s ease-out;
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-bounce {
+  animation: bounce 1s infinite;
+}
+
+/* AI Chat specific animations */
+.ai-message-enter {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.ai-message-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 300ms, transform 300ms;
+}
+
+.user-message-enter {
+  opacity: 0;
+  transform: translateY(20px) scale(0.95);
+}
+
+.user-message-enter-active {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition: opacity 300ms, transform 300ms;
+}
+
+/* Suggestion button animations */
+.suggestion-button {
+  transition: all 0.2s ease-in-out;
+}
+
+.suggestion-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Loading animation for AI responses */
+.ai-thinking {
+  display: inline-block;
+  position: relative;
+  width: 80px;
+  height: 20px;
+}
+
+.ai-thinking div {
+  position: absolute;
+  top: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #6b7280;
+  animation-timing-function: cubic-bezier(0, 1, 1, 0);
+}
+
+.ai-thinking div:nth-child(1) {
+  left: 8px;
+  animation: ai-thinking1 0.6s infinite;
+}
+
+.ai-thinking div:nth-child(2) {
+  left: 8px;
+  animation: ai-thinking2 0.6s infinite;
+}
+
+.ai-thinking div:nth-child(3) {
+  left: 32px;
+  animation: ai-thinking2 0.6s infinite;
+}
+
+.ai-thinking div:nth-child(4) {
+  left: 56px;
+  animation: ai-thinking3 0.6s infinite;
+}
+
+@keyframes ai-thinking1 {
+  0% {
+    transform: scale(0);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes ai-thinking3 {
+  0% {
+    transform: scale(1);
+  }
+  100% {
+    transform: scale(0);
+  }
+}
+
+@keyframes ai-thinking2 {
+  0% {
+    transform: translate(0, 0);
+  }
+  100% {
+    transform: translate(24px, 0);
+  }
+}
+
+/* Responsive design improvements */
+@media (max-width: 768px) {
+  .ai-chat-container {
+    height: calc(100vh - 120px);
+  }
+}
+
+/* Focus states for better accessibility */
+.focus-visible:focus {
+  outline: 2px solid #000;
+  outline-offset: 2px;
+}
+
+/* Smooth transitions for all interactive elements */
+* {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
 .App {
   text-align: center;
 }
