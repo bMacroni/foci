@@ -1,18 +1,106 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { aiAPI } from '../services/api';
+import { aiAPI, goalsAPI, tasksAPI } from '../services/api';
 
 const AIChat = () => {
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      type: 'ai',
-      content: "Hello! I'm your Foci AI assistant. I can help you manage your goals, tasks, and calendar events. Try saying something like 'Add a goal to learn React' or 'Show me my tasks for today'.",
-      timestamp: new Date()
-    }
-  ]);
+  const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [userData, setUserData] = useState({ goals: [], tasks: [] });
+  const [hasLoadedData, setHasLoadedData] = useState(false);
   const messagesEndRef = useRef(null);
+
+  // Load user data to customize the experience
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        const [goalsResponse, tasksResponse] = await Promise.all([
+          goalsAPI.getAll(),
+          tasksAPI.getAll()
+        ]);
+        
+        setUserData({
+          goals: goalsResponse.data || [],
+          tasks: tasksResponse.data || []
+        });
+        setHasLoadedData(true);
+      } catch (error) {
+        console.error('Error loading user data:', error);
+        setHasLoadedData(true);
+      }
+    };
+
+    loadUserData();
+  }, []);
+
+  // Initialize welcome message based on user data
+  useEffect(() => {
+    if (hasLoadedData) {
+      const hasGoals = userData.goals.length > 0;
+      const hasTasks = userData.tasks.length > 0;
+      
+      let welcomeMessage = '';
+      
+      if (!hasGoals && !hasTasks) {
+        // New user - comprehensive onboarding
+        welcomeMessage = `🎯 **Welcome to Foci!** I'm your AI-powered productivity assistant, and I'm here to help you build a focused, organized life.
+
+**Let's get started!** I can help you:
+
+• **Set meaningful goals** - Create clear, achievable objectives
+• **Organize tasks** - Break down goals into actionable steps  
+• **Manage your calendar** - Schedule and track important events
+• **Stay focused** - Get personalized productivity advice
+
+**What would you like to work on today?** You can start by telling me about a goal you have, or I can help you get organized!`;
+      } else if (hasGoals && !hasTasks) {
+        // Has goals but no tasks
+        welcomeMessage = `🎯 **Welcome back!** I see you have ${userData.goals.length} goal${userData.goals.length !== 1 ? 's' : ''} set up. 
+
+**Let's make progress!** I can help you:
+
+• **Break down your goals** into actionable tasks
+• **Create tasks** to move toward your objectives
+• **Review and refine** your existing goals
+• **Plan your week** around your priorities
+
+**What would you like to focus on today?**`;
+      } else if (hasGoals && hasTasks) {
+        // Has both goals and tasks
+        const completedTasks = userData.tasks.filter(task => task.completed).length;
+        const totalTasks = userData.tasks.length;
+        
+        welcomeMessage = `🎯 **Welcome back!** Great progress - you have ${userData.goals.length} goal${userData.goals.length !== 1 ? 's' : ''} and ${totalTasks} task${totalTasks !== 1 ? 's' : ''} (${completedTasks} completed).
+
+**Let's keep the momentum going!** I can help you:
+
+• **Review your progress** and celebrate wins
+• **Create new tasks** for your goals
+• **Prioritize what's next** for today
+• **Adjust your goals** if needed
+
+**What's your focus for today?**`;
+      } else {
+        // Has tasks but no goals
+        welcomeMessage = `📝 **Welcome back!** I see you have ${userData.tasks.length} task${userData.tasks.length !== 1 ? 's' : ''} to work on.
+
+**Let's get organized!** I can help you:
+
+• **Create goals** to give your tasks direction
+• **Prioritize your tasks** for today
+• **Review and organize** your task list
+• **Plan your week** effectively
+
+**What would you like to work on?**`;
+      }
+
+      setMessages([{
+        id: 1,
+        type: 'ai',
+        content: welcomeMessage,
+        timestamp: new Date()
+      }]);
+    }
+  }, [hasLoadedData, userData]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -21,6 +109,22 @@ const AIChat = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  const refreshUserData = async () => {
+    try {
+      const [goalsResponse, tasksResponse] = await Promise.all([
+        goalsAPI.getAll(),
+        tasksAPI.getAll()
+      ]);
+      
+      setUserData({
+        goals: goalsResponse.data || [],
+        tasks: tasksResponse.data || []
+      });
+    } catch (error) {
+      console.error('Error refreshing user data:', error);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -49,6 +153,9 @@ const AIChat = () => {
       };
 
       setMessages(prev => [...prev, aiMessage]);
+      
+      // Refresh user data after AI response to get updated goals/tasks
+      await refreshUserData();
     } catch (error) {
       console.error('Error sending message:', error);
       
@@ -71,6 +178,40 @@ const AIChat = () => {
       handleSubmit(e);
     }
   };
+
+  // Show loading state while fetching user data
+  if (!hasLoadedData) {
+    return (
+      <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl border border-black/10 h-[700px] flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="bg-black text-white p-6 rounded-t-3xl">
+          <div className="flex items-center">
+            <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mr-4 shadow-lg">
+              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-xl font-bold">Foci AI Assistant</h3>
+              <p className="text-gray-200 font-medium">Your intelligent productivity companion</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Loading Content */}
+        <div className="flex-1 flex items-center justify-center bg-white/80">
+          <div className="text-center">
+            <div className="flex space-x-1 mb-4">
+              <div className="w-3 h-3 bg-blue-500 rounded-full animate-bounce"></div>
+              <div className="w-3 h-3 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+              <div className="w-3 h-3 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+            </div>
+            <p className="text-gray-600 font-medium">Loading your personalized experience...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl border border-black/10 h-[700px] flex flex-col overflow-hidden">
@@ -104,31 +245,179 @@ const AIChat = () => {
           </div>
         ))}
         
-        {/* Quick action suggestions */}
-        {messages.length === 1 && (
+        {/* Quick action suggestions - show for new users or when there's only the welcome message */}
+        {messages.length === 1 && hasLoadedData && (
           <div className="animate-fadeIn" style={{ animationDelay: '0.5s' }}>
-            <div className="bg-blue-50/80 backdrop-blur-sm rounded-2xl p-4 border border-blue-200/50">
-              <p className="text-sm text-blue-800 font-medium mb-3 flex items-center space-x-1">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50/80 backdrop-blur-sm rounded-2xl p-6 border border-blue-200/50 shadow-lg">
+              <p className="text-sm text-blue-800 font-medium mb-4 flex items-center space-x-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
-                <span>Try asking me:</span>
+                <span className="text-base">Quick Start Suggestions</span>
               </p>
-              <div className="space-y-2">
-                {[
-                  "How can I improve my focus?",
-                  "Add a goal to learn React by next month",
-                  "Create a task to review documents by Friday",
-                  "What productivity tips do you have?"
-                ].map((suggestion, idx) => (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {(() => {
+                  const hasGoals = userData.goals.length > 0;
+                  const hasTasks = userData.tasks.length > 0;
+                  
+                  if (!hasGoals && !hasTasks) {
+                    // New user suggestions
+                    return [
+                      {
+                        text: "Help me set up my first goal",
+                        category: "Goals",
+                        icon: "🎯"
+                      },
+                      {
+                        text: "Create a task for today",
+                        category: "Tasks", 
+                        icon: "📝"
+                      },
+                      {
+                        text: "Show me productivity tips",
+                        category: "Advice",
+                        icon: "💡"
+                      },
+                      {
+                        text: "Help me organize my week",
+                        category: "Planning",
+                        icon: "📅"
+                      },
+                      {
+                        text: "What should I focus on today?",
+                        category: "Focus",
+                        icon: "🎯"
+                      },
+                      {
+                        text: "Help me break down a big project",
+                        category: "Planning",
+                        icon: "📋"
+                      }
+                    ];
+                  } else if (hasGoals && !hasTasks) {
+                    // Has goals but no tasks
+                    return [
+                      {
+                        text: "Break down my goals into tasks",
+                        category: "Tasks",
+                        icon: "📋"
+                      },
+                      {
+                        text: "Create tasks for today",
+                        category: "Tasks",
+                        icon: "📝"
+                      },
+                      {
+                        text: "Review my goals",
+                        category: "Goals",
+                        icon: "🎯"
+                      },
+                      {
+                        text: "Plan my week around my goals",
+                        category: "Planning",
+                        icon: "📅"
+                      },
+                      {
+                        text: "What's my next priority?",
+                        category: "Focus",
+                        icon: "🎯"
+                      },
+                      {
+                        text: "Help me stay motivated",
+                        category: "Motivation",
+                        icon: "💪"
+                      }
+                    ];
+                  } else if (hasGoals && hasTasks) {
+                    // Has both goals and tasks
+                    const pendingTasks = userData.tasks.filter(task => !task.completed).length;
+                    return [
+                      {
+                        text: `Work on my ${pendingTasks} pending tasks`,
+                        category: "Tasks",
+                        icon: "📝"
+                      },
+                      {
+                        text: "Review my progress",
+                        category: "Progress",
+                        icon: "📊"
+                      },
+                      {
+                        text: "Create new tasks for my goals",
+                        category: "Tasks",
+                        icon: "➕"
+                      },
+                      {
+                        text: "What should I focus on today?",
+                        category: "Focus",
+                        icon: "🎯"
+                      },
+                      {
+                        text: "Plan my week",
+                        category: "Planning",
+                        icon: "📅"
+                      },
+                      {
+                        text: "Celebrate my wins",
+                        category: "Motivation",
+                        icon: "🎉"
+                      }
+                    ];
+                  } else {
+                    // Has tasks but no goals
+                    return [
+                      {
+                        text: "Create goals for my tasks",
+                        category: "Goals",
+                        icon: "🎯"
+                      },
+                      {
+                        text: "Prioritize my tasks",
+                        category: "Tasks",
+                        icon: "📊"
+                      },
+                      {
+                        text: "Organize my task list",
+                        category: "Tasks",
+                        icon: "📋"
+                      },
+                      {
+                        text: "What should I focus on today?",
+                        category: "Focus",
+                        icon: "🎯"
+                      },
+                      {
+                        text: "Plan my week",
+                        category: "Planning",
+                        icon: "📅"
+                      },
+                      {
+                        text: "Show me productivity tips",
+                        category: "Advice",
+                        icon: "💡"
+                      }
+                    ];
+                  }
+                })().map((suggestion, idx) => (
                   <button
                     key={idx}
-                    onClick={() => setInputMessage(suggestion)}
-                    className="block w-full text-left text-xs text-blue-700 hover:text-blue-900 hover:bg-blue-100/50 rounded-lg px-3 py-2 transition-colors"
+                    onClick={() => setInputMessage(suggestion.text)}
+                    className="text-left text-sm text-blue-700 hover:text-blue-900 hover:bg-blue-100/50 rounded-xl px-4 py-3 transition-all duration-200 border border-blue-200/30 hover:border-blue-300/50 group"
                   >
-                    "{suggestion}"
+                    <div className="flex items-center space-x-2">
+                      <span className="text-lg">{suggestion.icon}</span>
+                      <div>
+                        <div className="font-medium group-hover:underline">{suggestion.text}</div>
+                        <div className="text-xs text-blue-600 opacity-75">{suggestion.category}</div>
+                      </div>
+                    </div>
                   </button>
                 ))}
+              </div>
+              <div className="mt-4 pt-4 border-t border-blue-200/50">
+                <p className="text-xs text-blue-700 opacity-80">
+                  💡 <strong>Pro tip:</strong> You can also just tell me what's on your mind - I'll help you turn it into actionable goals and tasks!
+                </p>
               </div>
             </div>
           </div>
@@ -161,7 +450,7 @@ const AIChat = () => {
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Ask me to add a goal, create a task, or check your calendar..."
+              placeholder="Tell me what you'd like to work on today, or ask me to help you get organized..."
               className="w-full px-4 py-3 border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 resize-none bg-white/80 backdrop-blur-sm shadow-sm transition-all duration-200"
               rows="2"
               disabled={isLoading}

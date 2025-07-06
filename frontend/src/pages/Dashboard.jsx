@@ -6,7 +6,7 @@ import CalendarEvents from '../components/CalendarEvents'
 import AIChat from '../components/AIChat'
 
 function Dashboard({ showSuccess }) {
-  const [activeTab, setActiveTab] = useState('goals');
+  const [activeTab, setActiveTab] = useState('ai');
 
   return (
     <div className="min-h-screen bg-white">
