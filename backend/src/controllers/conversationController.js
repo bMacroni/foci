@@ -1,4 +1,15 @@
-import { supabase } from '../../config/supabase.js';
+import { createClient } from '@supabase/supabase-js';
+
+// Helper function to create authenticated Supabase client
+const createAuthenticatedSupabase = (jwt) => {
+  return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${jwt}`
+      }
+    }
+  });
+};
 
 export const conversationController = {
   // Create a new conversation thread
@@ -6,10 +17,13 @@ export const conversationController = {
     try {
       const { title, summary } = req.body;
       const userId = req.user.id;
+      const token = req.headers.authorization?.replace('Bearer ', '');
 
       if (!title) {
         return res.status(400).json({ error: 'Thread title is required' });
       }
+
+      const supabase = createAuthenticatedSupabase(token);
 
       const { data: thread, error } = await supabase
         .from('conversation_threads')
@@ -37,6 +51,9 @@ export const conversationController = {
   async getThreads(req, res) {
     try {
       const userId = req.user.id;
+      const token = req.headers.authorization?.replace('Bearer ', '');
+
+      const supabase = createAuthenticatedSupabase(token);
 
       const { data: threads, error } = await supabase
         .from('conversation_threads')
@@ -87,6 +104,9 @@ export const conversationController = {
     try {
       const { threadId } = req.params;
       const userId = req.user.id;
+      const token = req.headers.authorization?.replace('Bearer ', '');
+
+      const supabase = createAuthenticatedSupabase(token);
 
       // First, verify the thread belongs to the user
       const { data: thread, error: threadError } = await supabase
@@ -128,6 +148,7 @@ export const conversationController = {
       const { threadId } = req.params;
       const { content, role, metadata } = req.body;
       const userId = req.user.id;
+      const token = req.headers.authorization?.replace('Bearer ', '');
 
       if (!content || !role) {
         return res.status(400).json({ error: 'Message content and role are required' });
@@ -136,6 +157,8 @@ export const conversationController = {
       if (!['user', 'assistant'].includes(role)) {
         return res.status(400).json({ error: 'Role must be either "user" or "assistant"' });
       }
+
+      const supabase = createAuthenticatedSupabase(token);
 
       // Verify the thread belongs to the user
       const { data: thread, error: threadError } = await supabase
@@ -186,6 +209,9 @@ export const conversationController = {
       const { threadId } = req.params;
       const { title, summary, is_active } = req.body;
       const userId = req.user.id;
+      const token = req.headers.authorization?.replace('Bearer ', '');
+
+      const supabase = createAuthenticatedSupabase(token);
 
       // Verify the thread belongs to the user
       const { data: thread, error: threadError } = await supabase
@@ -229,6 +255,9 @@ export const conversationController = {
     try {
       const { threadId } = req.params;
       const userId = req.user.id;
+      const token = req.headers.authorization?.replace('Bearer ', '');
+
+      const supabase = createAuthenticatedSupabase(token);
 
       // Verify the thread belongs to the user
       const { data: thread, error: threadError } = await supabase
@@ -264,6 +293,9 @@ export const conversationController = {
   async getStats(req, res) {
     try {
       const userId = req.user.id;
+      const token = req.headers.authorization?.replace('Bearer ', '');
+
+      const supabase = createAuthenticatedSupabase(token);
 
       const { data: stats, error } = await supabase
         .from('conversation_threads')

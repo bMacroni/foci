@@ -40,7 +40,8 @@ router.post('/chat', requireAuth, async (req, res) => {
         await conversationController.addMessage({
           params: { threadId },
           body: { content: message, role: 'user' },
-          user: { id: userId }
+          user: { id: userId },
+          headers: req.headers
         }, { status: () => ({ json: () => {} }) });
 
         // Save AI response
@@ -51,7 +52,8 @@ router.post('/chat', requireAuth, async (req, res) => {
             role: 'assistant',
             metadata: { actions: response.actions || [] }
           },
-          user: { id: userId }
+          user: { id: userId },
+          headers: req.headers
         }, { status: () => ({ json: () => {} }) });
       } catch (saveError) {
         console.error('Error saving conversation:', saveError);
@@ -88,7 +90,8 @@ router.post('/threads', requireAuth, async (req, res) => {
 
     const thread = await conversationController.createThread({
       body: { title: threadTitle, summary },
-      user: { id: userId }
+      user: { id: userId },
+      headers: req.headers
     }, res);
 
   } catch (error) {
