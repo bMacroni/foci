@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { aiAPI, goalsAPI, tasksAPI, conversationsAPI } from '../services/api';
+import BulkApprovalPanel from './BulkApprovalPanel';
 
 const AIChat = ({ onNavigateToTab }) => {
   const [messages, setMessages] = useState([]);
@@ -12,6 +13,7 @@ const AIChat = ({ onNavigateToTab }) => {
   const [isLoadingThreads, setIsLoadingThreads] = useState(false);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const messagesEndRef = useRef(null);
+  const [pendingApproval, setPendingApproval] = useState(null);
 
   // Load user data and conversation threads
   useEffect(() => {
@@ -123,8 +125,6 @@ const AIChat = ({ onNavigateToTab }) => {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
-
-
 
   const refreshUserData = async () => {
     try {
@@ -279,6 +279,36 @@ const AIChat = ({ onNavigateToTab }) => {
     return message.split(' ').slice(0, 8).join(' ') + (message.split(' ').length > 8 ? '...' : '');
   };
 
+  // Helper: Try to extract a JSON array of tasks/goals from Gemini's response
+  const tryExtractBulkList = (message) => {
+    try {
+      const parsed = JSON.parse(message);
+      if (Array.isArray(parsed) && parsed.every(item => item.title)) {
+        return parsed;
+      }
+    } catch (e) {
+      // Not JSON, ignore
+    }
+    return null;
+  };
+
+  // Modified: handle Gemini response
+  const handleGeminiResponse = (response) => {
+    const bulkList = tryExtractBulkList(response.message);
+    if (bulkList) {
+      setPendingApproval(bulkList);
+      return;
+    }
+    // Fallback: normal message
+    setMessages(prev => [...prev, {
+      id: Date.now(),
+      type: 'ai',
+      content: response.message,
+      timestamp: new Date()
+    }]);
+  };
+
+  // Modified: handleSubmit uses handleGeminiResponse
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!inputMessage.trim() || isLoading) return;
@@ -318,16 +348,7 @@ const AIChat = ({ onNavigateToTab }) => {
       }
 
       const response = await aiAPI.sendMessage(inputMessage, threadId);
-      
-      const aiMessage = {
-        id: Date.now() + 1,
-        type: 'ai',
-        content: response.data.message,
-        actions: response.data.actions || [],
-        timestamp: new Date()
-      };
-
-      setMessages(prev => [...prev, aiMessage]);
+      handleGeminiResponse(response);
       
       // Update the current thread's last message in the list without full refresh
       if (threadId) {
@@ -339,30 +360,25 @@ const AIChat = ({ onNavigateToTab }) => {
                   ...thread,
                   message_count: (thread.message_count || 0) + 2, // +2 for user and AI messages
                   last_message: {
-                    content: aiMessage.content.substring(0, 100) + (aiMessage.content.length > 100 ? '...' : ''),
+                    content: (response.message || '').substring(0, 100) + ((response.message || '').length > 100 ? '...' : ''),
                     role: 'assistant',
-                    created_at: aiMessage.timestamp.toISOString()
+                    created_at: new Date().toISOString()
                   },
-                  updated_at: aiMessage.timestamp.toISOString()
+                  updated_at: new Date().toISOString()
                 }
               : thread
           );
         });
       }
-      
-      // Only refresh user data, not conversation threads to avoid UI reset
-      await refreshUserData();
     } catch (error) {
       console.error('Error sending message:', error);
       
-      const errorMessage = {
+      setMessages(prev => [...prev, {
         id: Date.now() + 1,
         type: 'ai',
         content: "I'm sorry, I encountered an error. Please try again or check your connection.",
         timestamp: new Date()
-      };
-
-      setMessages(prev => [...prev, errorMessage]);
+      }]);
     } finally {
       setIsLoading(false);
     }
@@ -375,7 +391,51 @@ const AIChat = ({ onNavigateToTab }) => {
     }
   };
 
+  // Bulk approval handlers
+  const handleBulkApprove = async (items) => {
+    setIsLoading(true);
+    try {
+      await tasksAPI.bulkCreate(items);
+      setPendingApproval(null);
+      setMessages(prev => [
+        ...prev,
+        {
+          id: Date.now(),
+          type: 'ai',
+          content: 'Tasks have been added to your planner!',
+          timestamp: new Date()
+        }
+      ]);
+      // Only refresh user data, not conversation threads to avoid UI reset
+      // await refreshUserData();
+    } catch (error) {
+      setPendingApproval(null);
+      setMessages(prev => [
+        ...prev,
+        {
+          id: Date.now(),
+          type: 'ai',
+          content: 'There was an error adding your tasks. Please try again.',
+          timestamp: new Date()
+        }
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  const handleBulkCancel = () => {
+    setPendingApproval(null);
+    setMessages(prev => [
+      ...prev,
+      {
+        id: Date.now(),
+        type: 'ai',
+        content: 'Bulk addition cancelled.',
+        timestamp: new Date()
+      }
+    ]);
+  };
 
   // Show loading state while fetching user data
   if (!hasLoadedData) {
@@ -638,7 +698,13 @@ const AIChat = ({ onNavigateToTab }) => {
           {messages.map((message) => (
             <MessageBubble key={message.id} message={message} />
           ))}
-          
+          {pendingApproval && (
+            <BulkApprovalPanel
+              items={pendingApproval}
+              onApprove={handleBulkApprove}
+              onCancel={handleBulkCancel}
+            />
+          )}
           {isLoading && (
             <div className="flex items-center space-x-2 text-gray-500">
               <div className="flex space-x-1">
@@ -649,7 +715,6 @@ const AIChat = ({ onNavigateToTab }) => {
               <span className="text-sm">Foci.ai is thinking...</span>
             </div>
           )}
-          
           <div ref={messagesEndRef} />
         </div>
 
@@ -685,8 +750,7 @@ const AIChat = ({ onNavigateToTab }) => {
 };
 
 const MessageBubble = ({ message }) => {
-  const formatAIContent = (content) => {
-    // Convert markdown-style formatting to HTML
+  const formatAIContent = (content = '') => {
     return content
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')

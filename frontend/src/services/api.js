@@ -53,6 +53,7 @@ export const tasksAPI = {
   create: (taskData) => api.post('/tasks', taskData),
   update: (id, taskData) => api.put(`/tasks/${id}`, taskData),
   delete: (id) => api.delete(`/tasks/${id}`),
+  bulkCreate: (tasks) => api.post('/tasks/bulk', tasks),
 };
 
 // Calendar API

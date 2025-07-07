@@ -1,12 +1,12 @@
 import express from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import GeminiService from '../utils/geminiService.js';
-import AIService from '../utils/aiService.js';
+// import AIService from '../utils/aiService.js';
 import { conversationController } from '../controllers/conversationController.js';
 
 const router = express.Router();
 const geminiService = new GeminiService();
-const aiService = new AIService(); // Fallback service
+// const aiService = new AIService(); // Fallback service
 
 // Chat endpoint with conversation history support
 router.post('/chat', requireAuth, async (req, res) => {
@@ -22,15 +22,17 @@ router.post('/chat', requireAuth, async (req, res) => {
 
     console.log(`AI Chat - User ${userId}: ${message}${threadId ? ` (Thread: ${threadId})` : ''}`);
 
-    // Try Gemini first, fallback to basic AI service if needed
+    // Only use Gemini for processing
     let response;
     try {
       response = await geminiService.processMessage(message, userId);
       console.log(`Gemini Response: ${response.message}`);
     } catch (error) {
-      console.log('Gemini failed, using fallback AI service');
-      response = await aiService.processMessage(message, userId);
-      console.log(`Fallback AI Response: ${response.message}`);
+      // Comment out fallback to AIService
+      // console.log('Gemini failed, using fallback AI service');
+      // response = await aiService.processMessage(message, userId);
+      // console.log(`Fallback AI Response: ${response.message}`);
+      throw error;
     }
 
     // If threadId is provided, save the conversation

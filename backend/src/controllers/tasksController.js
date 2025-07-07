@@ -174,4 +174,43 @@ export async function deleteTask(req, res) {
     return res.status(400).json({ error: error.message });
   }
   res.status(204).send();
+}
+
+export async function bulkCreateTasks(req, res) {
+  const tasks = req.body;
+  const user_id = req.user.id;
+  const token = req.headers.authorization?.split(' ')[1];
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  });
+
+  if (!Array.isArray(tasks) || tasks.length === 0) {
+    return res.status(400).json({ error: 'Request body must be a non-empty array of tasks.' });
+  }
+
+  // Attach user_id to each task and sanitize fields
+  const tasksToInsert = tasks.map(task => ({
+    user_id,
+    title: task.title,
+    description: task.description || '',
+    due_date: task.due_date || null,
+    priority: task.priority || null,
+    goal_id: task.goal_id === '' ? null : (task.goal_id || null),
+    completed: task.completed || false
+  }));
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .insert(tasksToInsert)
+    .select();
+
+  if (error) {
+    console.log('Supabase bulk insert error:', error);
+    return res.status(400).json({ error: error.message });
+  }
+  res.status(201).json(data);
 } 
