@@ -294,18 +294,56 @@ const AIChat = ({ onNavigateToTab }) => {
 
   // Modified: handle Gemini response
   const handleGeminiResponse = (response) => {
-    const bulkList = tryExtractBulkList(response.message);
-    if (bulkList) {
-      setPendingApproval(bulkList);
-      return;
+    console.log('🔍 Raw response from API:', response);
+    
+    try {
+      // Extract the actual response data from the axios response
+      const responseData = response.data || response;
+      const message = responseData.message;
+      const actions = responseData.actions || [];
+      
+      console.log('📝 Extracted message:', message);
+      console.log('⚡ Extracted actions:', actions);
+      
+      // Validate that we have a message
+      if (!message) {
+        console.error('❌ No message found in response');
+        setMessages(prev => [...prev, {
+          id: Date.now(),
+          type: 'ai',
+          content: "I'm sorry, I received an empty response. Please try again.",
+          timestamp: new Date(),
+          actions: []
+        }]);
+        return;
+      }
+      
+      const bulkList = tryExtractBulkList(message);
+      if (bulkList) {
+        console.log('📋 Bulk list detected:', bulkList);
+        setPendingApproval(bulkList);
+        return;
+      }
+      
+      console.log('💬 Adding normal message to chat');
+      // Fallback: normal message
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        type: 'ai',
+        content: message,
+        timestamp: new Date(),
+        actions: actions
+      }]);
+    } catch (error) {
+      console.error('❌ Error handling Gemini response:', error);
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        type: 'ai',
+        content: "I'm sorry, I encountered an error processing the response. Please try again.",
+        timestamp: new Date(),
+        actions: []
+      }]);
     }
-    // Fallback: normal message
-    setMessages(prev => [...prev, {
-      id: Date.now(),
-      type: 'ai',
-      content: response.message,
-      timestamp: new Date()
-    }]);
   };
 
   // Modified: handleSubmit uses handleGeminiResponse
@@ -347,11 +385,16 @@ const AIChat = ({ onNavigateToTab }) => {
         setConversationThreads(prev => Array.isArray(prev) ? [threadMeta, ...prev] : [threadMeta]);
       }
 
+      console.log('🚀 Sending message to AI API...');
       const response = await aiAPI.sendMessage(inputMessage, threadId);
+      console.log('✅ Received response from AI API');
       handleGeminiResponse(response);
       
       // Update the current thread's last message in the list without full refresh
       if (threadId) {
+        const responseData = response.data || response;
+        const message = responseData.message || '';
+        
         setConversationThreads(prev => {
           if (!Array.isArray(prev)) return prev;
           return prev.map(thread => 
@@ -360,7 +403,7 @@ const AIChat = ({ onNavigateToTab }) => {
                   ...thread,
                   message_count: (thread.message_count || 0) + 2, // +2 for user and AI messages
                   last_message: {
-                    content: (response.message || '').substring(0, 100) + ((response.message || '').length > 100 ? '...' : ''),
+                    content: message.substring(0, 100) + (message.length > 100 ? '...' : ''),
                     role: 'assistant',
                     created_at: new Date().toISOString()
                   },
