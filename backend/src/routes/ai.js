@@ -22,58 +22,32 @@ router.post('/chat', requireAuth, async (req, res) => {
 
     console.log(`AI Chat - User ${userId}: ${message}${threadId ? ` (Thread: ${threadId})` : ''}`);
 
-    // Only use Gemini for processing
-    let response;
-    try {
-      response = await geminiService.processMessage(message, userId);
-      console.log(`Gemini Response: ${response.message}`);
-    } catch (error) {
-      // Comment out fallback to AIService
-      // console.log('Gemini failed, using fallback AI service');
-      // response = await aiService.processMessage(message, userId);
-      // console.log(`Fallback AI Response: ${response.message}`);
-      throw error;
-    }
+    // Process message with Gemini service
+    const response = await geminiService.processMessage(message, userId);
+    console.log(`Gemini Response: ${response.message}`);
 
-    // If threadId is provided, save the conversation
+    // Save conversation to database if threadId is provided
     if (threadId) {
       try {
-        // Save user message
-        await conversationController.addMessage({
-          params: { threadId },
-          body: { content: message, role: 'user' },
-          user: { id: userId },
-          headers: req.headers
-        }, { status: () => ({ json: () => {} }) });
-
-        // Save AI response
-        await conversationController.addMessage({
-          params: { threadId },
-          body: { 
-            content: response.message, 
-            role: 'assistant',
-            metadata: { actions: response.actions || [] }
-          },
-          user: { id: userId },
-          headers: req.headers
-        }, { status: () => ({ json: () => {} }) });
-      } catch (saveError) {
-        console.error('Error saving conversation:', saveError);
-        // Don't fail the request if saving fails
+        const token = req.headers.authorization?.replace('Bearer ', '');
+        await conversationController.addMessage(threadId, message, 'user', {}, token);
+        await conversationController.addMessage(threadId, response.message, 'assistant', { actions: response.actions }, token);
+      } catch (dbError) {
+        console.error('Error saving conversation to database:', dbError);
+        // Continue with response even if database save fails
       }
     }
 
     res.json({
       message: response.message,
-      actions: response.actions || [],
-      threadId: threadId
+      actions: response.actions || []
     });
 
   } catch (error) {
     console.error('AI Chat Error:', error);
     res.status(500).json({ 
       error: 'Failed to process message',
-      message: "I'm sorry, I encountered an error. Please try again."
+      message: 'I\'m sorry, I encountered an error processing your request. Please try again.'
     });
   }
 });
@@ -84,24 +58,78 @@ router.post('/threads', requireAuth, async (req, res) => {
     const { title, summary } = req.body;
     const userId = req.user.id;
 
-    // Generate a title if not provided
-    let threadTitle = title;
-    if (!threadTitle) {
-      threadTitle = `Conversation ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`;
-    }
-
-    const thread = await conversationController.createThread({
-      body: { title: threadTitle, summary },
-      user: { id: userId },
-      headers: req.headers
-    }, res);
-
+    const thread = await conversationController.createThread(userId, title || 'New Conversation', summary);
+    res.json(thread);
   } catch (error) {
-    console.error('Error creating conversation thread:', error);
-    res.status(500).json({ 
-      error: 'Failed to create conversation thread',
-      message: "I'm sorry, I couldn't create a new conversation thread."
-    });
+    console.error('Create Thread Error:', error);
+    res.status(500).json({ error: 'Failed to create conversation thread' });
+  }
+});
+
+// Get conversation threads for user
+router.get('/threads', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const threads = await conversationController.getThreads(userId);
+    res.json(threads);
+  } catch (error) {
+    console.error('Get Threads Error:', error);
+    res.status(500).json({ error: 'Failed to get conversation threads' });
+  }
+});
+
+// Get specific conversation thread
+router.get('/threads/:threadId', requireAuth, async (req, res) => {
+  try {
+    const { threadId } = req.params;
+    const userId = req.user.id;
+    
+    const thread = await conversationController.getThread(threadId, userId);
+    if (!thread) {
+      return res.status(404).json({ error: 'Thread not found' });
+    }
+    
+    res.json(thread);
+  } catch (error) {
+    console.error('Get Thread Error:', error);
+    res.status(500).json({ error: 'Failed to get conversation thread' });
+  }
+});
+
+// Update conversation thread
+router.put('/threads/:threadId', requireAuth, async (req, res) => {
+  try {
+    const { threadId } = req.params;
+    const { title, summary } = req.body;
+    const userId = req.user.id;
+    
+    const updatedThread = await conversationController.updateThread(threadId, userId, { title, summary });
+    if (!updatedThread) {
+      return res.status(404).json({ error: 'Thread not found' });
+    }
+    
+    res.json(updatedThread);
+  } catch (error) {
+    console.error('Update Thread Error:', error);
+    res.status(500).json({ error: 'Failed to update conversation thread' });
+  }
+});
+
+// Delete conversation thread
+router.delete('/threads/:threadId', requireAuth, async (req, res) => {
+  try {
+    const { threadId } = req.params;
+    const userId = req.user.id;
+    
+    const deleted = await conversationController.deleteThread(threadId, userId);
+    if (!deleted) {
+      return res.status(404).json({ error: 'Thread not found' });
+    }
+    
+    res.json({ message: 'Thread deleted successfully' });
+  } catch (error) {
+    console.error('Delete Thread Error:', error);
+    res.status(500).json({ error: 'Failed to delete conversation thread' });
   }
 });
 

@@ -1,12 +1,10 @@
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.SUPABASE_URL, 
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-
 export async function storeGoogleTokens(userId, tokens) {
   try {
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.SUPABASE_URL, 
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
     const { data, error } = await supabase
       .from('google_tokens')
       .upsert({
@@ -20,12 +18,10 @@ export async function storeGoogleTokens(userId, tokens) {
       }, {
         onConflict: 'user_id'
       });
-
     if (error) {
       console.error('Error storing Google tokens:', error);
       throw error;
     }
-
     return data;
   } catch (error) {
     console.error('Failed to store Google tokens:', error);
@@ -35,12 +31,16 @@ export async function storeGoogleTokens(userId, tokens) {
 
 export async function getGoogleTokens(userId) {
   try {
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.SUPABASE_URL, 
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
     const { data, error } = await supabase
       .from('google_tokens')
       .select('*')
       .eq('user_id', userId)
       .single();
-
     if (error) {
       if (error.code === 'PGRST116') {
         // No tokens found for user
@@ -48,7 +48,6 @@ export async function getGoogleTokens(userId) {
       }
       throw error;
     }
-
     return data;
   } catch (error) {
     console.error('Failed to get Google tokens:', error);
@@ -58,15 +57,18 @@ export async function getGoogleTokens(userId) {
 
 export async function deleteGoogleTokens(userId) {
   try {
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.SUPABASE_URL, 
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
     const { error } = await supabase
       .from('google_tokens')
       .delete()
       .eq('user_id', userId);
-
     if (error) {
       throw error;
     }
-
     return true;
   } catch (error) {
     console.error('Failed to delete Google tokens:', error);

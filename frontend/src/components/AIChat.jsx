@@ -1,6 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { aiAPI, goalsAPI, tasksAPI, conversationsAPI } from '../services/api';
+import { aiAPI, goalsAPI, tasksAPI, conversationsAPI, calendarAPI } from '../services/api';
 import BulkApprovalPanel from './BulkApprovalPanel';
+
+// Utility function to generate unique IDs
+let messageIdCounter = 0;
+const generateUniqueId = () => {
+  messageIdCounter += 1;
+  return Date.now() + messageIdCounter;
+};
 
 const AIChat = ({ onNavigateToTab }) => {
   const [messages, setMessages] = useState([]);
@@ -14,6 +21,8 @@ const AIChat = ({ onNavigateToTab }) => {
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const messagesEndRef = useRef(null);
   const [pendingApproval, setPendingApproval] = useState(null);
+  const [taskListByMessageId, setTaskListByMessageId] = useState({});
+  const [listByMessageId, setListByMessageId] = useState({});
 
   // Load user data and conversation threads
   useEffect(() => {
@@ -279,19 +288,6 @@ const AIChat = ({ onNavigateToTab }) => {
     return message.split(' ').slice(0, 8).join(' ') + (message.split(' ').length > 8 ? '...' : '');
   };
 
-  // Helper: Try to extract a JSON array of tasks/goals from Gemini's response
-  const tryExtractBulkList = (message) => {
-    try {
-      const parsed = JSON.parse(message);
-      if (Array.isArray(parsed) && parsed.every(item => item.title)) {
-        return parsed;
-      }
-    } catch (e) {
-      // Not JSON, ignore
-    }
-    return null;
-  };
-
   // Modified: handle Gemini response
   const handleGeminiResponse = (response) => {
     console.log('🔍 Raw response from API:', response);
@@ -318,17 +314,50 @@ const AIChat = ({ onNavigateToTab }) => {
         return;
       }
       
-      const bulkList = tryExtractBulkList(message);
-      if (bulkList) {
-        console.log('📋 Bulk list detected:', bulkList);
-        setPendingApproval(bulkList);
-        return;
+      // Process structured actions if present
+      if (actions && actions.length > 0) {
+        console.log('📋 Processing structured actions:', actions);
+        
+        // Process each action based on the new JSON format
+        const processedActions = actions.map(action => {
+          console.log('Processing action:', action);
+          
+          // Validate action structure
+          if (!action.action_type || !action.entity_type || !action.details) {
+            console.warn('Invalid action structure:', action);
+            return null;
+          }
+          
+          return {
+            type: action.entity_type,
+            operation: action.action_type,
+            data: action.details
+          };
+        }).filter(Boolean);
+        
+        if (processedActions.length > 0) {
+          // Check if we need bulk approval
+          if (processedActions.length > 1) {
+            setPendingApproval({
+              items: processedActions,
+              message: message
+            });
+            return;
+          }
+          
+          // Single action - process immediately
+          const action = processedActions[0];
+          console.log('Processing single action:', action);
+          
+          // Execute the action based on type and operation
+          executeAction(action);
+        }
       }
       
-      console.log('💬 Adding normal message to chat');
-      // Fallback: normal message
+      console.log('💬 Adding message to chat');
+      // Add AI response to messages
       setMessages(prev => [...prev, {
-        id: Date.now(),
+        id: generateUniqueId(),
         type: 'ai',
         content: message,
         timestamp: new Date(),
@@ -337,7 +366,7 @@ const AIChat = ({ onNavigateToTab }) => {
     } catch (error) {
       console.error('❌ Error handling Gemini response:', error);
       setMessages(prev => [...prev, {
-        id: Date.now(),
+        id: generateUniqueId(),
         type: 'ai',
         content: "I'm sorry, I encountered an error processing the response. Please try again.",
         timestamp: new Date(),
@@ -352,7 +381,7 @@ const AIChat = ({ onNavigateToTab }) => {
     if (!inputMessage.trim() || isLoading) return;
 
     const userMessage = {
-      id: Date.now(),
+      id: generateUniqueId(),
       type: 'user',
       content: inputMessage,
       timestamp: new Date()
@@ -417,7 +446,7 @@ const AIChat = ({ onNavigateToTab }) => {
       console.error('Error sending message:', error);
       
       setMessages(prev => [...prev, {
-        id: Date.now() + 1,
+        id: generateUniqueId(),
         type: 'ai',
         content: "I'm sorry, I encountered an error. Please try again or check your connection.",
         timestamp: new Date()
@@ -438,12 +467,17 @@ const AIChat = ({ onNavigateToTab }) => {
   const handleBulkApprove = async (items) => {
     setIsLoading(true);
     try {
-      await tasksAPI.bulkCreate(items);
+      // Extract task data from action objects if needed
+      const taskData = items.map(item => 
+        item.data ? item.data : item
+      );
+      
+      await tasksAPI.bulkCreate(taskData);
       setPendingApproval(null);
       setMessages(prev => [
         ...prev,
         {
-          id: Date.now(),
+          id: generateUniqueId(),
           type: 'ai',
           content: 'Tasks have been added to your planner!',
           timestamp: new Date()
@@ -456,7 +490,7 @@ const AIChat = ({ onNavigateToTab }) => {
       setMessages(prev => [
         ...prev,
         {
-          id: Date.now(),
+          id: generateUniqueId(),
           type: 'ai',
           content: 'There was an error adding your tasks. Please try again.',
           timestamp: new Date()
@@ -472,12 +506,124 @@ const AIChat = ({ onNavigateToTab }) => {
     setMessages(prev => [
       ...prev,
       {
-        id: Date.now(),
+        id: generateUniqueId(),
         type: 'ai',
         content: 'Bulk addition cancelled.',
         timestamp: new Date()
       }
     ]);
+  };
+
+  // Execute action based on type and operation
+  const executeAction = async (action) => {
+    console.log('Executing action:', action);
+    
+    try {
+      switch (action.type) {
+        case 'goal':
+          if (action.operation === 'create') {
+            await goalsAPI.create(action.data);
+            setMessages(prev => [...prev, {
+              id: generateUniqueId(),
+              type: 'ai',
+              content: `✅ Goal "${action.data.title}" has been created!`,
+              timestamp: new Date()
+            }]);
+            refreshUserData();
+          }
+          break;
+          
+        case 'task':
+          if (action.operation === 'create') {
+            await tasksAPI.create(action.data);
+            setMessages(prev => [...prev, {
+              id: generateUniqueId(),
+              type: 'ai',
+              content: `✅ Task "${action.data.title}" has been created!`,
+              timestamp: new Date()
+            }]);
+            refreshUserData();
+          }
+          break;
+          
+        case 'calendar_event':
+          if (action.operation === 'create') {
+            // Map Gemini fields to backend fields
+            const data = action.data || action.details || {};
+            const eventPayload = {
+              summary: data.title || data.summary || 'Untitled Event',
+              description: data.description || '',
+              startTime: data.start_time || data.startTime,
+              endTime: data.end_time || data.endTime,
+              timeZone: data.time_zone || data.timeZone || 'UTC',
+            };
+            await calendarAPI.createEvent(eventPayload);
+            setMessages(prev => [...prev, {
+              id: generateUniqueId(),
+              type: 'ai',
+              content: `✅ Calendar event "${eventPayload.summary}" has been scheduled!`,
+              timestamp: new Date()
+            }]);
+          }
+          break;
+          
+        default:
+          console.warn('Unknown action type:', action.type);
+      }
+    } catch (error) {
+      console.error('Error executing action:', error);
+      setMessages(prev => [...prev, {
+        id: generateUniqueId(),
+        type: 'ai',
+        content: `❌ Error: Failed to ${action.operation} ${action.type}. Please try again.`,
+        timestamp: new Date()
+      }]);
+    }
+  };
+
+  // Helper to fetch tasks for a message
+  const fetchTasksForMessage = async (messageId) => {
+    setTaskListByMessageId(prev => ({
+      ...prev,
+      [messageId]: { loading: true, error: null, tasks: [] }
+    }));
+    try {
+      const response = await tasksAPI.getAll();
+      setTaskListByMessageId(prev => ({
+        ...prev,
+        [messageId]: { loading: false, error: null, tasks: response.data || [] }
+      }));
+    } catch (error) {
+      setTaskListByMessageId(prev => ({
+        ...prev,
+        [messageId]: { loading: false, error: 'Failed to load tasks', tasks: [] }
+      }));
+    }
+  };
+
+  // Helper to fetch list (tasks or goals) for a message
+  const fetchListForMessage = async (messageId, type) => {
+    setListByMessageId(prev => ({
+      ...prev,
+      [messageId]: { type, loading: true, error: null, items: [] }
+    }));
+    try {
+      let response;
+      if (type === 'task') {
+        response = await tasksAPI.getAll();
+      } else if (type === 'goal') {
+        response = await goalsAPI.getAll();
+      }
+      setListByMessageId(prev => ({
+        ...prev,
+        [messageId]: { type, loading: false, error: null, items: response.data || [] }
+      }));
+    } catch (error) {
+      setListByMessageId(prev => ({
+        ...prev,
+        [messageId]: { type, loading: false, error: 'Failed to load ' + type + 's', items: [] }
+      }));
+    }
   };
 
   // Show loading state while fetching user data
@@ -739,11 +885,16 @@ const AIChat = ({ onNavigateToTab }) => {
         {/* Messages Area */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {messages.map((message) => (
-            <MessageBubble key={message.id} message={message} />
+            <MessageBubble
+              key={message.id}
+              message={message}
+              fetchListForMessage={fetchListForMessage}
+              listState={listByMessageId[message.id]}
+            />
           ))}
           {pendingApproval && (
             <BulkApprovalPanel
-              items={pendingApproval}
+              items={pendingApproval.items || pendingApproval}
               onApprove={handleBulkApprove}
               onCancel={handleBulkCancel}
             />
@@ -792,8 +943,81 @@ const AIChat = ({ onNavigateToTab }) => {
   );
 };
 
-const MessageBubble = ({ message }) => {
+const MessageBubble = ({ message, fetchListForMessage, listState }) => {
+  // Helper to detect and parse Markdown JSON code blocks - now handles multiple JSON objects
+  const extractJsonFromCodeBlock = (content) => {
+    const codeBlockMatches = content.match(/```json\s*([\s\S]*?)\s*```/gi);
+    if (codeBlockMatches && codeBlockMatches.length > 0) {
+      const jsonObjects = [];
+      for (const match of codeBlockMatches) {
+        try {
+          const jsonContent = match.replace(/```json\s*/i, '').replace(/\s*```/i, '');
+          const parsed = JSON.parse(jsonContent);
+          jsonObjects.push(parsed);
+        } catch (e) {
+          console.error('Error parsing JSON from code block:', e);
+        }
+      }
+      return jsonObjects.length > 0 ? jsonObjects : null;
+    }
+    return null;
+  };
+
+  // New: If this is a 'read task' or 'read goal' code block, fetch list on first render
+  useEffect(() => {
+    const jsonObjects = extractJsonFromCodeBlock(message.content);
+    if (
+      jsonObjects &&
+      jsonObjects.length > 0 &&
+      fetchListForMessage &&
+      !listState // Only fetch if not already fetched
+    ) {
+      // Check if any of the JSON objects are read actions
+      const readAction = jsonObjects.find(json => 
+        json.action_type === 'read' && 
+        (json.entity_type === 'task' || json.entity_type === 'goal')
+      );
+      
+      if (readAction) {
+        fetchListForMessage(message.id, readAction.entity_type);
+      }
+    }
+  }, [message, fetchListForMessage, listState]);
+
   const formatAIContent = (content = '') => {
+    const jsonObjects = extractJsonFromCodeBlock(content);
+    if (jsonObjects && jsonObjects.length > 0) {
+      // Check for read actions first
+      const readTask = jsonObjects.find(json => json.action_type === 'read' && json.entity_type === 'task');
+      const readGoal = jsonObjects.find(json => json.action_type === 'read' && json.entity_type === 'goal');
+      
+      if (readTask) {
+        return '<strong>Here are your tasks:</strong>';
+      }
+      if (readGoal) {
+        return '<strong>Here are your goals:</strong>';
+      }
+      
+      // For create/update/delete actions, show a summary
+      const createActions = jsonObjects.filter(json => json.action_type === 'create');
+      const updateActions = jsonObjects.filter(json => json.action_type === 'update');
+      const deleteActions = jsonObjects.filter(json => json.action_type === 'delete');
+      
+      let summary = '';
+      if (createActions.length > 0) {
+        summary += `Created ${createActions.length} item${createActions.length > 1 ? 's' : ''}`;
+      }
+      if (updateActions.length > 0) {
+        summary += `${summary ? ', ' : ''}Updated ${updateActions.length} item${updateActions.length > 1 ? 's' : ''}`;
+      }
+      if (deleteActions.length > 0) {
+        summary += `${summary ? ', ' : ''}Deleted ${deleteActions.length} item${deleteActions.length > 1 ? 's' : ''}`;
+      }
+      
+      return `<strong>${summary}</strong>`;
+    }
+    
+    // Fallback to normal formatting
     return content
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
@@ -815,6 +1039,11 @@ const MessageBubble = ({ message }) => {
     );
   } else {
     // AI message: left-justified, full-width, no bubble
+    const jsonObjects = extractJsonFromCodeBlock(message.content);
+    const isReadTask = jsonObjects && jsonObjects.some(json => json.action_type === 'read' && json.entity_type === 'task');
+    const isReadGoal = jsonObjects && jsonObjects.some(json => json.action_type === 'read' && json.entity_type === 'goal');
+    const hasActions = jsonObjects && jsonObjects.length > 0;
+    
     return (
       <div className="flex">
         <div className="w-full text-left">
@@ -823,13 +1052,48 @@ const MessageBubble = ({ message }) => {
             style={{ background: 'none', borderRadius: 0, padding: 0, marginLeft: 0, marginRight: 0 }}
             dangerouslySetInnerHTML={{ __html: formatAIContent(message.content) }}
           />
+          {/* Render task or goal list if this is a read-task or read-goal action */}
+          {(isReadTask || isReadGoal) && (
+            <div className="mt-2">
+              {listState?.loading && <div className="text-xs text-gray-500">Loading {isReadTask ? 'tasks' : 'goals'}...</div>}
+              {listState?.error && <div className="text-xs text-red-500">{listState.error}</div>}
+              {Array.isArray(listState?.items) && listState.items.length > 0 && (
+                <ul className="list-disc pl-5 text-sm mt-1">
+                  {listState.items.map((item) => (
+                    <li key={item.id} className={item.completed ? 'line-through text-gray-400' : ''}>
+                      {item.title}
+                      {item.due_date && (
+                        <span className="ml-2 text-xs text-gray-500">(Due: {new Date(item.due_date).toLocaleDateString()})</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {Array.isArray(listState?.items) && listState.items.length === 0 && !listState.loading && !listState.error && (
+                <div className="text-xs text-gray-500">No {isReadTask ? 'tasks' : 'goals'} found.</div>
+              )}
+            </div>
+          )}
+          {/* Show actions taken for create/update/delete operations */}
+          {hasActions && !isReadTask && !isReadGoal && (
+            <div className="mt-3 pt-3 border-t border-black/10">
+              <div className="text-xs text-gray-500 mb-2">Actions taken:</div>
+              <div className="space-y-1">
+                {jsonObjects.map((action, index) => (
+                  <div key={index} className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                    ✓ {action.action_type} {action.entity_type}: {action.details?.title || 'Action completed'}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {message.actions && message.actions.length > 0 && (
             <div className="mt-3 pt-3 border-t border-black/10">
               <div className="text-xs text-gray-500 mb-2">Actions taken:</div>
               <div className="space-y-1">
                 {message.actions.map((action, index) => (
                   <div key={index} className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
-                    ✓ {action}
+                    ✓ {action.action_type} {action.entity_type}: {action.details?.title || 'Action completed'}
                   </div>
                 ))}
               </div>

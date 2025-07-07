@@ -1,51 +1,60 @@
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.SUPABASE_URL, 
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-
 // Goals API
 export const goalsAPI = {
   getAll: async () => {
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.SUPABASE_URL, 
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
     const { data, error } = await supabase
       .from('goals')
       .select('*')
       .order('created_at', { ascending: false });
-    
     if (error) throw error;
     return { data };
   },
 
   create: async (goalData) => {
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.SUPABASE_URL, 
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
     const { data, error } = await supabase
       .from('goals')
       .insert(goalData)
       .select()
       .single();
-    
     if (error) throw error;
     return { data };
   },
 
   update: async (id, goalData) => {
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.SUPABASE_URL, 
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
     const { data, error } = await supabase
       .from('goals')
       .update(goalData)
       .eq('id', id)
       .select()
       .single();
-    
     if (error) throw error;
     return { data };
   },
 
   delete: async (id) => {
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.SUPABASE_URL, 
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
     const { error } = await supabase
       .from('goals')
       .delete()
       .eq('id', id);
-    
     if (error) throw error;
     return { success: true };
   }
@@ -54,6 +63,11 @@ export const goalsAPI = {
 // Tasks API
 export const tasksAPI = {
   getAll: async () => {
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.SUPABASE_URL, 
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
     const { data, error } = await supabase
       .from('tasks')
       .select(`
@@ -64,40 +78,51 @@ export const tasksAPI = {
         )
       `)
       .order('created_at', { ascending: false });
-    
     if (error) throw error;
     return { data };
   },
 
   create: async (taskData) => {
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.SUPABASE_URL, 
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
     const { data, error } = await supabase
       .from('tasks')
       .insert(taskData)
       .select()
       .single();
-    
     if (error) throw error;
     return { data };
   },
 
   update: async (id, taskData) => {
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.SUPABASE_URL, 
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
     const { data, error } = await supabase
       .from('tasks')
       .update(taskData)
       .eq('id', id)
       .select()
       .single();
-    
     if (error) throw error;
     return { data };
   },
 
   delete: async (id) => {
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.SUPABASE_URL, 
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
     const { error } = await supabase
       .from('tasks')
       .delete()
       .eq('id', id);
-    
     if (error) throw error;
     return { success: true };
   }
