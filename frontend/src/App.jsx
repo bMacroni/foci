@@ -41,19 +41,6 @@ const AppContent = () => {
 
   return (
     <div className="App">
-      <nav className="bg-white shadow-sm border-b">
-        <div className="container mx-auto px-4 py-3">
-          <div className="flex justify-between items-center">
-            <h1 className="text-xl font-bold text-gray-900">Foci</h1>
-            <button
-              onClick={logout}
-              className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800"
-            >
-              Logout
-            </button>
-          </div>
-        </div>
-      </nav>
       <Routes>
         <Route path="/" element={<Dashboard showSuccess={showSuccess} />} />
       </Routes>

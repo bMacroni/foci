@@ -266,6 +266,19 @@ const AIChat = ({ onNavigateToTab }) => {
     }
   };
 
+  const getRequestType = (message) => {
+    // Simple keyword-based classification for demo; can be replaced with smarter logic
+    if (/goal/i.test(message)) return 'Goal';
+    if (/task/i.test(message)) return 'Task';
+    if (/calendar|event|schedule/i.test(message)) return 'Calendar';
+    return 'General';
+  };
+
+  const getSummary = (message) => {
+    // Use the first 8 words as a summary
+    return message.split(' ').slice(0, 8).join(' ') + (message.split(' ').length > 8 ? '...' : '');
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!inputMessage.trim() || isLoading) return;
@@ -284,20 +297,24 @@ const AIChat = ({ onNavigateToTab }) => {
     try {
       // Create a new thread if none exists and get the thread ID
       let threadId = currentThreadId;
+      let threadMeta = null;
       if (!threadId) {
-        console.log('No current thread, creating new one');
-        const title = `Conversation ${new Date().toLocaleDateString()}`;
+        const type = getRequestType(inputMessage);
+        const summary = getSummary(inputMessage);
+        const createdAt = new Date();
+        const title = `[${type}] ${summary}`;
         const threadResponse = await conversationsAPI.createThread(title);
         threadId = threadResponse.data.id;
         setCurrentThreadId(threadId);
-        
-        // Add the new thread to the list without refreshing the entire list
-        const newThread = {
+        threadMeta = {
           ...threadResponse.data,
-          message_count: 0,
-          last_message: null
+          type,
+          summary,
+          created_at: createdAt.toISOString(),
+          initial_message: inputMessage
         };
-        setConversationThreads(prev => Array.isArray(prev) ? [newThread, ...prev] : [newThread]);
+        // Add the new thread to the list without refreshing the entire list
+        setConversationThreads(prev => Array.isArray(prev) ? [threadMeta, ...prev] : [threadMeta]);
       }
 
       const response = await aiAPI.sendMessage(inputMessage, threadId);
@@ -395,7 +412,7 @@ const AIChat = ({ onNavigateToTab }) => {
   }
 
   return (
-    <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl border border-black/10 h-full flex overflow-hidden relative">
+    <div className="bg-white h-full flex overflow-hidden relative">
       {/* Mobile Sidebar Overlay */}
       {showMobileSidebar && (
         <div className="lg:hidden fixed inset-0 bg-black/50 z-50">
@@ -435,50 +452,72 @@ const AIChat = ({ onNavigateToTab }) => {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {conversationThreads.map((thread) => (
-                    <div
-                      key={thread.id}
-                      className={`p-3 rounded-xl cursor-pointer transition-colors ${
-                        currentThreadId === thread.id
-                          ? 'bg-black text-white'
-                          : 'hover:bg-gray-100'
-                      }`}
-                      onClick={() => {
-                        loadConversationThread(thread.id);
-                        setShowMobileSidebar(false);
-                      }}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-sm font-medium truncate ${
-                            currentThreadId === thread.id ? 'text-white' : 'text-black'
-                          }`}>
-                            {thread.title}
-                          </p>
-                          <p className={`text-xs truncate ${
-                            currentThreadId === thread.id ? 'text-gray-200' : 'text-gray-500'
-                          }`}>
-                            {new Date(thread.created_at).toLocaleDateString()}
-                          </p>
+                  {conversationThreads.map((thread) => {
+                    // Try to extract type, summary, and created_at from thread
+                    let type = 'General';
+                    let summary = '';
+                    let createdAt = thread.created_at;
+                    if (thread.title && thread.title.startsWith('[')) {
+                      const match = thread.title.match(/^\[(.*?)\]\s(.+)/);
+                      if (match) {
+                        type = match[1];
+                        summary = match[2];
+                      } else {
+                        summary = thread.title;
+                      }
+                    } else {
+                      summary = thread.title || '';
+                    }
+                    // Prefer thread.created_at, fallback to thread.last_message?.created_at
+                    if (!createdAt && thread.last_message && thread.last_message.created_at) {
+                      createdAt = thread.last_message.created_at;
+                    }
+                    const formattedDate = createdAt ? new Date(createdAt).toLocaleString() : '';
+                    return (
+                      <div
+                        key={thread.id}
+                        className={`p-3 rounded-xl cursor-pointer transition-colors ${
+                          currentThreadId === thread.id
+                            ? 'bg-black text-white'
+                            : 'hover:bg-gray-100'
+                        }`}
+                        onClick={() => {
+                          loadConversationThread(thread.id);
+                          setShowMobileSidebar(false);
+                        }}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm font-medium truncate ${
+                              currentThreadId === thread.id ? 'text-white' : 'text-black'
+                            }`}>
+                              [{type}] {summary}
+                            </p>
+                            <p className={`text-xs truncate ${
+                              currentThreadId === thread.id ? 'text-gray-200' : 'text-gray-500'
+                            }`}>
+                              {formattedDate}
+                            </p>
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteThread(thread.id);
+                            }}
+                            className={`p-1 rounded ${
+                              currentThreadId === thread.id
+                                ? 'hover:bg-white/20'
+                                : 'hover:bg-gray-200'
+                            }`}
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
                         </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteThread(thread.id);
-                          }}
-                          className={`p-1 rounded ${
-                            currentThreadId === thread.id
-                              ? 'hover:bg-white/20'
-                              : 'hover:bg-gray-200'
-                          }`}
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -523,47 +562,69 @@ const AIChat = ({ onNavigateToTab }) => {
               </div>
             ) : (
               <div className="space-y-2">
-                {conversationThreads.map((thread) => (
-                  <div
-                    key={thread.id}
-                    className={`p-3 rounded-xl cursor-pointer transition-colors ${
-                      currentThreadId === thread.id
-                        ? 'bg-black text-white'
-                        : 'hover:bg-gray-100'
-                    }`}
-                    onClick={() => loadConversationThread(thread.id)}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-medium truncate ${
-                          currentThreadId === thread.id ? 'text-white' : 'text-black'
-                        }`}>
-                          {thread.title}
-                        </p>
-                        <p className={`text-xs truncate ${
-                          currentThreadId === thread.id ? 'text-gray-200' : 'text-gray-500'
-                        }`}>
-                          {new Date(thread.created_at).toLocaleDateString()}
-                        </p>
+                {conversationThreads.map((thread) => {
+                  // Try to extract type, summary, and created_at from thread
+                  let type = 'General';
+                  let summary = '';
+                  let createdAt = thread.created_at;
+                  if (thread.title && thread.title.startsWith('[')) {
+                    const match = thread.title.match(/^\[(.*?)\]\s(.+)/);
+                    if (match) {
+                      type = match[1];
+                      summary = match[2];
+                    } else {
+                      summary = thread.title;
+                    }
+                  } else {
+                    summary = thread.title || '';
+                  }
+                  // Prefer thread.created_at, fallback to thread.last_message?.created_at
+                  if (!createdAt && thread.last_message && thread.last_message.created_at) {
+                    createdAt = thread.last_message.created_at;
+                  }
+                  const formattedDate = createdAt ? new Date(createdAt).toLocaleString() : '';
+                  return (
+                    <div
+                      key={thread.id}
+                      className={`p-3 rounded-xl cursor-pointer transition-colors ${
+                        currentThreadId === thread.id
+                          ? 'bg-black text-white'
+                          : 'hover:bg-gray-100'
+                      }`}
+                      onClick={() => loadConversationThread(thread.id)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-medium truncate ${
+                            currentThreadId === thread.id ? 'text-white' : 'text-black'
+                          }`}>
+                            [{type}] {summary}
+                          </p>
+                          <p className={`text-xs truncate ${
+                            currentThreadId === thread.id ? 'text-gray-200' : 'text-gray-500'
+                          }`}>
+                            {formattedDate}
+                          </p>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteThread(thread.id);
+                          }}
+                          className={`p-1 rounded ${
+                            currentThreadId === thread.id
+                              ? 'hover:bg-white/20'
+                              : 'hover:bg-gray-200'
+                          }`}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
                       </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteThread(thread.id);
-                        }}
-                        className={`p-1 rounded ${
-                          currentThreadId === thread.id
-                            ? 'hover:bg-white/20'
-                            : 'hover:bg-gray-200'
-                        }`}
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -572,48 +633,6 @@ const AIChat = ({ onNavigateToTab }) => {
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
-        {/* Chat Header */}
-        <div className="bg-black text-white p-4 lg:p-6">
-          <div className="flex items-center justify-between">
-            {/* Hamburger menu button */}
-            <button
-              onClick={() => setShowMobileSidebar(true)}
-              className="lg:hidden p-2 text-gray-300 hover:text-white transition-colors"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-            
-            <div className="flex items-center">
-              <div className="w-10 h-10 lg:w-12 lg:h-12 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mr-3 lg:mr-4 shadow-lg">
-                <svg className="w-5 h-5 lg:w-6 lg:h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-lg lg:text-xl font-bold">Foci.ai</h3>
-                <p className="text-gray-200 text-sm lg:text-base font-medium">Your intelligent productivity companion</p>
-              </div>
-            </div>
-            
-            {/* Logout button */}
-            <button
-              onClick={() => {
-                localStorage.removeItem('jwt_token');
-                window.location.href = '/login';
-              }}
-              className="p-2 text-gray-300 hover:text-white transition-colors"
-            >
-              <svg className="w-5 h-5 lg:w-6 lg:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-            </button>
-          </div>
-        </div>
-
-
-
         {/* Messages Area */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {messages.map((message) => (
@@ -633,8 +652,6 @@ const AIChat = ({ onNavigateToTab }) => {
           
           <div ref={messagesEndRef} />
         </div>
-
-
 
         {/* Input Area */}
         <div className="border-t border-black/10 p-4">
@@ -677,35 +694,44 @@ const MessageBubble = ({ message }) => {
       .replace(/\n/g, '<br>');
   };
 
-  return (
-    <div className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-      <div
-        className={`max-w-[80%] px-4 py-3 rounded-2xl ${
-          message.type === 'user'
-            ? 'bg-black text-white'
-            : 'bg-gray-100 text-black'
-        }`}
-      >
-        <div
-          className="prose prose-sm max-w-none"
-          dangerouslySetInnerHTML={{ __html: formatAIContent(message.content) }}
-        />
-        
-        {message.actions && message.actions.length > 0 && (
-          <div className="mt-3 pt-3 border-t border-black/10">
-            <div className="text-xs text-gray-500 mb-2">Actions taken:</div>
-            <div className="space-y-1">
-              {message.actions.map((action, index) => (
-                <div key={index} className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
-                  ✓ {action}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+  if (message.type === 'user') {
+    // User message: right-aligned bubble
+    return (
+      <div className="flex justify-end">
+        <div className="max-w-[80%] px-4 py-3 rounded-2xl bg-black text-white">
+          <div
+            className="prose prose-sm max-w-none"
+            dangerouslySetInnerHTML={{ __html: formatAIContent(message.content) }}
+          />
+        </div>
       </div>
-    </div>
-  );
+    );
+  } else {
+    // AI message: left-justified, full-width, no bubble
+    return (
+      <div className="flex">
+        <div className="w-full text-left">
+          <div
+            className="prose prose-sm max-w-none text-black text-left"
+            style={{ background: 'none', borderRadius: 0, padding: 0, marginLeft: 0, marginRight: 0 }}
+            dangerouslySetInnerHTML={{ __html: formatAIContent(message.content) }}
+          />
+          {message.actions && message.actions.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-black/10">
+              <div className="text-xs text-gray-500 mb-2">Actions taken:</div>
+              <div className="space-y-1">
+                {message.actions.map((action, index) => (
+                  <div key={index} className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                    ✓ {action}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 };
 
 export default AIChat; 
