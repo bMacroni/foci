@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import * as chrono from 'chrono-node';
 
 export class GeminiService {
   constructor() {
@@ -147,6 +148,8 @@ Response:`;
             
             // Validate JSON structure
             if (this._validateJsonStructure(jsonResponse)) {
+              // Normalize any due_date in details
+              this._normalizeDueDate(jsonResponse);
               validActions.push(jsonResponse);
             }
           } catch (parseError) {
@@ -172,6 +175,27 @@ Response:`;
           };
         }
       } else {
+        // If no JSON found, but the response contains a code block, try to extract and parse it
+        if (jsonMatches.length === 0 && text.includes('```json')) {
+          console.log('🟡 Attempting to extract JSON from code block:', text);
+          const codeBlockMatch = text.match(/```json\s*([\s\S]*?)\s*```/i);
+          if (codeBlockMatch) {
+            console.log('🟢 Code block matched:', codeBlockMatch[1]);
+            try {
+              const jsonResponse = JSON.parse(codeBlockMatch[1]);
+              if (this._validateJsonStructure(jsonResponse)) {
+                this._normalizeDueDate(jsonResponse);
+                this._addToHistory(userId, { role: 'assistant', content: text });
+                return {
+                  message: text,
+                  actions: [jsonResponse]
+                };
+              }
+            } catch (parseError) {
+              console.error('Error parsing JSON from code block:', parseError);
+            }
+          }
+        }
         // No JSON found, treat as regular conversational response
         this._addToHistory(userId, { role: 'assistant', content: text });
         return {
@@ -186,6 +210,35 @@ Response:`;
         message: "I'm sorry, I encountered an error processing your request. Please try again or rephrase your request.",
         actions: []
       };
+    }
+  }
+
+  /**
+   * Normalize due_date in Gemini JSON actions using chrono-node and current year logic
+   */
+  _normalizeDueDate(action) {
+    if (!action.details || !action.details.due_date) return;
+    let dueDateStr = action.details.due_date;
+    let parsed = (chrono && chrono.parseDate) ? chrono.parseDate(dueDateStr, new Date(), { forwardDate: true }) : null;
+    if (!parsed) {
+      // fallback: try parsing as ISO
+      parsed = new Date(dueDateStr);
+    }
+    if (parsed && !isNaN(parsed)) {
+      const now = new Date();
+      // If year is in the past, or not this year or next, set to this year
+      if (parsed.getFullYear() < now.getFullYear() || parsed.getFullYear() > now.getFullYear() + 1) {
+        parsed.setFullYear(now.getFullYear());
+      }
+      // If the date is in the past, move to next year
+      if (parsed < now) {
+        parsed.setFullYear(parsed.getFullYear() + 1);
+      }
+      // Format as YYYY-MM-DD
+      const yyyy = parsed.getFullYear();
+      const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+      const dd = String(parsed.getDate()).padStart(2, '0');
+      action.details.due_date = `${yyyy}-${mm}-${dd}`;
     }
   }
 

@@ -320,19 +320,24 @@ const AIChat = ({ onNavigateToTab }) => {
         
         // Process each action based on the new JSON format
         const processedActions = actions.map(action => {
-          console.log('Processing action:', action);
-          
-          // Validate action structure
-          if (!action.action_type || !action.entity_type || !action.details) {
-            console.warn('Invalid action structure:', action);
-            return null;
+          // Map Gemini fields to expected frontend fields
+          if (action.action_type && action.entity_type) {
+            return {
+              type: action.entity_type,
+              operation: action.action_type,
+              data: action.details || {},
+            };
           }
-          
-          return {
-            type: action.entity_type,
-            operation: action.action_type,
-            data: action.details
-          };
+          // Legacy support for simple actions
+          if (typeof action === 'string') {
+            const [type, operation] = action.split(' ');
+            return { type, operation, data: {} };
+          }
+          // Already in expected format
+          if (action.type && action.operation) {
+            return action;
+          }
+          return null;
         }).filter(Boolean);
         
         if (processedActions.length > 0) {
@@ -392,56 +397,19 @@ const AIChat = ({ onNavigateToTab }) => {
     setIsLoading(true);
 
     try {
-      // Create a new thread if none exists and get the thread ID
       let threadId = currentThreadId;
-      let threadMeta = null;
       if (!threadId) {
-        const type = getRequestType(inputMessage);
-        const summary = getSummary(inputMessage);
-        const createdAt = new Date();
-        const title = `[${type}] ${summary}`;
-        const threadResponse = await conversationsAPI.createThread(title);
-        threadId = threadResponse.data.id;
+        const response = await conversationsAPI.createThread({ title: getSummary(inputMessage) });
+        threadId = response.data.id;
         setCurrentThreadId(threadId);
-        threadMeta = {
-          ...threadResponse.data,
-          type,
-          summary,
-          created_at: createdAt.toISOString(),
-          initial_message: inputMessage
-        };
-        // Add the new thread to the list without refreshing the entire list
-        setConversationThreads(prev => Array.isArray(prev) ? [threadMeta, ...prev] : [threadMeta]);
+        setConversationThreads(prev => [response.data, ...prev]);
       }
-
+      
       console.log('🚀 Sending message to AI API...');
       const response = await aiAPI.sendMessage(inputMessage, threadId);
       console.log('✅ Received response from AI API');
       handleGeminiResponse(response);
       
-      // Update the current thread's last message in the list without full refresh
-      if (threadId) {
-        const responseData = response.data || response;
-        const message = responseData.message || '';
-        
-        setConversationThreads(prev => {
-          if (!Array.isArray(prev)) return prev;
-          return prev.map(thread => 
-            thread.id === threadId 
-              ? {
-                  ...thread,
-                  message_count: (thread.message_count || 0) + 2, // +2 for user and AI messages
-                  last_message: {
-                    content: message.substring(0, 100) + (message.length > 100 ? '...' : ''),
-                    role: 'assistant',
-                    created_at: new Date().toISOString()
-                  },
-                  updated_at: new Date().toISOString()
-                }
-              : thread
-          );
-        });
-      }
     } catch (error) {
       console.error('Error sending message:', error);
       
@@ -562,6 +530,32 @@ const AIChat = ({ onNavigateToTab }) => {
               id: generateUniqueId(),
               type: 'ai',
               content: `✅ Calendar event "${eventPayload.summary}" has been scheduled!`,
+              timestamp: new Date()
+            }]);
+          } else if (action.operation === 'read') {
+            let eventsResponse = await calendarAPI.getEvents();
+            console.log('📅 Raw events from backend:', eventsResponse.data);
+            let events = eventsResponse.data;
+            // If a due_date is present, filter events for that date
+            if (action.data && action.data.due_date) {
+              const targetDateStr = action.data.due_date;
+              console.log('🔎 Filtering for targetDateStr:', targetDateStr);
+              events = events.filter(event => {
+                let eventDateObj = event.start.dateTime ? new Date(event.start.dateTime) : new Date(event.start.date);
+                // Format as YYYY-MM-DD in UTC
+                const yyyy = eventDateObj.getUTCFullYear();
+                const mm = String(eventDateObj.getUTCMonth() + 1).padStart(2, '0');
+                const dd = String(eventDateObj.getUTCDate()).padStart(2, '0');
+                const eventDateStr = `${yyyy}-${mm}-${dd}`;
+                console.log('  Event:', event.summary, '| eventDateStr:', eventDateStr, '| Matches:', eventDateStr === targetDateStr);
+                return eventDateStr === targetDateStr;
+              });
+              console.log('✅ Filtered events:', events);
+            }
+            setMessages(prev => [...prev, {
+              id: generateUniqueId(),
+              type: 'calendar_events',
+              content: events,
               timestamp: new Date()
             }]);
           }
@@ -884,14 +878,33 @@ const AIChat = ({ onNavigateToTab }) => {
       <div className="flex-1 flex flex-col">
         {/* Messages Area */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {messages.map((message) => (
-            <MessageBubble
-              key={message.id}
-              message={message}
-              fetchListForMessage={fetchListForMessage}
-              listState={listByMessageId[message.id]}
-            />
-          ))}
+          {messages.map((message) => {
+            switch (message.type) {
+              case 'user':
+                return <MessageBubble key={message.id} message={message} />;
+              case 'ai':
+                return <MessageBubble key={message.id} message={message} fetchListForMessage={fetchListForMessage} listState={listByMessageId[message.id]} />;
+              case 'calendar_events':
+                return (
+                  <div key={message.id} className="p-4 bg-blue-100 rounded-lg">
+                    <p className="font-semibold">Here are your upcoming events:</p>
+                    <ul className="list-disc pl-5 mt-2">
+                      {Array.isArray(message.content) && message.content.length > 0 ? (
+                        message.content.map(event => (
+                          <li key={event.id}>
+                            <strong>{event.summary}</strong> on {new Date(event.start.dateTime || event.start.date).toLocaleDateString()}
+                          </li>
+                        ))
+                      ) : (
+                        <li>No upcoming events found.</li>
+                      )}
+                    </ul>
+                  </div>
+                );
+              default:
+                return null;
+            }
+          })}
           {pendingApproval && (
             <BulkApprovalPanel
               items={pendingApproval.items || pendingApproval}
@@ -1025,6 +1038,25 @@ const MessageBubble = ({ message, fetchListForMessage, listState }) => {
       .replace(/\n/g, '<br>');
   };
 
+  if (message.type === 'calendar_events') {
+    return (
+      <div className="p-4 bg-blue-100 rounded-lg">
+        <p className="font-semibold">Here are your upcoming events:</p>
+        <ul className="list-disc pl-5 mt-2">
+          {Array.isArray(message.content) && message.content.length > 0 ? (
+            message.content.map(event => (
+              <li key={event.id}>
+                <strong>{event.summary}</strong> on {new Date(event.start.dateTime || event.start.date).toLocaleDateString()}
+              </li>
+            ))
+          ) : (
+            <li>No upcoming events found.</li>
+          )}
+        </ul>
+      </div>
+    );
+  }
+
   if (message.type === 'user') {
     // User message: right-aligned bubble
     return (
@@ -1093,7 +1125,7 @@ const MessageBubble = ({ message, fetchListForMessage, listState }) => {
               <div className="space-y-1">
                 {message.actions.map((action, index) => (
                   <div key={index} className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
-                    ✓ {action.action_type} {action.entity_type}: {action.details?.title || 'Action completed'}
+                    ✓ {action.type}: {action.description}
                   </div>
                 ))}
               </div>

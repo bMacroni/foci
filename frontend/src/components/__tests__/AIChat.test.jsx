@@ -1,0 +1,143 @@
+import React from 'react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import AIChat from '../AIChat';
+import { aiAPI, calendarAPI } from '../../services/api';
+
+// Mock the api services
+vi.mock('../../services/api', () => ({
+  aiAPI: {
+    sendMessage: vi.fn(),
+  },
+  calendarAPI: {
+    getEvents: vi.fn(),
+  },
+  goalsAPI: {
+    getAll: vi.fn().mockResolvedValue({ data: [] }),
+  },
+  tasksAPI: {
+    getAll: vi.fn().mockResolvedValue({ data: [] }),
+  },
+  conversationsAPI: {
+    getThreads: vi.fn().mockResolvedValue({ data: [] }),
+    getMessages: vi.fn().mockResolvedValue({ data: [] }),
+    createThread: vi.fn().mockResolvedValue({ data: { id: 'thread-123' } }),
+  },
+}));
+
+describe('AIChat Component', () => {
+  it('should render calendar events when the AI returns a read_calendar_event action', async () => {
+    // Mock the AI response
+    const aiResponse = {
+      data: {
+        message: "I've processed your request and created 1 action:",
+        actions: [{ type: 'calendar_event', operation: 'read', description: "View this week's calendar schedule" }],
+      },
+    };
+    aiAPI.sendMessage.mockResolvedValue(aiResponse);
+
+    // Mock calendar API response
+    const calendarEvents = {
+      data: [
+        { id: 1, summary: 'Test Event 1', start: { dateTime: '2024-01-01T10:00:00Z' } },
+        { id: 2, summary: 'Test Event 2', start: { dateTime: '2024-01-02T12:00:00Z' } },
+      ],
+    };
+    calendarAPI.getEvents.mockResolvedValue(calendarEvents);
+
+    render(<AIChat />);
+
+    // Wait for the input to appear
+    const input = await screen.findByPlaceholderText("Tell me what you'd like to work on today...");
+    fireEvent.change(input, { target: { value: "what's my schedule this week" } });
+
+    const sendButton = screen.getByText('Send');
+    fireEvent.click(sendButton);
+
+    // Wait for the AI response to be processed and calendar events to be rendered
+    await waitFor(() => {
+      expect(aiAPI.sendMessage).toHaveBeenCalledWith("what's my schedule this week", 'thread-123');
+    });
+
+    await waitFor(() => {
+        expect(calendarAPI.getEvents).toHaveBeenCalled();
+    });
+
+    // Check that calendar events are rendered
+    expect(screen.getByText('Here are your upcoming events:')).toBeInTheDocument();
+    expect(screen.getByText('Test Event 1')).toBeInTheDocument();
+    expect(screen.getByText('Test Event 2')).toBeInTheDocument();
+  });
+
+  it('should render only events for the requested date when due_date is present in the Gemini response', async () => {
+    const aiResponse = {
+      data: {
+        message: "I've processed your request and created 1 action:",
+        actions: [{ type: 'calendar_event', operation: 'read', data: { due_date: '2024-07-09' } }],
+      },
+    };
+    aiAPI.sendMessage.mockResolvedValue(aiResponse);
+
+    const calendarEvents = {
+      data: [
+        { id: 1, summary: 'Event On Date', start: { date: '2024-07-09' } },
+        { id: 2, summary: 'Event Not On Date', start: { date: '2024-07-10' } },
+      ],
+    };
+    calendarAPI.getEvents.mockResolvedValue(calendarEvents);
+
+    render(<AIChat />);
+    const input = await screen.findByPlaceholderText("Tell me what you'd like to work on today...");
+    fireEvent.change(input, { target: { value: "show me my schedule for 2024-07-09" } });
+    const sendButton = screen.getByText('Send');
+    fireEvent.click(sendButton);
+
+    await waitFor(() => {
+      expect(aiAPI.sendMessage).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(calendarAPI.getEvents).toHaveBeenCalled();
+    });
+    expect(screen.getByText('Here are your upcoming events:')).toBeInTheDocument();
+    const eventsList = screen.getByText('Here are your upcoming events:').nextSibling;
+    // Use within to scope the search to the events list
+    const { getByText, queryByText } = within(eventsList);
+    expect(getByText((content) => content.includes('Event On Date'))).toBeInTheDocument();
+    expect(queryByText((content) => content.includes('Event Not On Date'))).not.toBeInTheDocument();
+  });
+
+  it('should render events for the correct date even if event start.dateTime is in a different timezone', async () => {
+    const aiResponse = {
+      data: {
+        message: "I've processed your request and created 1 action:",
+        actions: [{ type: 'calendar_event', operation: 'read', data: { due_date: '2025-07-09' } }],
+      },
+    };
+    aiAPI.sendMessage.mockResolvedValue(aiResponse);
+
+    const calendarEvents = {
+      data: [
+        { id: 1, summary: 'Morning Event', start: { dateTime: '2025-07-09T07:00:00-05:00' } },
+        { id: 2, summary: 'Other Day', start: { dateTime: '2025-07-10T07:00:00-05:00' } },
+      ],
+    };
+    calendarAPI.getEvents.mockResolvedValue(calendarEvents);
+
+    render(<AIChat />);
+    const input = await screen.findByPlaceholderText("Tell me what you'd like to work on today...");
+    fireEvent.change(input, { target: { value: "show only wednesday" } });
+    const sendButton = screen.getByText('Send');
+    fireEvent.click(sendButton);
+
+    await waitFor(() => {
+      expect(aiAPI.sendMessage).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(calendarAPI.getEvents).toHaveBeenCalled();
+    });
+    const eventsList = screen.getByText('Here are your upcoming events:').nextSibling;
+    const { getByText, queryByText } = within(eventsList);
+    expect(getByText((content) => content.includes('Morning Event'))).toBeInTheDocument();
+    expect(queryByText((content) => content.includes('Other Day'))).not.toBeInTheDocument();
+  });
+}); 

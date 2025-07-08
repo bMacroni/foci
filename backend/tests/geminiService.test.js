@@ -582,4 +582,40 @@ describe('GeminiService', () => {
       expect(result.actions[0].entity_type).toBe('task');
     });
   });
+
+  describe('Due Date Normalization', () => {
+    it('should normalize due_date to this year if Gemini returns a past year', async () => {
+      geminiService.model.generateContent.mockResolvedValueOnce({
+        response: {
+          text: () => `{
+            "action_type": "read",
+            "entity_type": "calendar_event",
+            "details": { "due_date": "2022-07-27", "title": "Test Event" }
+          }`
+        }
+      });
+      const result = await geminiService.processMessage('show me my schedule for July 27, 2022', 'test-user');
+      expect(result.actions[0].details.due_date.startsWith(String(new Date().getFullYear()))).toBe(true);
+    });
+    it('should normalize due_date for natural language like "tomorrow"', async () => {
+      geminiService.model.generateContent.mockResolvedValueOnce({
+        response: {
+          text: () => `{
+            "action_type": "read",
+            "entity_type": "calendar_event",
+            "details": { "due_date": "tomorrow", "title": "Test Event" }
+          }`
+        }
+      });
+      const result = await geminiService.processMessage('show me my schedule for tomorrow', 'test-user');
+      // Should be tomorrow's date
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const yyyy = tomorrow.getFullYear();
+      const mm = String(tomorrow.getMonth() + 1).padStart(2, '0');
+      const dd = String(tomorrow.getDate()).padStart(2, '0');
+      const expected = `${yyyy}-${mm}-${dd}`;
+      expect(result.actions[0].details.due_date).toBe(expected);
+    });
+  });
 }); 
