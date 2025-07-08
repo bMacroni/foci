@@ -5,7 +5,8 @@ import {
   createCalendarEvent,
   updateCalendarEvent,
   deleteCalendarEvent,
-  getCalendarList
+  getCalendarList,
+  getEventsForDate
 } from '../utils/calendarService.js';
 
 const router = express.Router();
@@ -33,6 +34,25 @@ router.get('/events', requireAuth, async (req, res) => {
       res.status(401).json({ error: 'Google Calendar not connected. Please connect your Google account first.' });
     } else {
       res.status(500).json({ error: 'Failed to get calendar events' });
+    }
+  }
+});
+
+// Get events for a specific date
+router.get('/events/date', requireAuth, async (req, res) => {
+  const { date } = req.query;
+  // Validate date (simple regex for YYYY-MM-DD)
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ error: 'Missing or invalid date parameter (expected YYYY-MM-DD)' });
+  }
+  try {
+    const events = await getEventsForDate(req.user.id, date);
+    res.json(events);
+  } catch (error) {
+    if (error.message.includes('No Google tokens found')) {
+      res.status(401).json({ error: 'Google Calendar not connected. Please connect your Google account first.' });
+    } else {
+      res.status(500).json({ error: 'Failed to fetch events for date' });
     }
   }
 });

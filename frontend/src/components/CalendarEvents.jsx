@@ -1,7 +1,64 @@
 import React, { useState, useEffect } from 'react';
 import { calendarAPI } from '../services/api';
 
-const CalendarEvents = () => {
+// Accept events and error as props for AI integration
+const CalendarEvents = ({ events: propEvents, error: propError }) => {
+  // If events are provided as props, use them directly (AI mode)
+  if (propEvents !== undefined) {
+    if (propError) {
+      return (
+        <div className="mb-6 bg-red-50/80 backdrop-blur-sm border border-red-200 text-red-700 px-6 py-4 rounded-2xl shadow-sm">
+          <div className="flex items-center space-x-2">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="font-medium">{propError}</span>
+          </div>
+        </div>
+      );
+    }
+    if (!Array.isArray(propEvents) || propEvents.length === 0) {
+      return (
+        <div className="text-center py-8">
+          <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <h3 className="text-xl font-semibold text-black mb-2">No events scheduled for this date</h3>
+          <p className="text-gray-600">Perfect time to plan your day and add some structure!</p>
+        </div>
+      );
+    }
+    // Render a simple list of events for the date
+    return (
+      <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl border border-black/10 p-8 my-6">
+        <h3 className="text-2xl font-bold text-black mb-4 flex items-center">
+          <svg className="w-6 h-6 mr-2 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          Events for Selected Date
+        </h3>
+        <ul className="divide-y divide-gray-200">
+          {propEvents.map(event => (
+            <li key={event.id} className="py-4">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+                <div>
+                  <div className="font-semibold text-lg text-black">{event.title || event.summary}</div>
+                  {event.description && <div className="text-gray-600 text-sm mb-1">{event.description}</div>}
+                  <div className="text-gray-500 text-sm">
+                    <span>🕒 {formatEventTime(event.start)}{event.end ? ` → ${formatEventTime(event.end)}` : ''}</span>
+                    {event.location && <span className="ml-4">📍 {event.location}</span>}
+                  </div>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);

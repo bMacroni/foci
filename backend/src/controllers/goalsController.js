@@ -128,3 +128,59 @@ export async function deleteGoal(req, res) {
   if (error) return res.status(400).json({ error: error.message });
   res.status(204).send();
 } 
+
+export async function deleteGoalFromAI(args, userId, userContext) {
+  const { id, title } = args;
+  const token = userContext?.token;
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  });
+
+  let goalId = id;
+  if (!goalId && title) {
+    // Fetch all goals for the user and find by title
+    const { data: goals, error: fetchError } = await supabase
+      .from('goals')
+      .select('id, title')
+      .eq('user_id', userId);
+    if (fetchError) return { error: fetchError.message };
+    const match = goals.find(g => g.title && g.title.trim().toLowerCase() === title.trim().toLowerCase());
+    if (!match) return { error: `No goal found with title '${title}'` };
+    goalId = match.id;
+  }
+  if (!goalId) {
+    return { error: "Goal ID or title is required to delete a goal." };
+  }
+  const { error } = await supabase
+    .from('goals')
+    .delete()
+    .eq('id', goalId)
+    .eq('user_id', userId);
+  if (error) return { error: error.message };
+  return { success: true };
+}
+
+export async function getGoalsForUser(userId, token) {
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  });
+
+  const { data, error } = await supabase
+    .from('goals')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    return { error: error.message };
+  }
+  return data;
+} 

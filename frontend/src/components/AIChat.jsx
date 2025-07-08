@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { aiAPI, goalsAPI, tasksAPI, conversationsAPI, calendarAPI } from '../services/api';
 import BulkApprovalPanel from './BulkApprovalPanel';
+import { AIActionProvider, useAIAction } from '../contexts/AIActionContext';
+import CalendarEvents from './CalendarEvents';
 
 // Utility function to generate unique IDs
 let messageIdCounter = 0;
@@ -23,6 +25,7 @@ const AIChat = ({ onNavigateToTab }) => {
   const [pendingApproval, setPendingApproval] = useState(null);
   const [taskListByMessageId, setTaskListByMessageId] = useState({});
   const [listByMessageId, setListByMessageId] = useState({});
+  const { calendarEvents, error: calendarError, processAIResponse } = useAIAction();
 
   // Load user data and conversation threads
   useEffect(() => {
@@ -288,86 +291,40 @@ const AIChat = ({ onNavigateToTab }) => {
     return message.split(' ').slice(0, 8).join(' ') + (message.split(' ').length > 8 ? '...' : '');
   };
 
-  // Modified: handle Gemini response
+  // Refactored handleGeminiResponse for new backend flow
   const handleGeminiResponse = (response) => {
     console.log('🔍 Raw response from API:', response);
-    
     try {
       // Extract the actual response data from the axios response
       const responseData = response.data || response;
       const message = responseData.message;
       const actions = responseData.actions || [];
-      
-      console.log('📝 Extracted message:', message);
-      console.log('⚡ Extracted actions:', actions);
-      
-      // Validate that we have a message
-      if (!message) {
-        console.error('❌ No message found in response');
-        setMessages(prev => [...prev, {
-          id: Date.now(),
+
+      // Show the final AI message
+      setMessages(prev => [
+        ...prev,
+        {
+          id: generateUniqueId(),
           type: 'ai',
-          content: "I'm sorry, I received an empty response. Please try again.",
+          content: message,
           timestamp: new Date(),
-          actions: []
-        }]);
-        return;
-      }
-      
-      // Process structured actions if present
-      if (actions && actions.length > 0) {
-        console.log('📋 Processing structured actions:', actions);
-        
-        // Process each action based on the new JSON format
-        const processedActions = actions.map(action => {
-          // Map Gemini fields to expected frontend fields
-          if (action.action_type && action.entity_type) {
-            return {
-              type: action.entity_type,
-              operation: action.action_type,
-              data: action.details || {},
-            };
-          }
-          // Legacy support for simple actions
-          if (typeof action === 'string') {
-            const [type, operation] = action.split(' ');
-            return { type, operation, data: {} };
-          }
-          // Already in expected format
-          if (action.type && action.operation) {
-            return action;
-          }
-          return null;
-        }).filter(Boolean);
-        
-        if (processedActions.length > 0) {
-          // Check if we need bulk approval
-          if (processedActions.length > 1) {
-            setPendingApproval({
-              items: processedActions,
-              message: message
-            });
-            return;
-          }
-          
-          // Single action - process immediately
-          const action = processedActions[0];
-          console.log('Processing single action:', action);
-          
-          // Execute the action based on type and operation
-          executeAction(action);
+          actions: actions
         }
+      ]);
+
+      // Optionally, show a summary of actions taken (if any)
+      if (actions && actions.length > 0) {
+        setMessages(prev => [
+          ...prev,
+          {
+            id: generateUniqueId(),
+            type: 'ai',
+            content: `Actions taken: ${actions.map(a => a && a.title ? a.title : JSON.stringify(a)).join(', ')}`,
+            timestamp: new Date(),
+            actions: actions
+          }
+        ]);
       }
-      
-      console.log('💬 Adding message to chat');
-      // Add AI response to messages
-      setMessages(prev => [...prev, {
-        id: generateUniqueId(),
-        type: 'ai',
-        content: message,
-        timestamp: new Date(),
-        actions: actions
-      }]);
     } catch (error) {
       console.error('❌ Error handling Gemini response:', error);
       setMessages(prev => [...prev, {
@@ -617,6 +574,49 @@ const AIChat = ({ onNavigateToTab }) => {
         ...prev,
         [messageId]: { type, loading: false, error: 'Failed to load ' + type + 's', items: [] }
       }));
+    }
+  };
+
+  // Handler for recommending a low energy task
+  const handleRecommendLowEnergyTask = async () => {
+    setIsLoading(true);
+    try {
+      const userRequest = 'What is a good low energy task?';
+      const response = await aiAPI.recommendTask(userRequest);
+      const { recommendedTask } = response.data;
+      if (recommendedTask) {
+        setMessages(prev => ([
+          ...prev,
+          {
+            id: generateUniqueId(),
+            type: 'ai',
+            content: `🪫 **Recommended Low Energy Task:**\n\n**${recommendedTask.title}**\n${recommendedTask.description ? recommendedTask.description : ''}\n(Priority: ${recommendedTask.priority})`,
+            timestamp: new Date()
+          }
+        ]));
+      } else {
+        setMessages(prev => ([
+          ...prev,
+          {
+            id: generateUniqueId(),
+            type: 'ai',
+            content: `I couldn't find a suitable low energy task right now.`,
+            timestamp: new Date()
+          }
+        ]));
+      }
+    } catch (error) {
+      setMessages(prev => ([
+        ...prev,
+        {
+          id: generateUniqueId(),
+          type: 'ai',
+          content: `Sorry, there was an error fetching a low energy task recommendation.`,
+          timestamp: new Date()
+        }
+      ]));
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -949,9 +949,28 @@ const AIChat = ({ onNavigateToTab }) => {
               </svg>
               <span>Send</span>
             </button>
+            {/* New button for low energy task recommendation */}
+            <button
+              type="button"
+              onClick={handleRecommendLowEnergyTask}
+              disabled={isLoading}
+              className="px-6 py-3 bg-gray-200 text-gray-800 rounded-xl hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              <span>Suggest Low Energy Task</span>
+            </button>
           </form>
         </div>
       </div>
+      {/* Render CalendarEvents if calendarEvents is not null */}
+      {calendarEvents !== null && (
+        <CalendarEvents
+          events={calendarEvents}
+          error={calendarError}
+        />
+      )}
     </div>
   );
 };
@@ -1031,11 +1050,14 @@ const MessageBubble = ({ message, fetchListForMessage, listState }) => {
     }
     
     // Fallback to normal formatting
-    return content
+    let formatted = content
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
       .replace(/•/g, '• ')
       .replace(/\n/g, '<br>');
+    // Remove lines that start with 'Description:'
+    formatted = formatted.replace(/<br>\s*Description:.*?(<br>|$)/gi, '<br>');
+    return formatted;
   };
 
   if (message.type === 'calendar_events') {
@@ -1137,4 +1159,10 @@ const MessageBubble = ({ message, fetchListForMessage, listState }) => {
   }
 };
 
-export default AIChat; 
+export default function AIChatWithProvider(props) {
+  return (
+    <AIActionProvider>
+      <AIChat {...props} />
+    </AIActionProvider>
+  );
+} 

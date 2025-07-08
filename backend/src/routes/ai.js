@@ -22,14 +22,16 @@ router.post('/chat', requireAuth, async (req, res) => {
 
     console.log(`AI Chat - User ${userId}: ${message}${threadId ? ` (Thread: ${threadId})` : ''}`);
 
-    // Process message with Gemini service
-    const response = await geminiService.processMessage(message, userId);
+    // Extract JWT token from Authorization header
+    const token = req.headers.authorization?.split(' ')[1];
+
+    // Process message with Gemini service, passing token in userContext
+    const response = await geminiService.processMessage(message, userId, { token });
     console.log(`Gemini Response: ${response.message}`);
 
     // Save conversation to database if threadId is provided
     if (threadId) {
       try {
-        const token = req.headers.authorization?.replace('Bearer ', '');
         await conversationController.addMessage(threadId, message, 'user', {}, token);
         await conversationController.addMessage(threadId, response.message, 'assistant', { actions: response.actions }, token);
       } catch (dbError) {
@@ -49,6 +51,41 @@ router.post('/chat', requireAuth, async (req, res) => {
       error: 'Failed to process message',
       message: 'I\'m sorry, I encountered an error processing your request. Please try again.'
     });
+  }
+});
+
+// Recommend a task based on user query and current tasks
+router.post('/recommend-task', requireAuth, async (req, res) => {
+  try {
+    const { userRequest } = req.body;
+    const userId = req.user.id;
+    if (!userRequest || typeof userRequest !== 'string') {
+      return res.status(400).json({ error: 'userRequest is required and must be a string' });
+    }
+    // Fetch the user's tasks (reuse logic from getTasks controller)
+    const token = req.headers.authorization?.split(' ')[1];
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    });
+    const { data: tasks, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    if (error) {
+      return res.status(400).json({ error: error.message });
+    }
+    // Call Gemini to recommend a task
+    const result = await geminiService.recommendTaskFromList(userRequest, tasks, userId);
+    res.json(result);
+  } catch (error) {
+    console.error('Recommend Task Error:', error);
+    res.status(500).json({ error: 'Failed to recommend a task' });
   }
 });
 

@@ -139,3 +139,37 @@ export async function getCalendarList(userId) {
     throw error;
   }
 } 
+
+/**
+ * Fetches all events for a specific date (YYYY-MM-DD) for the user's primary calendar.
+ * @param {string} userId
+ * @param {string} date - in YYYY-MM-DD format
+ * @returns {Promise<Array>} events
+ */
+export async function getEventsForDate(userId, date) {
+  try {
+    const calendar = await getCalendarClient(userId);
+    // Calculate timeMin and timeMax for the date
+    const timeMin = new Date(date + 'T00:00:00Z').toISOString();
+    const timeMax = new Date(date + 'T23:59:59Z').toISOString();
+
+    const response = await calendar.events.list({
+      calendarId: 'primary',
+      timeMin,
+      timeMax,
+      singleEvents: true,
+      orderBy: 'startTime',
+    });
+    return response.data.items.map(event => ({
+      id: event.id,
+      title: event.summary,
+      start: event.start?.dateTime || event.start?.date,
+      end: event.end?.dateTime || event.end?.date,
+      location: event.location || '',
+      description: event.description || '',
+    }));
+  } catch (error) {
+    console.error('Error fetching events for date:', error);
+    throw error;
+  }
+} 

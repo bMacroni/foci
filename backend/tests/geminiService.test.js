@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
+import { vi, describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from 'vitest';
 
 describe('GeminiService', () => {
   let GeminiService;
@@ -18,122 +18,170 @@ describe('GeminiService', () => {
     
     // Mock the Gemini model with different response scenarios
     geminiService.model = {
-      generateContent: vi.fn(async (prompt) => {
-        // Extract the user message from the prompt
-        const userMsgMatch = prompt.match(/User Message: "([\s\S]*?)"/);
-        const userMsg = userMsgMatch ? userMsgMatch[1].toLowerCase() : '';
-        
+      generateContent: vi.fn(async (input) => {
+        let userMsg = '';
+        if (input && Array.isArray(input.contents)) {
+          const userParts = input.contents.filter(c => c.role === 'user');
+          if (userParts.length > 0) {
+            userMsg = userParts[userParts.length - 1].parts[0].text.toLowerCase();
+          }
+        } else if (typeof input === 'string') {
+          const userMsgMatch = input.match(/User Message: "([\s\S]*?)"/);
+          userMsg = userMsgMatch ? userMsgMatch[1].toLowerCase() : '';
+        }
         // Test goal creation
         if (userMsg.includes('add a goal') || userMsg.includes('create a goal')) {
-          return { 
-            response: { 
-              text: () => `{
-                "action_type": "create",
-                "entity_type": "goal",
-                "details": {
-                  "title": "Learn React",
-                  "description": "Master React development fundamentals",
-                  "due_date": "2024-12-31",
-                  "priority": "high"
+          return {
+            response: {
+              functionCalls: [
+                {
+                  name: 'create_goal',
+                  args: {
+                    title: 'Learn React',
+                    description: 'Master React development fundamentals',
+                    due_date: '2024-12-31',
+                    priority: 'high'
+                  }
                 }
-              }`
-            } 
+              ],
+              text: () => ''
+            }
           };
         }
-        
         // Test goal reading
         if (userMsg.includes('what are my goals') || userMsg.includes('show me my goals')) {
-          return { 
-            response: { 
-              text: () => `{
-                "action_type": "read",
-                "entity_type": "goal",
-                "details": {}
-              }`
-            } 
+          return {
+            response: {
+              functionCalls: [
+                {
+                  name: 'read_goal',
+                  args: {}
+                }
+              ],
+              text: () => ''
+            }
           };
         }
-        
         // Test task creation
         if (userMsg.includes('add a task') || userMsg.includes('create a task')) {
-          return { 
-            response: { 
-              text: () => `{
-                "action_type": "create",
-                "entity_type": "task",
-                "details": {
-                  "title": "Review documentation",
-                  "description": "Read through project documentation",
-                  "due_date": "2024-07-15",
-                  "priority": "medium"
+          return {
+            response: {
+              functionCalls: [
+                {
+                  name: 'create_task',
+                  args: {
+                    title: 'Review documentation',
+                    description: 'Read through project documentation',
+                    due_date: '2024-07-15',
+                    priority: 'medium'
+                  }
                 }
-              }`
-            } 
+              ],
+              text: () => ''
+            }
           };
         }
-        
         // Test task reading
         if (userMsg.includes('show me a list of my tasks') || userMsg.includes('what are my tasks')) {
-          return { 
-            response: { 
-              text: () => `{
-                "action_type": "read",
-                "entity_type": "task",
-                "details": {}
-              }`
-            } 
+          return {
+            response: {
+              functionCalls: [
+                {
+                  name: 'read_task',
+                  args: {}
+                }
+              ],
+              text: () => ''
+            }
           };
         }
-        
         // Test calendar event creation
         if (userMsg.includes('schedule') || userMsg.includes('meeting')) {
-          return { 
-            response: { 
-              text: () => `{
-                "action_type": "create",
-                "entity_type": "calendar_event",
-                "details": {
-                  "title": "Team Meeting",
-                  "description": "Weekly team sync",
-                  "due_date": "2024-07-10",
-                  "priority": "medium"
+          return {
+            response: {
+              functionCalls: [
+                {
+                  name: 'create_calendar_event',
+                  args: {
+                    title: 'Team Meeting',
+                    description: 'Weekly team sync',
+                    start_time: '2024-07-10T10:00:00Z',
+                    end_time: '2024-07-10T11:00:00Z',
+                    time_zone: 'UTC'
+                  }
                 }
-              }`
-            } 
+              ],
+              text: () => ''
+            }
           };
         }
-        
-        // Test clarifying questions (no JSON response)
+        // Test multiple actions (marathon example)
+        if (userMsg.includes('run a marathon')) {
+          return {
+            response: {
+              functionCalls: [
+                {
+                  name: 'create_goal',
+                  args: {
+                    title: 'Complete Couch to 5k program',
+                    description: 'Complete a Couch to 5k program to build a foundation for running longer distances.',
+                    priority: 'high',
+                    related_goal: 'Run a marathon'
+                  }
+                },
+                {
+                  name: 'create_task',
+                  args: {
+                    title: 'Download a Couch to 5k app or find a program online',
+                    description: 'Research and choose a Couch to 5k program that fits your schedule and preferences.',
+                    due_date: '2024-07-17',
+                    priority: 'high',
+                    related_goal: 'Complete Couch to 5k program'
+                  }
+                },
+                {
+                  name: 'create_task',
+                  args: {
+                    title: 'Schedule first Couch to 5k run',
+                    description: 'Look at your calendar and schedule your first Couch to 5k run. Evenings or early mornings often work well.',
+                    due_date: '2024-07-19',
+                    priority: 'high',
+                    related_goal: 'Complete Couch to 5k program'
+                  }
+                }
+              ],
+              text: () => ''
+            }
+          };
+        }
+        // Test clarifying questions (no function call)
         if (userMsg.includes('help me organize')) {
-          return { 
-            response: { 
+          return {
+            response: {
               text: () => "I'd be happy to help you organize! What specific area would you like to focus on - your goals, tasks, or schedule?"
-            } 
+            }
           };
         }
-        
         // Test general conversation
         if (userMsg.includes('hello') || userMsg.includes('how are you')) {
-          return { 
-            response: { 
+          return {
+            response: {
               text: () => "Hello! I'm here to help you manage your productivity. How can I assist you today?"
-            } 
+            }
           };
         }
-        
         // Test invalid JSON response
         if (userMsg.includes('invalid json')) {
-          return { 
-            response: { 
+          return {
+            response: {
               text: () => "This is not valid JSON: { invalid json }"
-            } 
+            }
           };
         }
-        
         // Test malformed JSON response
         if (userMsg.includes('malformed json')) {
-          return { 
-            response: { 
+          return {
+            response: {
               text: () => `{
                 "action_type": "create",
                 "entity_type": "goal",
@@ -141,18 +189,19 @@ describe('GeminiService', () => {
                   "title": "Test Goal"
                 }
               }`
-            } 
+            }
           };
         }
-        
         // Default response
-        return { 
-          response: { 
-            text: () => "I understand you want to manage your productivity. How can I help you today?" 
-          } 
+        return {
+          response: {
+            text: () => "I understand you want to manage your productivity. How can I help you today?"
+          }
         };
       })
     };
+    // Mock _executeFunctionCall to always return the functionCall.args
+    geminiService._executeFunctionCall = vi.fn(async (functionCall) => functionCall.args);
   });
 
   afterEach(() => {
@@ -518,7 +567,14 @@ describe('GeminiService', () => {
   describe('Frontend Integration Issues', () => {
     it('should handle calendar event creation without calendarAPI import error', async () => {
       // Override the mock for this specific test
-      geminiService.model.generateContent = vi.fn(async (prompt) => {
+      geminiService.model.generateContent = vi.fn(async (input) => {
+        let userMsg = '';
+        if (input && Array.isArray(input.contents)) {
+          const userParts = input.contents.filter(c => c.role === 'user');
+          if (userParts.length > 0) {
+            userMsg = userParts[userParts.length - 1].parts[0].text.toLowerCase();
+          }
+        }
         return { 
           response: { 
             text: () => `{
@@ -546,7 +602,14 @@ describe('GeminiService', () => {
 
     it('should handle bulk approval with correct items structure', async () => {
       // Override the mock for this specific test
-      geminiService.model.generateContent = vi.fn(async (prompt) => {
+      geminiService.model.generateContent = vi.fn(async (input) => {
+        let userMsg = '';
+        if (input && Array.isArray(input.contents)) {
+          const userParts = input.contents.filter(c => c.role === 'user');
+          if (userParts.length > 0) {
+            userMsg = userParts[userParts.length - 1].parts[0].text.toLowerCase();
+          }
+        }
         return { 
           response: { 
             text: () => `[
@@ -616,6 +679,132 @@ describe('GeminiService', () => {
       const dd = String(tomorrow.getDate()).padStart(2, '0');
       const expected = `${yyyy}-${mm}-${dd}`;
       expect(result.actions[0].details.due_date).toBe(expected);
+    });
+  });
+
+  describe('Task Recommendation', () => {
+    it('should recommend a low energy task from the user\'s task list', async () => {
+      // Mock a list of tasks with varying energy levels
+      const tasks = [
+        { title: 'Write project report', description: 'Summarize project progress', priority: 'high' },
+        { title: 'Organize desk', description: 'Tidy up workspace', priority: 'low' },
+        { title: 'Plan next sprint', description: 'Outline tasks for next sprint', priority: 'medium' },
+        { title: 'Read emails', description: 'Check and respond to emails', priority: 'low' },
+      ];
+      // Simulate a user request for a low energy task
+      const userRequest = 'Which of my tasks would be good for a low energy day?';
+
+      // Mock Gemini's response for this test
+      geminiService.model.generateContent = vi.fn(async () => ({
+        response: {
+          text: () => '{ "recommendedTask": { "title": "Organize desk", "description": "Tidy up workspace", "priority": "low" } }'
+        }
+      }));
+
+      const result = await geminiService.recommendTaskFromList(userRequest, tasks, 'test-user');
+
+      expect(result).toBeDefined();
+      expect(result.recommendedTask).toBeDefined();
+      // The recommended task should be one of the low priority tasks
+      const lowEnergyTitles = tasks.filter(t => t.priority === 'low').map(t => t.title);
+      expect(lowEnergyTitles).toContain(result.recommendedTask.title);
+    });
+  });
+
+  describe('Calendar Event Use Cases', () => {
+    it('should process a schedule request for a specific date and return events', async () => {
+      geminiService.model.generateContent = vi.fn(async (input) => {
+        let userMsg = '';
+        if (input && Array.isArray(input.contents)) {
+          const userParts = input.contents.filter(c => c.role === 'user');
+          if (userParts.length > 0) {
+            userMsg = userParts[userParts.length - 1].parts[0].text.toLowerCase();
+          }
+        }
+        // Simulate Gemini returning a JSON array of events
+        return {
+          response: {
+            text: () => `[
+              {
+                "id": "event1",
+                "title": "Team Meeting",
+                "start": "2024-06-10T10:00:00",
+                "end": "2024-06-10T11:00:00",
+                "location": "Zoom",
+                "description": "Weekly sync"
+              }
+            ]`
+          }
+        };
+      });
+      const result = await geminiService.processMessage('What is on my calendar for June 10th?', 'test-user');
+      expect(result.message).toBeDefined();
+      expect(Array.isArray(result.actions)).toBe(true);
+      expect(result.actions.length).toBe(0); // Should not treat array as actions
+    });
+
+    it('should process a schedule request for a date with no events', async () => {
+      geminiService.model.generateContent = vi.fn(async (input) => {
+        let userMsg = '';
+        if (input && Array.isArray(input.contents)) {
+          const userParts = input.contents.filter(c => c.role === 'user');
+          if (userParts.length > 0) {
+            userMsg = userParts[userParts.length - 1].parts[0].text.toLowerCase();
+          }
+        }
+        // Simulate Gemini returning an empty array
+        return {
+          response: {
+            text: () => '[]'
+          }
+        };
+      });
+      const result = await geminiService.processMessage('Show my schedule for 2024-07-01', 'test-user');
+      expect(result.message).toBeDefined();
+      expect(Array.isArray(result.actions)).toBe(true);
+      expect(result.actions.length).toBe(0); // No actions for empty array
+    });
+
+    it('should ask for clarification if no date is provided', async () => {
+      geminiService.model.generateContent = vi.fn(async (input) => {
+        let userMsg = '';
+        if (input && Array.isArray(input.contents)) {
+          const userParts = input.contents.filter(c => c.role === 'user');
+          if (userParts.length > 0) {
+            userMsg = userParts[userParts.length - 1].parts[0].text.toLowerCase();
+          }
+        }
+        // Simulate Gemini asking for clarification
+        return {
+          response: {
+            text: () => 'Which date would you like to see events for?'
+          }
+        };
+      });
+      const result = await geminiService.processMessage('Show my schedule', 'test-user');
+      expect(result.message).toContain('Which date');
+      expect(result.actions.length).toBe(0);
+    });
+
+    it('should handle error response from Gemini', async () => {
+      geminiService.model.generateContent = vi.fn(async (input) => {
+        let userMsg = '';
+        if (input && Array.isArray(input.contents)) {
+          const userParts = input.contents.filter(c => c.role === 'user');
+          if (userParts.length > 0) {
+            userMsg = userParts[userParts.length - 1].parts[0].text.toLowerCase();
+          }
+        }
+        // Simulate Gemini returning an error JSON
+        return {
+          response: {
+            text: () => '{ "error": "Google Calendar not connected. Please connect your Google account first." }'
+          }
+        };
+      });
+      const result = await geminiService.processMessage('What is on my calendar for June 10th?', 'test-user');
+      expect(result.message).toContain('error');
+      expect(result.actions.length).toBe(0);
     });
   });
 }); 

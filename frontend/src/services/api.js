@@ -71,6 +71,7 @@ export const aiAPI = {
   sendMessage: (message, threadId) => api.post('/ai/chat', { message, threadId }),
   getGoalSuggestions: (goalTitle) => api.post('/ai/goal-suggestions', { goalTitle }),
   createThread: (title, summary) => api.post('/ai/threads', { title, summary }),
+  recommendTask: (userRequest) => api.post('/ai/recommend-task', { userRequest }),
 };
 
 // Conversations API

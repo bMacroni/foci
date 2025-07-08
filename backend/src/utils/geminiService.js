@@ -1,86 +1,30 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import * as chrono from 'chrono-node';
+import {
+  allGeminiFunctionDeclarations
+} from './geminiFunctionDeclarations.js';
+import * as tasksController from '../controllers/tasksController.js';
+import * as goalsController from '../controllers/goalsController.js';
+import * as calendarService from './calendarService.js';
 
 export class GeminiService {
   constructor() {
-    // Always initialize conversation history regardless of API key status
     this.conversationHistory = new Map();
-    
     if (!process.env.GOOGLE_AI_API_KEY) {
       console.warn('GOOGLE_AI_API_KEY not found. Gemini AI features will be disabled.');
       this.enabled = false;
       return;
     }
-    
     this.enabled = true;
     this.genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
-    this.model = this.genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
-    console.log('✅ Gemini AI initialized with model: gemini-1.5-pro');
-    
-    // System prompt that defines the AI's role and capabilities
-    this.systemPrompt = `You are an AI service integrated within an app designed to help users manage their long-term goals, short-term tasks, and calendar events through a conversational chat interface. Your primary role is to clearly interpret the user's intent from their requests, collaborate with them through the conversation to define precise, actionable steps, and translate the outcome into structured JSON format for the app to process.
-
-Workflow Instructions:
-
-Intent Recognition:
-
-Carefully analyze the user's input to determine their underlying goal or task.
-
-Ask clarifying questions if necessary to understand exactly what the user wants.
-
-Collaborative Action Definition:
-
-Engage in conversation to refine the user's objective into clear, actionable items.
-
-Suggest specific, achievable tasks or actions aligned with their stated objectives.
-
-Ensure tasks or actions suggested are practical and relevant to the user's stated goal or request.
-
-Structured JSON Response:
-
-Once the user's action or task is clear and agreed upon, respond exclusively with structured JSON adhering to the following format:
-
-{
-  "action_type": "[create | read | update | delete]",
-  "entity_type": "[goal | task | calendar_event]",
-  "details": {
-    "title": "Brief descriptive title of the action or task",
-    "description": "Detailed explanation of the task or action",
-    "due_date": "YYYY-MM-DD (if applicable)",
-    "priority": "[high | medium | low] (if applicable)",
-    "related_goal": "Associated long-term goal title (if applicable)"
-  }
-}
-
-Include only fields relevant to the user's specific request.
-
-Ensure clarity, conciseness, and accuracy in each JSON response, making it easy for the app to process and update accordingly.
-
-Example User Request:
-"What tasks can I work on this week to work toward my goal of running a marathon?"
-
-Example JSON Response:
-
-{
-  "action_type": "create",
-  "entity_type": "task",
-  "details": {
-    "title": "Complete a 5-mile run",
-    "description": "Schedule and complete a 5-mile run to build endurance for marathon training.",
-    "due_date": "2024-07-10",
-    "priority": "medium",
-    "related_goal": "Run a marathon"
-  }
-}
-
-Always ensure the conversation leads clearly and logically to actionable outcomes that the app can easily manage through CRUD operations.`;
+    this.model = this.genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    console.log('✅ Gemini AI initialized with model: gemini-2.5-flash');
   }
 
   /**
-   * Main entry point for processing a user message.
-   * Handles conversation history and returns structured response.
+   * Main entry point for processing a user message using Gemini function calling API.
    */
-  async processMessage(message, userId) {
+  async processMessage(message, userId, userContext = {}) {
     try {
       if (!this.enabled) {
         return {
@@ -88,122 +32,131 @@ Always ensure the conversation leads clearly and logically to actionable outcome
           actions: []
         };
       }
-
       // Update conversation history
       this._addToHistory(userId, { role: 'user', content: message });
-
-      // Get conversation history for context
-      const history = this.conversationHistory.get(userId) || [];
-      const recentHistory = history.slice(-10); // Keep last 10 exchanges for context
-      
-      const historyText = recentHistory.length > 0 
-        ? `\nRecent conversation:\n${recentHistory.map(h => `${h.role}: ${h.content}`).join('\n')}`
-        : '';
-
-      // Create the prompt with context
-      const prompt = `${this.systemPrompt}
-
-${historyText}
-
-User Message: "${message}"
-
-Please analyze the user's intent, collaborate with them to define clear actionable steps, and respond with either:
-1. Clarifying questions if more information is needed
-2. Structured JSON response if the action is clear and agreed upon
-
-Response:`;
-
-      const result = await this.model.generateContent(prompt);
+      // Add a system prompt to instruct Gemini to use functions
+      const systemPrompt = `
+You are an AI assistant for a productivity app. Always use the provided functions for any user request that can be fulfilled by a function. If a user request requires information you do not have (such as a goal ID), first call the appropriate function (e.g., 'read_goal') to retrieve the necessary data, then use that data to fulfill the user's request (e.g., call 'delete_goal' with the correct ID). Only return plain text if no function is appropriate. Chain function calls as needed to fully satisfy the user's intent.`;
+      // Trim conversation history to the last MAX_HISTORY_MESSAGES
+      const MAX_HISTORY_MESSAGES = 10;
+      const fullHistory = this.conversationHistory.get(userId) || [];
+      const trimmedHistory = fullHistory.slice(-MAX_HISTORY_MESSAGES);
+      const contents = [
+        { role: 'user', parts: [{ text: systemPrompt }] },
+        ...trimmedHistory.map(msg => ({
+          role: msg.role,
+          parts: [{ text: msg.content }]
+        })),
+        { role: 'user', parts: [{ text: message }] }
+      ];
+      // DEBUG: Log the incoming user message and contents
+      console.log('DEBUG: Incoming user message:', message);
+      console.log('DEBUG: Contents sent to Gemini:', JSON.stringify(contents, null, 2));
+      // Send to Gemini
+      const result = await this.model.generateContent({
+        contents,
+        tools: [{ functionDeclarations: allGeminiFunctionDeclarations }]
+      });
       const response = await result.response;
-      const text = response.text();
-
-      // Check if the response contains JSON - now handle multiple JSON objects
-      // Use a more precise regex that matches complete JSON objects
-      const jsonMatches = [];
-      let braceCount = 0;
-      let startIndex = -1;
-      
-      for (let i = 0; i < text.length; i++) {
-        if (text[i] === '{') {
-          if (braceCount === 0) {
-            startIndex = i;
+      // Get function calls and text from Gemini response
+      const functionCalls = response.functionCalls ? await response.functionCalls() : [];
+      // DEBUG: Log the raw Gemini response and functionCalls
+      console.log('DEBUG: Raw Gemini response:', response);
+      console.log('DEBUG: Gemini functionCalls (evaluated):', functionCalls);
+      // Check for function calls
+      let actions = [];
+      let functionResults = [];
+      if (functionCalls && functionCalls.length > 0) {
+        // DEBUG: Log function calls
+        console.log('DEBUG: Gemini functionCalls:', functionCalls);
+        for (const functionCall of functionCalls) {
+          let execResult = await this._executeFunctionCall(functionCall, userId, userContext);
+          // Due date normalization for tests (mock mode)
+          let details = execResult !== undefined && execResult !== null ? execResult : functionCall.args;
+          // Gemini API expects functionResponse.response to be an object, not an array
+          if (functionCall.name === 'read_goal' && Array.isArray(details)) {
+            details = { goals: details };
           }
-          braceCount++;
-        } else if (text[i] === '}') {
-          braceCount--;
-          if (braceCount === 0 && startIndex !== -1) {
-            const jsonString = text.substring(startIndex, i + 1);
-            jsonMatches.push(jsonString);
-            startIndex = -1;
-          }
-        }
-      }
-      
-      if (jsonMatches.length > 0) {
-        const validActions = [];
-        
-        for (const jsonMatch of jsonMatches) {
-          try {
-            const jsonResponse = JSON.parse(jsonMatch);
-            
-            // Validate JSON structure
-            if (this._validateJsonStructure(jsonResponse)) {
-              // Normalize any due_date in details
-              this._normalizeDueDate(jsonResponse);
-              validActions.push(jsonResponse);
+          if (details && details.due_date) {
+            // Normalize past year to current year
+            const yearMatch = details.due_date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (yearMatch && parseInt(yearMatch[1]) < new Date().getFullYear()) {
+              const currentYear = String(new Date().getFullYear());
+              details.due_date = currentYear + '-' + yearMatch[2] + '-' + yearMatch[3];
             }
-          } catch (parseError) {
-            console.error('Error parsing JSON response:', parseError);
-            // Continue with other JSON objects if one fails
+            // Normalize 'tomorrow' to tomorrow's date
+            if (details.due_date.toLowerCase && details.due_date.toLowerCase() === 'tomorrow') {
+              const tomorrow = new Date();
+              tomorrow.setDate(tomorrow.getDate() + 1);
+              const yyyy = tomorrow.getFullYear();
+              const mm = String(tomorrow.getMonth() + 1).padStart(2, '0');
+              const dd = String(tomorrow.getDate()).padStart(2, '0');
+              details.due_date = `${yyyy}-${mm}-${dd}`;
+            }
           }
+          // Map function call to action object
+          let action_type = 'unknown';
+          let entity_type = 'unknown';
+          if (functionCall.name.startsWith('create_')) action_type = 'create';
+          else if (functionCall.name.startsWith('read_')) action_type = 'read';
+          else if (functionCall.name.startsWith('update_')) action_type = 'update';
+          else if (functionCall.name.startsWith('delete_')) action_type = 'delete';
+          const entityMatch = functionCall.name.match(/^(create|read|update|delete)_(.*)$/);
+          if (entityMatch) entity_type = entityMatch[2];
+          actions.push({
+            action_type,
+            entity_type,
+            details
+          });
+          functionResults.push({ name: functionCall.name, response: details });
         }
-        
-        if (validActions.length > 0) {
-          // Update conversation history with AI response
-          this._addToHistory(userId, { role: 'assistant', content: text });
-          
-          return {
-            message: `I've processed your request and created ${validActions.length} action${validActions.length > 1 ? 's' : ''}:`,
-            actions: validActions
-          };
+        // Send function results back to Gemini for final message
+        const functionResponses = functionResults.map(fr => ({
+          name: fr.name,
+          response: fr.response
+        }));
+        const followupContents = [
+          ...contents,
+          ...functionResponses.map(fr => ({
+            role: 'model',
+            parts: [{ functionResponse: { name: fr.name, response: fr.response } }]
+          }))
+        ];
+        // DEBUG: Log followup contents sent for final Gemini response
+        console.log('DEBUG: Followup contents sent to Gemini:', JSON.stringify(followupContents, null, 2));
+        let message = '';
+        if (actions.length > 1) {
+          message = `created ${actions.length} actions`;
         } else {
-          // No valid JSON found, treat as regular response
-          this._addToHistory(userId, { role: 'assistant', content: text });
-          return {
-            message: text,
-            actions: []
-          };
+          const finalResult = await this.model.generateContent({
+            contents: followupContents,
+            tools: [{ functionDeclarations: allGeminiFunctionDeclarations }]
+          });
+          const finalResponse = await finalResult.response;
+          message = finalResponse.text ? await finalResponse.text() : '';
+          // DEBUG: Log the final Gemini response
+          console.log('DEBUG: Final Gemini response:', finalResponse);
+          console.log('DEBUG: Final message:', message);
         }
-      } else {
-        // If no JSON found, but the response contains a code block, try to extract and parse it
-        if (jsonMatches.length === 0 && text.includes('```json')) {
-          console.log('🟡 Attempting to extract JSON from code block:', text);
-          const codeBlockMatch = text.match(/```json\s*([\s\S]*?)\s*```/i);
-          if (codeBlockMatch) {
-            console.log('🟢 Code block matched:', codeBlockMatch[1]);
-            try {
-              const jsonResponse = JSON.parse(codeBlockMatch[1]);
-              if (this._validateJsonStructure(jsonResponse)) {
-                this._normalizeDueDate(jsonResponse);
-                this._addToHistory(userId, { role: 'assistant', content: text });
-                return {
-                  message: text,
-                  actions: [jsonResponse]
-                };
-              }
-            } catch (parseError) {
-              console.error('Error parsing JSON from code block:', parseError);
-            }
-          }
-        }
-        // No JSON found, treat as regular conversational response
-        this._addToHistory(userId, { role: 'assistant', content: text });
+        // Add to conversation history
+        this._addToHistory(userId, { role: 'model', content: message });
+        // DEBUG: Log the final actions array
+        console.log('DEBUG: Final actions array:', actions);
         return {
-          message: text,
+          message,
+          actions
+        };
+      } else {
+        // No function call, just return Gemini's text
+        const message = response.text ? await response.text() : '';
+        this._addToHistory(userId, { role: 'model', content: message });
+        // DEBUG: Log the final message and empty actions
+        console.log('DEBUG: No function call. Final message:', message);
+        return {
+          message,
           actions: []
         };
       }
-
     } catch (error) {
       console.error('Gemini Service Error:', error);
       return {
@@ -211,6 +164,78 @@ Response:`;
         actions: []
       };
     }
+  }
+
+  /**
+   * Map Gemini function call to backend logic and execute.
+   */
+  async _executeFunctionCall(functionCall, userId, userContext) {
+    const { name, args } = functionCall;
+    try {
+      switch (name) {
+        case 'create_task':
+          // args: { title, description, due_date, priority, related_goal }
+          // Map related_goal to goal_id if needed
+          // ...implement mapping logic as needed
+          return await tasksController.createTaskFromAI(args, userId, userContext);
+        case 'update_task':
+          return await tasksController.updateTaskFromAI(args, userId, userContext);
+        case 'delete_task':
+          return await tasksController.deleteTaskFromAI(args, userId, userContext);
+        case 'read_task':
+          return await tasksController.readTaskFromAI(args, userId, userContext);
+        case 'create_goal':
+          return await goalsController.createGoalFromAI(args, userId, userContext);
+        case 'update_goal':
+          return await goalsController.updateGoalFromAI(args, userId, userContext);
+        case 'delete_goal':
+          return await goalsController.deleteGoal(args, userId, userContext);
+        case 'read_goal':
+          // Use the new utility function, pass userId and token from userContext
+          return await goalsController.getGoalsForUser(userId, userContext.token);
+        case 'create_calendar_event':
+          return await calendarService.createCalendarEventFromAI(args, userId, userContext);
+        case 'update_calendar_event':
+          return await calendarService.updateCalendarEventFromAI(args, userId, userContext);
+        case 'delete_calendar_event':
+          return await calendarService.deleteCalendarEventFromAI(args, userId, userContext);
+        case 'read_calendar_event':
+          return await calendarService.readCalendarEventFromAI(args, userId, userContext);
+        default:
+          return { error: `Unknown function call: ${name}` };
+      }
+    } catch (err) {
+      return { error: err.message || String(err) };
+    }
+  }
+
+  /**
+   * Recommend a task from a list based on user query (e.g., low energy day)
+   */
+  async recommendTaskFromList(userRequest, tasks, userId) {
+    if (!this.enabled) {
+      return { recommendedTask: null, message: "Gemini AI is not enabled." };
+    }
+    // Format the task list for the prompt
+    const taskListText = tasks.map((t, i) => `Task ${i + 1}:\nTitle: ${t.title}\nDescription: ${t.description}\nPriority: ${t.priority}`).join('\n\n');
+    const prompt = `You are an AI assistant helping users choose tasks based on their current needs.\n\nUser Request: "${userRequest}"\n\nHere is the user's current task list:\n${taskListText}\n\nBased on the user's request, recommend ONE task from the list that best fits. Respond ONLY with a JSON object in the following format:\n\n{\n  "recommendedTask": {\n    "title": "...",\n    "description": "...",\n    "priority": "..."\n  }\n}`;
+
+    const result = await this.model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+    // Try to parse the JSON response
+    try {
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const jsonResponse = JSON.parse(jsonMatch[0]);
+        if (jsonResponse.recommendedTask) {
+          return { recommendedTask: jsonResponse.recommendedTask, message: text };
+        }
+      }
+    } catch (e) {
+      // Parsing failed
+    }
+    return { recommendedTask: null, message: text };
   }
 
   /**

@@ -82,8 +82,12 @@ console.log('Registering conversations router...');
 app.use('/api/conversations', conversationsRouter);
 console.log('Conversations router registered');
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Foci API server running on port ${PORT}`)
-  console.log(`📊 Health check: http://localhost:${PORT}/api/health`)
-}) 
+// Start server only if run directly
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => {
+    console.log(`🚀 Foci API server running on port ${PORT}`)
+    console.log(`📊 Health check: http://localhost:${PORT}/api/health`)
+  });
+}
+
+export default app; 
