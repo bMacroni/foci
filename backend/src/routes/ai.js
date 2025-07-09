@@ -24,6 +24,13 @@ router.post('/chat', requireAuth, async (req, res) => {
 
     // Extract JWT token from Authorization header
     const token = req.headers.authorization?.split(' ')[1];
+    
+    console.log('=== AI ROUTE DEBUG ===');
+    console.log('Authorization header:', req.headers.authorization ? 'Present' : 'Missing');
+    console.log('Token (first 50 chars):', token ? token.substring(0, 50) + '...' : 'No token');
+    console.log('Token type:', typeof token);
+    console.log('Token length:', token ? token.length : 0);
+    console.log('=== END AI ROUTE DEBUG ===');
 
     // Process message with Gemini service, passing token in userContext
     const response = await geminiService.processMessage(message, userId, { token });

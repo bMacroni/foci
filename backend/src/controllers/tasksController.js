@@ -213,4 +213,188 @@ export async function bulkCreateTasks(req, res) {
     return res.status(400).json({ error: error.message });
   }
   res.status(201).json(data);
+}
+
+export async function createTaskFromAI(args, userId, userContext) {
+  const { title, description, due_date, priority, related_goal } = args;
+  const token = userContext?.token;
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  });
+
+  let goalId = null;
+  if (related_goal) {
+    // Fetch all goals for the user and find by title
+    const { data: goals, error: fetchError } = await supabase
+      .from('goals')
+      .select('id, title')
+      .eq('user_id', userId);
+    if (fetchError) return { error: fetchError.message };
+    const match = goals.find(g => g.title && g.title.trim().toLowerCase() === related_goal.trim().toLowerCase());
+    if (match) goalId = match.id;
+  }
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .insert([{ 
+      user_id: userId, 
+      title, 
+      description, 
+      due_date,
+      priority,
+      goal_id: goalId,
+      completed: false
+    }])
+    .select()
+    .single();
+
+  if (error) {
+    return { error: error.message };
+  }
+  return data;
+}
+
+export async function updateTaskFromAI(args, userId, userContext) {
+  const { id, title, description, due_date, priority, related_goal, completed } = args;
+  const token = userContext?.token;
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  });
+
+  let taskId = id;
+  if (!taskId && title) {
+    // Fetch all tasks for the user and find by title
+    const { data: tasks, error: fetchError } = await supabase
+      .from('tasks')
+      .select('id, title')
+      .eq('user_id', userId);
+    if (fetchError) return { error: fetchError.message };
+    const match = tasks.find(t => t.title && t.title.trim().toLowerCase() === title.trim().toLowerCase());
+    if (!match) return { error: `No task found with title '${title}'` };
+    taskId = match.id;
+  }
+  if (!taskId) {
+    return { error: "Task ID or title is required to update a task." };
+  }
+
+  let goalId = null;
+  if (related_goal) {
+    // Fetch all goals for the user and find by title
+    const { data: goals, error: fetchError } = await supabase
+      .from('goals')
+      .select('id, title')
+      .eq('user_id', userId);
+    if (fetchError) return { error: fetchError.message };
+    const match = goals.find(g => g.title && g.title.trim().toLowerCase() === related_goal.trim().toLowerCase());
+    if (match) goalId = match.id;
+  }
+
+  // Prepare update data
+  const updateData = {};
+  if (description !== undefined) updateData.description = description;
+  if (due_date !== undefined) updateData.due_date = due_date;
+  if (priority !== undefined) updateData.priority = priority;
+  if (related_goal !== undefined) updateData.goal_id = goalId;
+  if (completed !== undefined) updateData.completed = completed;
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .update(updateData)
+    .eq('id', taskId)
+    .eq('user_id', userId)
+    .select()
+    .single();
+
+  if (error) {
+    return { error: error.message };
+  }
+  return data;
+}
+
+export async function deleteTaskFromAI(args, userId, userContext) {
+  const { id, title } = args;
+  const token = userContext?.token;
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  });
+
+  let taskId = id;
+  if (!taskId && title) {
+    // Fetch all tasks for the user and find by title
+    const { data: tasks, error: fetchError } = await supabase
+      .from('tasks')
+      .select('id, title')
+      .eq('user_id', userId);
+    if (fetchError) return { error: fetchError.message };
+    const match = tasks.find(t => t.title && t.title.trim().toLowerCase() === title.trim().toLowerCase());
+    if (!match) return { error: `No task found with title '${title}'` };
+    taskId = match.id;
+  }
+  if (!taskId) {
+    return { error: "Task ID or title is required to delete a task." };
+  }
+
+  const { error } = await supabase
+    .from('tasks')
+    .delete()
+    .eq('id', taskId)
+    .eq('user_id', userId);
+
+  if (error) {
+    return { error: error.message };
+  }
+  return { success: true };
+}
+
+export async function readTaskFromAI(args, userId, userContext) {
+  const { due_date, related_goal } = args;
+  const token = userContext?.token;
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  });
+
+  let query = supabase
+    .from('tasks')
+    .select('*')
+    .eq('user_id', userId);
+
+  if (due_date) {
+    query = query.eq('due_date', due_date);
+  }
+
+  if (related_goal) {
+    // First get the goal ID
+    const { data: goals, error: goalError } = await supabase
+      .from('goals')
+      .select('id, title')
+      .eq('user_id', userId);
+    if (goalError) return { error: goalError.message };
+    const match = goals.find(g => g.title && g.title.trim().toLowerCase() === related_goal.trim().toLowerCase());
+    if (match) {
+      query = query.eq('goal_id', match.id);
+    }
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: false });
+
+  if (error) {
+    return { error: error.message };
+  }
+  return data;
 } 

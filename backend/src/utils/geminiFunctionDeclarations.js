@@ -19,31 +19,32 @@ export const createTaskFunctionDeclaration = {
 
 export const updateTaskFunctionDeclaration = {
   name: 'update_task',
-  description: 'Updates an existing task for the user. Use this when the user wants to change details of a task. Example user prompts: "Change the due date for my homework task", "Mark the laundry task as complete".',
+  description: `Updates an existing task for the user. If the user provides only the task title, first call 'read_task' to retrieve all tasks, find the task with the matching title, and then call this function with the correct ID. Use this when the user wants to change details of a task. Example user prompts: "Change the due date for my homework task", "Mark the laundry task as complete".`,
   parameters: {
     type: Type.OBJECT,
     properties: {
-      id: { type: Type.STRING, description: 'Task ID' },
-      title: { type: Type.STRING, description: 'Task title' },
+      id: { type: Type.STRING, description: 'The unique ID of the task to update (required if known)' },
+      title: { type: Type.STRING, description: 'The title of the task to update (optional, use to look up the ID if not provided)' },
       description: { type: Type.STRING, description: 'Task details' },
       due_date: { type: Type.STRING, description: 'Due date (YYYY-MM-DD)' },
       priority: { type: Type.STRING, enum: ['high', 'medium', 'low'], description: 'Task priority' },
       related_goal: { type: Type.STRING, description: 'Associated goal title' },
       completed: { type: Type.BOOLEAN, description: 'Task completion status' }
     },
-    required: ['id']
+    required: [] // id is required if known, but not always present
   }
 };
 
 export const deleteTaskFunctionDeclaration = {
   name: 'delete_task',
-  description: 'Deletes a task for the user. Use this when the user wants to remove a task. Example user prompts: "Delete my laundry task", "Remove the call mom task".',
+  description: `Deletes a task by its unique ID. If the user provides only the task title, first call 'read_task' to retrieve all tasks, find the task with the matching title, and then call this function with the correct ID. Use this when the user wants to remove a task. Example user prompts: "Delete my laundry task", "Remove the call mom task".`,
   parameters: {
     type: Type.OBJECT,
     properties: {
-      id: { type: Type.STRING, description: 'Task ID' }
+      id: { type: Type.STRING, description: 'The unique ID of the task to delete (required if known)' },
+      title: { type: Type.STRING, description: 'The title of the task to delete (optional, use to look up the ID if not provided)' }
     },
-    required: ['id']
+    required: [] // id is required if known, but not always present
   }
 };
 
@@ -63,7 +64,7 @@ export const readTaskFunctionDeclaration = {
 // Goal Functions
 export const createGoalFunctionDeclaration = {
   name: 'create_goal',
-  description: 'Creates a new goal for the user. Use this when the user wants to set a new goal. Example user prompts: "Set a goal to run a marathon", "Create a new goal for reading more books".',
+  description: 'Creates a new goal for the user. Use this when the user wants to set a new goal. Before calling this function, call "lookup_goal" to check if the goal already exists. Example user prompts: "Set a goal to run a marathon", "Create a new goal for reading more books".',
   parameters: {
     type: Type.OBJECT,
     properties: {
@@ -78,23 +79,22 @@ export const createGoalFunctionDeclaration = {
 
 export const updateGoalFunctionDeclaration = {
   name: 'update_goal',
-  description: 'Updates an existing goal for the user. Use this when the user wants to change details of a goal. Example user prompts: "Change the due date for my marathon goal", "Update the description of my reading goal".',
+  description: `Updates an existing goal for the user. First call 'lookup_goal' to get all goals, then use the appropriate goal ID from the list. Use this when the user wants to change details of a goal. Example user prompts: "Change the due date for my marathon goal", "Update the description of my reading goal".`,
   parameters: {
     type: Type.OBJECT,
     properties: {
-      id: { type: Type.STRING, description: 'Goal ID' },
-      title: { type: Type.STRING, description: 'Goal title' },
+      id: { type: Type.STRING, description: 'The unique ID of the goal to update (required)' },
       description: { type: Type.STRING, description: 'Goal details' },
       due_date: { type: Type.STRING, description: 'Due date (YYYY-MM-DD)' },
       priority: { type: Type.STRING, enum: ['high', 'medium', 'low'], description: 'Goal priority' }
     },
-    required: ['id']
+    required: ['id'] // id is now required since we get it from lookup_goal
   }
 };
 
 export const deleteGoalFunctionDeclaration = {
   name: 'delete_goal',
-  description: `Deletes a goal by its unique ID. If the user provides only the goal title, first call 'read_goal' to retrieve all goals, find the goal with the matching title, and then call this function with the correct ID. Example user prompts: "Delete the goal 'Test goal'", "Remove my goal called 'Get fit'".`,
+  description: `Deletes a goal by its unique ID. If the user provides only the goal title, first call 'lookup_goal' to retrieve the unique ID of goal, Example user prompts: "Delete the goal 'Test goal'", "Remove my goal called 'Get fit'".`,
   parameters: {
     type: Type.OBJECT,
     properties: {
@@ -102,6 +102,16 @@ export const deleteGoalFunctionDeclaration = {
       title: { type: Type.STRING, description: 'The title of the goal to delete (optional, use to look up the ID if not provided)' }
     },
     required: [] // id is required if known, but not always present
+  }
+};
+
+export const lookupGoalbyTitleFunctionDeclaration = {
+  name: 'lookup_goal',
+  description: 'This function is used as a precursor call to delete_goal and update_goal function calls. Returns all goals for the user with their IDs and titles. The purpose of this function is to retrieve a list of current goals that you must use to identify the requested goal and obtain the ID. After getting the goals list, use the ID from the most likely goal to call update_goal or delete_goal.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {},
+    required: []
   }
 };
 
@@ -184,6 +194,7 @@ export const allGeminiFunctionDeclarations = [
   createGoalFunctionDeclaration,
   updateGoalFunctionDeclaration,
   deleteGoalFunctionDeclaration,
+  lookupGoalbyTitleFunctionDeclaration,
   readGoalFunctionDeclaration,
   createCalendarEventFunctionDeclaration,
   updateCalendarEventFunctionDeclaration,

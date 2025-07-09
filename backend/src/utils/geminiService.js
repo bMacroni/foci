@@ -36,7 +36,11 @@ export class GeminiService {
       this._addToHistory(userId, { role: 'user', content: message });
       // Add a system prompt to instruct Gemini to use functions
       const systemPrompt = `
-You are an AI assistant for a productivity app. Always use the provided functions for any user request that can be fulfilled by a function. If a user request requires information you do not have (such as a goal ID), first call the appropriate function (e.g., 'read_goal') to retrieve the necessary data, then use that data to fulfill the user's request (e.g., call 'delete_goal' with the correct ID). Only return plain text if no function is appropriate. Chain function calls as needed to fully satisfy the user's intent.`;
+You are an AI assistant for a productivity app. Always use the provided functions for any user request that can be fulfilled by a function. 
+
+IMPORTANT: When you call lookup_goal and receive a list of goals, you MUST immediately call update_goal or delete_goal with the appropriate goal ID from that list. Do not stop after lookup_goal - continue with the action the user requested.
+
+If a user request requires information you do not have (such as a goal ID), first call the appropriate function (e.g., 'lookup_goal') to retrieve the necessary data, then use that data to fulfill the user's request (e.g., call 'update_goal' with the correct ID). Only return plain text if no function is appropriate. Chain function calls as needed to fully satisfy the user's intent.`;
       // Trim conversation history to the last MAX_HISTORY_MESSAGES
       const MAX_HISTORY_MESSAGES = 10;
       const fullHistory = this.conversationHistory.get(userId) || [];
@@ -77,6 +81,12 @@ You are an AI assistant for a productivity app. Always use the provided function
           if (functionCall.name === 'read_goal' && Array.isArray(details)) {
             details = { goals: details };
           }
+          if (functionCall.name === 'read_task' && Array.isArray(details)) {
+            details = { tasks: details };
+          }
+          if (functionCall.name === 'read_calendar_event' && Array.isArray(details)) {
+            details = { events: details };
+          }
           if (details && details.due_date) {
             // Normalize past year to current year
             const yearMatch = details.due_date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -94,20 +104,23 @@ You are an AI assistant for a productivity app. Always use the provided function
               details.due_date = `${yyyy}-${mm}-${dd}`;
             }
           }
-          // Map function call to action object
-          let action_type = 'unknown';
-          let entity_type = 'unknown';
-          if (functionCall.name.startsWith('create_')) action_type = 'create';
-          else if (functionCall.name.startsWith('read_')) action_type = 'read';
-          else if (functionCall.name.startsWith('update_')) action_type = 'update';
-          else if (functionCall.name.startsWith('delete_')) action_type = 'delete';
-          const entityMatch = functionCall.name.match(/^(create|read|update|delete)_(.*)$/);
-          if (entityMatch) entity_type = entityMatch[2];
-          actions.push({
-            action_type,
-            entity_type,
-            details
-          });
+          // Only add to actions if it's not a lookup operation
+          if (functionCall.name !== 'lookup_goal') {
+            // Map function call to action object
+            let action_type = 'unknown';
+            let entity_type = 'unknown';
+            if (functionCall.name.startsWith('create_')) action_type = 'create';
+            else if (functionCall.name.startsWith('read_')) action_type = 'read';
+            else if (functionCall.name.startsWith('update_')) action_type = 'update';
+            else if (functionCall.name.startsWith('delete_')) action_type = 'delete';
+            const entityMatch = functionCall.name.match(/^(create|read|update|delete)_(.*)$/);
+            if (entityMatch) entity_type = entityMatch[2];
+            actions.push({
+              action_type,
+              entity_type,
+              details
+            });
+          }
           functionResults.push({ name: functionCall.name, response: details });
         }
         // Send function results back to Gemini for final message
@@ -119,7 +132,12 @@ You are an AI assistant for a productivity app. Always use the provided function
           ...contents,
           ...functionResponses.map(fr => ({
             role: 'model',
-            parts: [{ functionResponse: { name: fr.name, response: fr.response } }]
+            parts: [{ 
+              functionResponse: { 
+                name: fr.name, 
+                response: Array.isArray(fr.response) ? { goals: fr.response } : fr.response 
+              } 
+            }]
           }))
         ];
         // DEBUG: Log followup contents sent for final Gemini response
@@ -133,6 +151,36 @@ You are an AI assistant for a productivity app. Always use the provided function
             tools: [{ functionDeclarations: allGeminiFunctionDeclarations }]
           });
           const finalResponse = await finalResult.response;
+          
+          // Check for additional function calls in the final response
+          const finalFunctionCalls = finalResponse.functionCalls ? await finalResponse.functionCalls() : [];
+          console.log('DEBUG: Final function calls:', finalFunctionCalls);
+          
+          if (finalFunctionCalls && finalFunctionCalls.length > 0) {
+            console.log('DEBUG: Found additional function calls, processing them...');
+            // Process the additional function calls
+            for (const functionCall of finalFunctionCalls) {
+              const details = await this._executeFunctionCall(functionCall, userId, userContext);
+              console.log('DEBUG: Additional function result:', details);
+              
+              // Determine action type and entity type
+              let action_type = 'unknown';
+              let entity_type = 'unknown';
+              if (functionCall.name.startsWith('create_')) action_type = 'create';
+              else if (functionCall.name.startsWith('read_')) action_type = 'read';
+              else if (functionCall.name.startsWith('update_')) action_type = 'update';
+              else if (functionCall.name.startsWith('delete_')) action_type = 'delete';
+              const entityMatch = functionCall.name.match(/^(create|read|update|delete)_(.*)$/);
+              if (entityMatch) entity_type = entityMatch[2];
+              
+              actions.push({
+                action_type,
+                entity_type,
+                details
+              });
+            }
+          }
+          
           message = finalResponse.text ? await finalResponse.text() : '';
           // DEBUG: Log the final Gemini response
           console.log('DEBUG: Final Gemini response:', finalResponse);
@@ -189,7 +237,9 @@ You are an AI assistant for a productivity app. Always use the provided function
         case 'update_goal':
           return await goalsController.updateGoalFromAI(args, userId, userContext);
         case 'delete_goal':
-          return await goalsController.deleteGoal(args, userId, userContext);
+          return await goalsController.deleteGoalFromAI(args, userId, userContext);
+        case 'lookup_goal':
+          return await goalsController.lookupGoalbyTitle(userId, userContext.token);
         case 'read_goal':
           // Use the new utility function, pass userId and token from userContext
           return await goalsController.getGoalsForUser(userId, userContext.token);
