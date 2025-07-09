@@ -61,6 +61,16 @@ export const readTaskFunctionDeclaration = {
   }
 };
 
+export const lookupTaskbyTitleFunctionDeclaration = {
+  name: 'lookup_task',
+  description: 'This function is used as a precursor call to delete_task and update_task function calls. Returns all tasks for the user with their IDs and titles. The purpose of this function is to retrieve a list of current tasks that you must use to identify the requested task and obtain the ID. After getting the task list, use the ID from the most likely task to call update_task or delete_task.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {},
+    required: []
+  }
+};
+
 // Goal Functions
 export const createGoalFunctionDeclaration = {
   name: 'create_goal',
@@ -143,6 +153,16 @@ export const createCalendarEventFunctionDeclaration = {
   }
 };
 
+export const lookupCalendarEventbyTitleFunctionDeclaration = {
+  name: 'lookup_calendar_event',
+  description: 'This function is used as a precursor call to delete_calendar_event and update_calendar_event function calls. If the user uses terms like, "tomorrow" "today" "next week", convert the term into a proper date or date range. Returns all calendar events for the user with their IDs and titles. The purpose of this function is to retrieve a list of current calendar events that you must use to identify the requested calendar event and obtain the ID. After getting the calendar events list, use the ID from the most likely calendar event to call update_calendar_event or delete_calendar_event.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {},
+    required: []
+  }
+};
+
 export const updateCalendarEventFunctionDeclaration = {
   name: 'update_calendar_event',
   description: 'Updates an existing calendar event for the user. Use this when the user wants to change event details. Example user prompts: "Change the time of my meeting", "Update the location for my doctor appointment".',
@@ -175,11 +195,11 @@ export const deleteCalendarEventFunctionDeclaration = {
 
 export const readCalendarEventFunctionDeclaration = {
   name: 'read_calendar_event',
-  description: 'Reads or lists calendar events for the user. Use this when the user wants to see their events or filter by date. Example user prompts: "Show me my calendar events", "List my events for next week", "What events do I have on Friday?"',
+  description: 'Reads or lists calendar events for the user. Use this when the user wants to see their events or filter by date. You can pass natural language dates like "tomorrow", "next week", "today", "next Friday", or specific dates like "2024-01-15". Example user prompts: "Show me my calendar events", "List my events for next week", "What events do I have on Friday?"',
   parameters: {
     type: Type.OBJECT,
     properties: {
-      date: { type: Type.STRING, description: 'Date to filter events (YYYY-MM-DD)' }
+      date: { type: Type.STRING, description: 'Date to filter events (natural language like "tomorrow", "next week", or specific date like "2024-01-15")' }
     },
     required: []
   }
@@ -191,6 +211,7 @@ export const allGeminiFunctionDeclarations = [
   updateTaskFunctionDeclaration,
   deleteTaskFunctionDeclaration,
   readTaskFunctionDeclaration,
+  lookupTaskbyTitleFunctionDeclaration,
   createGoalFunctionDeclaration,
   updateGoalFunctionDeclaration,
   deleteGoalFunctionDeclaration,
@@ -199,5 +220,6 @@ export const allGeminiFunctionDeclarations = [
   createCalendarEventFunctionDeclaration,
   updateCalendarEventFunctionDeclaration,
   deleteCalendarEventFunctionDeclaration,
+  lookupCalendarEventbyTitleFunctionDeclaration,
   readCalendarEventFunctionDeclaration
 ]; 

@@ -220,6 +220,7 @@ If a user request requires information you do not have (such as a goal ID), firs
   async _executeFunctionCall(functionCall, userId, userContext) {
     const { name, args } = functionCall;
     try {
+      console.log('Gemini function call name:', name);
       switch (name) {
         case 'create_task':
           // args: { title, description, due_date, priority, related_goal }
@@ -232,6 +233,9 @@ If a user request requires information you do not have (such as a goal ID), firs
           return await tasksController.deleteTaskFromAI(args, userId, userContext);
         case 'read_task':
           return await tasksController.readTaskFromAI(args, userId, userContext);
+        case 'lookup_task':
+          console.log('Calling lookupTaskbyTitle with:', { userId, token: userContext.token });
+          return await tasksController.lookupTaskbyTitle(userId, userContext.token);
         case 'create_goal':
           return await goalsController.createGoalFromAI(args, userId, userContext);
         case 'update_goal':
@@ -251,6 +255,8 @@ If a user request requires information you do not have (such as a goal ID), firs
           return await calendarService.deleteCalendarEventFromAI(args, userId, userContext);
         case 'read_calendar_event':
           return await calendarService.readCalendarEventFromAI(args, userId, userContext);
+        case 'lookup_calendar_event':
+          return await calendarService.lookupCalendarEventbyTitle(userId, userContext.token);
         default:
           return { error: `Unknown function call: ${name}` };
       }

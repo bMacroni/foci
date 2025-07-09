@@ -3,6 +3,7 @@ import { aiAPI, goalsAPI, tasksAPI, conversationsAPI, calendarAPI } from '../ser
 import BulkApprovalPanel from './BulkApprovalPanel';
 import { AIActionProvider, useAIAction } from '../contexts/AIActionContext';
 import CalendarEvents from './CalendarEvents';
+import SuccessToast from './SuccessToast';
 
 // Utility function to generate unique IDs
 let messageIdCounter = 0;
@@ -26,6 +27,11 @@ const AIChat = ({ onNavigateToTab }) => {
   const [taskListByMessageId, setTaskListByMessageId] = useState({});
   const [listByMessageId, setListByMessageId] = useState({});
   const { calendarEvents, error: calendarError, processAIResponse } = useAIAction();
+  const [toast, setToast] = useState({ isVisible: false, message: '', type: 'success' });
+  const showToast = (message, type = 'success') => {
+    setToast({ isVisible: true, message, type });
+  };
+  const handleCloseToast = () => setToast({ ...toast, isVisible: false });
 
   // Load user data and conversation threads
   useEffect(() => {
@@ -312,19 +318,43 @@ const AIChat = ({ onNavigateToTab }) => {
         }
       ]);
 
-      // Optionally, show a summary of actions taken (if any)
-      if (actions && actions.length > 0) {
-        setMessages(prev => [
-          ...prev,
-          {
-            id: generateUniqueId(),
-            type: 'ai',
-            content: `Actions taken: ${actions.map(a => a && a.title ? a.title : JSON.stringify(a)).join(', ')}`,
-            timestamp: new Date(),
-            actions: actions
-          }
-        ]);
-      }
+      // For each action, show a toast and add a natural language message
+      actions.forEach(action => {
+        // Only handle create/update/delete actions
+        if (["create", "update", "delete"].includes(action.action_type)) {
+          let actionVerb = '';
+          if (action.action_type === 'create') actionVerb = 'created';
+          if (action.action_type === 'update') actionVerb = 'updated';
+          if (action.action_type === 'delete') actionVerb = 'deleted';
+          const entity = action.entity_type.replace('_', ' ');
+          const title = action.details?.title || action.details?.name || '';
+          // Toast
+          showToast(`${entity.charAt(0).toUpperCase() + entity.slice(1)}${title ? ` "${title}"` : ''} ${actionVerb}.`, 'success');
+          // Chat message
+          setMessages(prev => [
+            ...prev,
+            {
+              id: generateUniqueId(),
+              type: 'ai',
+              content: `I've ${actionVerb} ${entity}${title ? ` "${title}"` : ''}.`,
+              timestamp: new Date()
+            }
+          ]);
+        }
+        // If error
+        if (action.details && action.details.error) {
+          showToast(`Failed to ${action.action_type} ${action.entity_type}: ${action.details.error}`, 'error');
+          setMessages(prev => [
+            ...prev,
+            {
+              id: generateUniqueId(),
+              type: 'ai',
+              content: `❌ Failed to ${action.action_type} ${action.entity_type}: ${action.details.error}`,
+              timestamp: new Date()
+            }
+          ]);
+        }
+      });
     } catch (error) {
       console.error('❌ Error handling Gemini response:', error);
       setMessages(prev => [...prev, {
@@ -376,6 +406,7 @@ const AIChat = ({ onNavigateToTab }) => {
         content: "I'm sorry, I encountered an error. Please try again or check your connection.",
         timestamp: new Date()
       }]);
+      showToast('Failed to send message. Please try again.', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -454,6 +485,7 @@ const AIChat = ({ onNavigateToTab }) => {
               content: `✅ Goal "${action.data.title}" has been created!`,
               timestamp: new Date()
             }]);
+            showToast(`Goal "${action.data.title}" created!`, 'success');
             refreshUserData();
           }
           break;
@@ -467,13 +499,13 @@ const AIChat = ({ onNavigateToTab }) => {
               content: `✅ Task "${action.data.title}" has been created!`,
               timestamp: new Date()
             }]);
+            showToast(`Task "${action.data.title}" created!`, 'success');
             refreshUserData();
           }
           break;
           
         case 'calendar_event':
           if (action.operation === 'create') {
-            // Map Gemini fields to backend fields
             const data = action.data || action.details || {};
             const eventPayload = {
               summary: data.title || data.summary || 'Untitled Event',
@@ -489,25 +521,14 @@ const AIChat = ({ onNavigateToTab }) => {
               content: `✅ Calendar event "${eventPayload.summary}" has been scheduled!`,
               timestamp: new Date()
             }]);
+            showToast(`Event "${eventPayload.summary}" created!`, 'success');
           } else if (action.operation === 'read') {
-            let eventsResponse = await calendarAPI.getEvents();
-            console.log('📅 Raw events from backend:', eventsResponse.data);
-            let events = eventsResponse.data;
-            // If a due_date is present, filter events for that date
-            if (action.data && action.data.due_date) {
-              const targetDateStr = action.data.due_date;
-              console.log('🔎 Filtering for targetDateStr:', targetDateStr);
-              events = events.filter(event => {
-                let eventDateObj = event.start.dateTime ? new Date(event.start.dateTime) : new Date(event.start.date);
-                // Format as YYYY-MM-DD in UTC
-                const yyyy = eventDateObj.getUTCFullYear();
-                const mm = String(eventDateObj.getUTCMonth() + 1).padStart(2, '0');
-                const dd = String(eventDateObj.getUTCDate()).padStart(2, '0');
-                const eventDateStr = `${yyyy}-${mm}-${dd}`;
-                console.log('  Event:', event.summary, '| eventDateStr:', eventDateStr, '| Matches:', eventDateStr === targetDateStr);
-                return eventDateStr === targetDateStr;
-              });
-              console.log('✅ Filtered events:', events);
+            // Use events from action.details.events or action.details
+            let events = [];
+            if (Array.isArray(action.details?.events)) {
+              events = action.details.events;
+            } else if (Array.isArray(action.details)) {
+              events = action.details;
             }
             setMessages(prev => [...prev, {
               id: generateUniqueId(),
@@ -529,6 +550,7 @@ const AIChat = ({ onNavigateToTab }) => {
         content: `❌ Error: Failed to ${action.operation} ${action.type}. Please try again.`,
         timestamp: new Date()
       }]);
+      showToast(`Failed to ${action.operation} ${action.type}.`, 'error');
     }
   };
 
@@ -656,6 +678,12 @@ const AIChat = ({ onNavigateToTab }) => {
 
   return (
     <div className="bg-white h-full flex overflow-hidden relative">
+      <SuccessToast
+        message={toast.message}
+        isVisible={toast.isVisible}
+        onClose={handleCloseToast}
+        type={toast.type}
+      />
       {/* Mobile Sidebar Overlay */}
       {showMobileSidebar && (
         <div className="lg:hidden fixed inset-0 bg-black/50 z-50">
@@ -1097,7 +1125,21 @@ const MessageBubble = ({ message, fetchListForMessage, listState }) => {
     const isReadTask = jsonObjects && jsonObjects.some(json => json.action_type === 'read' && json.entity_type === 'task');
     const isReadGoal = jsonObjects && jsonObjects.some(json => json.action_type === 'read' && json.entity_type === 'goal');
     const hasActions = jsonObjects && jsonObjects.length > 0;
-    
+    // --- ADDED: Render goals from message.actions if present ---
+    let goals = [];
+    if (message.actions && Array.isArray(message.actions)) {
+      const readGoalAction = message.actions.find(
+        a => a.action_type === 'read' && a.entity_type === 'goal'
+      );
+      if (readGoalAction) {
+        if (Array.isArray(readGoalAction.details)) {
+          goals = readGoalAction.details;
+        } else if (Array.isArray(readGoalAction.details?.goals)) {
+          goals = readGoalAction.details.goals;
+        }
+      }
+    }
+    // --- END ADDED ---
     return (
       <div className="flex">
         <div className="w-full text-left">
@@ -1128,30 +1170,18 @@ const MessageBubble = ({ message, fetchListForMessage, listState }) => {
               )}
             </div>
           )}
-          {/* Show actions taken for create/update/delete operations */}
-          {hasActions && !isReadTask && !isReadGoal && (
-            <div className="mt-3 pt-3 border-t border-black/10">
-              <div className="text-xs text-gray-500 mb-2">Actions taken:</div>
-              <div className="space-y-1">
-                {jsonObjects.map((action, index) => (
-                  <div key={index} className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
-                    ✓ {action.action_type} {action.entity_type}: {action.details?.title || 'Action completed'}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {message.actions && message.actions.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-black/10">
-              <div className="text-xs text-gray-500 mb-2">Actions taken:</div>
-              <div className="space-y-1">
-                {message.actions.map((action, index) => (
-                  <div key={index} className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
-                    ✓ {action.type}: {action.description}
-                  </div>
-                ))}
-              </div>
-            </div>
+          {/* Render goals from message.actions if present */}
+          {goals.length > 0 && (
+            <ul className="list-disc pl-5 text-sm mt-1">
+              {goals.map(goal => (
+                <li key={goal.id}>
+                  <strong>{goal.title}</strong>
+                  {goal.description && (
+                    <div className="text-xs text-gray-500">{goal.description}</div>
+                  )}
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       </div>

@@ -358,6 +358,52 @@ export async function deleteTaskFromAI(args, userId, userContext) {
   return { success: true };
 }
 
+export async function lookupTaskbyTitle(userId, token) {
+  console.log('=== LOOKUP GOAL DEBUG ===');
+  console.log('User ID:', userId);
+  console.log('Token (first 50 chars):', token ? token.substring(0, 50) + '...' : 'No token');
+  console.log('Token type:', typeof token);
+  console.log('Token length:', token ? token.length : 0);
+  
+  if (!token) {
+    console.log('ERROR: No token provided to lookupGoalbyTitle');
+    return { error: 'No authentication token provided' };
+  }
+
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  });
+
+  // Get ALL goals for this user
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('id, title')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  console.log('All goals for user:', data);
+  console.log('Supabase response error:', error);
+  console.log('=== END LOOKUP GOAL DEBUG ===');
+
+  if (error) {
+    return { error: error.message };
+  }
+  
+  // Return all goals with their IDs and titles
+  if (data && data.length > 0) {
+    console.log('Returning', data.length, 'tasks');
+    return data;
+  } else {
+    console.log('No tasks found for user');
+    return { error: 'No tasks found for this user' };
+  }
+}
+
+
 export async function readTaskFromAI(args, userId, userContext) {
   const { due_date, related_goal } = args;
   const token = userContext?.token;

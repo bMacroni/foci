@@ -1,5 +1,6 @@
 import { google } from 'googleapis';
 import { getGoogleTokens } from './googleTokenStorage.js';
+import * as chrono from 'chrono-node';
 
 export async function getCalendarClient(userId) {
   try {
@@ -170,6 +171,196 @@ export async function getEventsForDate(userId, date) {
     }));
   } catch (error) {
     console.error('Error fetching events for date:', error);
+    throw error;
+  }
+}
+
+/**
+ * Helper function to parse natural language dates and convert to date ranges
+ * @param {string} dateInput - Natural language date (e.g., "tomorrow", "next week", "2024-01-15")
+ * @returns {Object} Object with startDate and endDate in YYYY-MM-DD format
+ */
+function parseDateRange(dateInput) {
+  if (!dateInput) {
+    // Default to today if no date provided
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    return {
+      startDate: `${yyyy}-${mm}-${dd}`,
+      endDate: `${yyyy}-${mm}-${dd}`
+    };
+  }
+
+  // Try to parse as a specific date first (YYYY-MM-DD)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
+    return {
+      startDate: dateInput,
+      endDate: dateInput
+    };
+  }
+
+  // Use chrono-node to parse natural language
+  const parsed = chrono.parseDate(dateInput, new Date(), { forwardDate: true });
+  
+  if (parsed && !isNaN(parsed)) {
+    const yyyy = parsed.getFullYear();
+    const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+    const dd = String(parsed.getDate()).padStart(2, '0');
+    const dateStr = `${yyyy}-${mm}-${dd}`;
+    
+    // Handle different types of date inputs
+    if (dateInput.toLowerCase().includes('week')) {
+      // For "next week", "this week", etc. - get the full week
+      const startOfWeek = new Date(parsed);
+      startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(endOfWeek.getDate() + 6);
+      
+      const startYyyy = startOfWeek.getFullYear();
+      const startMm = String(startOfWeek.getMonth() + 1).padStart(2, '0');
+      const startDd = String(startOfWeek.getDate()).padStart(2, '0');
+      const endYyyy = endOfWeek.getFullYear();
+      const endMm = String(endOfWeek.getMonth() + 1).padStart(2, '0');
+      const endDd = String(endOfWeek.getDate()).padStart(2, '0');
+      
+      return {
+        startDate: `${startYyyy}-${startMm}-${startDd}`,
+        endDate: `${endYyyy}-${endMm}-${endDd}`
+      };
+    } else if (dateInput.toLowerCase().includes('month')) {
+      // For "next month", "this month", etc. - get the full month
+      const startOfMonth = new Date(parsed.getFullYear(), parsed.getMonth(), 1);
+      const endOfMonth = new Date(parsed.getFullYear(), parsed.getMonth() + 1, 0);
+      
+      const startYyyy = startOfMonth.getFullYear();
+      const startMm = String(startOfMonth.getMonth() + 1).padStart(2, '0');
+      const startDd = String(startOfMonth.getDate()).padStart(2, '0');
+      const endYyyy = endOfMonth.getFullYear();
+      const endMm = String(endOfMonth.getMonth() + 1).padStart(2, '0');
+      const endDd = String(endOfMonth.getDate()).padStart(2, '0');
+      
+      return {
+        startDate: `${startYyyy}-${startMm}-${startDd}`,
+        endDate: `${endYyyy}-${endMm}-${endDd}`
+      };
+    } else {
+      // For specific dates like "tomorrow", "today", "next Friday"
+      return {
+        startDate: dateStr,
+        endDate: dateStr
+      };
+    }
+  }
+
+  // Fallback to today if parsing fails
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  return {
+    startDate: `${yyyy}-${mm}-${dd}`,
+    endDate: `${yyyy}-${mm}-${dd}`
+  };
+}
+
+/**
+ * AI-specific function to read calendar events with optional date filtering
+ * @param {Object} args - Arguments from Gemini AI
+ * @param {string} userId - User ID
+ * @param {Object} userContext - User context
+ * @returns {Promise<Array>} events
+ */
+export async function readCalendarEventFromAI(args, userId, userContext) {
+  try {
+    const calendar = await getCalendarClient(userId);
+    
+    // Parse the date input (could be natural language like "tomorrow", "next week")
+    const dateRange = parseDateRange(args.date);
+    
+    // Build query parameters
+    const queryParams = {
+      calendarId: 'primary',
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 50 // Limit results for performance
+    };
+
+    // Add date filtering based on parsed range
+    if (dateRange.startDate && dateRange.endDate) {
+      const timeMin = new Date(dateRange.startDate + 'T00:00:00Z').toISOString();
+      const timeMax = new Date(dateRange.endDate + 'T23:59:59Z').toISOString();
+      queryParams.timeMin = timeMin;
+      queryParams.timeMax = timeMax;
+    } else {
+      // If no date specified, get events from now onwards
+      queryParams.timeMin = new Date().toISOString();
+    }
+
+    const response = await calendar.events.list(queryParams);
+    
+    // Format events for AI consumption
+    const events = response.data.items.map(event => ({
+      id: event.id,
+      title: event.summary || 'Untitled Event',
+      description: event.description || '',
+      start: event.start?.dateTime || event.start?.date,
+      end: event.end?.dateTime || event.end?.date,
+      location: event.location || '',
+      timeZone: event.start?.timeZone || 'UTC'
+    }));
+
+    return events;
+  } catch (error) {
+    console.error('Error in readCalendarEventFromAI:', error);
+    throw error;
+  }
+}
+
+/**
+ * AI-specific function to lookup calendar events by title
+ * @param {string} userId - User ID
+ * @param {string} token - User token (for consistency with other lookup functions)
+ * @returns {Promise<Array>} events with IDs and titles
+ */
+export async function lookupCalendarEventbyTitle(userId, token) {
+  try {
+    if (!token) {
+      console.log('ERROR: No token provided to lookupCalendarEventbyTitle');
+      return [];
+    }
+
+    const calendar = await getCalendarClient(userId);
+    
+    // Get events from now onwards (last 30 days and next 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const thirtyDaysFromNow = new Date();
+    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+
+    const response = await calendar.events.list({
+      calendarId: 'primary',
+      timeMin: thirtyDaysAgo.toISOString(),
+      timeMax: thirtyDaysFromNow.toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 100 // Get more events for better lookup
+    });
+
+    // Format events for AI lookup (similar to task/goal lookup pattern)
+    const events = response.data.items.map(event => ({
+      id: event.id,
+      title: event.summary || 'Untitled Event',
+      start: event.start?.dateTime || event.start?.date,
+      end: event.end?.dateTime || event.end?.date,
+      location: event.location || '',
+      description: event.description || ''
+    }));
+
+    return events;
+  } catch (error) {
+    console.error('Error in lookupCalendarEventbyTitle:', error);
     throw error;
   }
 } 

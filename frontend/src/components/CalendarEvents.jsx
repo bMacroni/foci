@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { calendarAPI } from '../services/api';
+import SuccessToast from './SuccessToast';
 
 // Accept events and error as props for AI integration
 const CalendarEvents = ({ events: propEvents, error: propError }) => {
@@ -66,6 +67,11 @@ const CalendarEvents = ({ events: propEvents, error: propError }) => {
   const [editingEvent, setEditingEvent] = useState(null);
   const [viewMode, setViewMode] = useState('daily'); // 'daily' or 'weekly'
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [toast, setToast] = useState({ isVisible: false, message: '', type: 'success' });
+  const showToast = (message, type = 'success') => {
+    setToast({ isVisible: true, message, type });
+  };
+  const handleCloseToast = () => setToast({ ...toast, isVisible: false });
 
   useEffect(() => {
     loadEvents();
@@ -170,9 +176,10 @@ const CalendarEvents = ({ events: propEvents, error: propError }) => {
       await calendarAPI.createEvent(eventData);
       setShowCreateForm(false);
       loadEvents();
+      showToast('Event created successfully!', 'success');
     } catch (err) {
       console.error('Error creating event:', err);
-      alert('Failed to create event');
+      showToast('Failed to create event', 'error');
     }
   };
 
@@ -181,9 +188,10 @@ const CalendarEvents = ({ events: propEvents, error: propError }) => {
       await calendarAPI.updateEvent(eventId, eventData);
       setEditingEvent(null);
       loadEvents();
+      showToast('Event updated successfully!', 'success');
     } catch (err) {
       console.error('Error updating event:', err);
-      alert('Failed to update event');
+      showToast('Failed to update event', 'error');
     }
   };
 
@@ -195,9 +203,10 @@ const CalendarEvents = ({ events: propEvents, error: propError }) => {
     try {
       await calendarAPI.deleteEvent(eventId);
       loadEvents();
+      showToast('Event deleted successfully!', 'success');
     } catch (err) {
       console.error('Error deleting event:', err);
-      alert('Failed to delete event');
+      showToast('Failed to delete event', 'error');
     }
   };
 
@@ -228,6 +237,12 @@ const CalendarEvents = ({ events: propEvents, error: propError }) => {
 
   return (
     <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl border border-black/10 p-8">
+      <SuccessToast
+        message={toast.message}
+        isVisible={toast.isVisible}
+        onClose={handleCloseToast}
+        type={toast.type}
+      />
       {/* Header with motivational message */}
       <div className="mb-8">
         <div className="flex justify-between items-center mb-4">
