@@ -64,7 +64,7 @@ export const readTaskFunctionDeclaration = {
 // Goal Functions
 export const createGoalFunctionDeclaration = {
   name: 'create_goal',
-  description: 'Creates a new goal for the user. Use this when the user wants to set a new goal. Before calling this function, call "lookup_goal" to check if the goal already exists. Example user prompts: "Set a goal to run a marathon", "Create a new goal for reading more books".',
+  description: 'Creates a new goal for the user. Use this when the user wants to set a new goal. If the user only provides partial data, ask follow-up questions to determine the remaining data points. One follow-up question to ask: "Would you like me to make suggestions to achieve this goal and add it to the description?" Before calling this function, call "lookup_goal" to check if the goal already exists. Example user prompts: "Set a goal to run a marathon", "Create a new goal for reading more books".',
   parameters: {
     type: Type.OBJECT,
     properties: {
