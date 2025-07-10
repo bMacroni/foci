@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import * as chrono from 'chrono-node';
+import { dateParser } from './dateParser.js';
 import {
   allGeminiFunctionDeclarations
 } from './geminiFunctionDeclarations.js';
@@ -36,11 +36,15 @@ export class GeminiService {
       this._addToHistory(userId, { role: 'user', content: message });
       // Add a system prompt to instruct Gemini to use functions
       const systemPrompt = `
-You are an AI assistant for a productivity app. Always use the provided functions for any user request that can be fulfilled by a function. 
+You are an AI assistant for a productivity app named Foci. Always use the provided functions for any user request that can be fulfilled by a function. If there is any confusion about which function to run, for example, your converation history consists of multiple requests, confirm with the user what their desired request is.
 
 IMPORTANT: When you call lookup_goal and receive a list of goals, you MUST immediately call update_goal or delete_goal with the appropriate goal ID from that list. Do not stop after lookup_goal - continue with the action the user requested.
 
-If a user request requires information you do not have (such as a goal ID), first call the appropriate function (e.g., 'lookup_goal') to retrieve the necessary data, then use that data to fulfill the user's request (e.g., call 'update_goal' with the correct ID). Only return plain text if no function is appropriate. Chain function calls as needed to fully satisfy the user's intent.`;
+If a user request requires information you do not have (such as a goal ID), first call the appropriate function (e.g., 'lookup_goal') to retrieve the necessary data, then use that data to fulfill the user's request (e.g., call 'update_goal' with the correct ID). Only return plain text if no function is appropriate. Chain function calls as needed to fully satisfy the user's intent.
+
+
+
+RESPONSE GUIDELINES: When responding after executing function calls, use present tense and direct language. Say "I've added..." or "I've created..." or "Task created successfully" rather than "I've already added..." or "I've already created...". Be clear and concise about what action was just performed.`;
       // Trim conversation history to the last MAX_HISTORY_MESSAGES
       const MAX_HISTORY_MESSAGES = 10;
       const fullHistory = this.conversationHistory.get(userId) || [];
@@ -70,10 +74,15 @@ If a user request requires information you do not have (such as a goal ID), firs
       // Check for function calls
       let actions = [];
       let functionResults = [];
+      // Track executed function calls to prevent duplication
+      const executedFunctionCalls = new Set();
       if (functionCalls && functionCalls.length > 0) {
         // DEBUG: Log function calls
         console.log('DEBUG: Gemini functionCalls:', functionCalls);
         for (const functionCall of functionCalls) {
+          // Create a unique key for the function call (name + args JSON)
+          const callKey = `${functionCall.name}:${JSON.stringify(functionCall.args)}`;
+          executedFunctionCalls.add(callKey);
           let execResult = await this._executeFunctionCall(functionCall, userId, userContext);
           // Due date normalization for tests (mock mode)
           let details = execResult !== undefined && execResult !== null ? execResult : functionCall.args;
@@ -89,7 +98,7 @@ If a user request requires information you do not have (such as a goal ID), firs
           }
           if (details && details.due_date) {
             // Normalize past year to current year
-            const yearMatch = details.due_date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            const yearMatch = details.due_date.match(/^\(\d{4}\)-(\d{2})-(\d{2})$/);
             if (yearMatch && parseInt(yearMatch[1]) < new Date().getFullYear()) {
               const currentYear = String(new Date().getFullYear());
               details.due_date = currentYear + '-' + yearMatch[2] + '-' + yearMatch[3];
@@ -160,6 +169,13 @@ If a user request requires information you do not have (such as a goal ID), firs
             console.log('DEBUG: Found additional function calls, processing them...');
             // Process the additional function calls
             for (const functionCall of finalFunctionCalls) {
+              // Create a unique key for the function call (name + args JSON)
+              const callKey = `${functionCall.name}:${JSON.stringify(functionCall.args)}`;
+              if (executedFunctionCalls.has(callKey)) {
+                // Skip duplicate function call
+                continue;
+              }
+              executedFunctionCalls.add(callKey);
               const details = await this._executeFunctionCall(functionCall, userId, userContext);
               console.log('DEBUG: Additional function result:', details);
               
@@ -295,31 +311,30 @@ If a user request requires information you do not have (such as a goal ID), firs
   }
 
   /**
-   * Normalize due_date in Gemini JSON actions using chrono-node and current year logic
+   * Normalize due_date in Gemini JSON actions using DateParser utility
    */
   _normalizeDueDate(action) {
     if (!action.details || !action.details.due_date) return;
     let dueDateStr = action.details.due_date;
-    let parsed = (chrono && chrono.parseDate) ? chrono.parseDate(dueDateStr, new Date(), { forwardDate: true }) : null;
-    if (!parsed) {
-      // fallback: try parsing as ISO
-      parsed = new Date(dueDateStr);
-    }
-    if (parsed && !isNaN(parsed)) {
-      const now = new Date();
-      // If year is in the past, or not this year or next, set to this year
-      if (parsed.getFullYear() < now.getFullYear() || parsed.getFullYear() > now.getFullYear() + 1) {
-        parsed.setFullYear(now.getFullYear());
+    let parsed = dateParser.parse(dueDateStr);
+    if (parsed) {
+      const parsedDate = new Date(parsed);
+      if (parsedDate && !isNaN(parsedDate)) {
+        const now = new Date();
+        // If year is in the past, or not this year or next, set to this year
+        if (parsedDate.getFullYear() < now.getFullYear() || parsedDate.getFullYear() > now.getFullYear() + 1) {
+          parsedDate.setFullYear(now.getFullYear());
+        }
+        // If the date is in the past, move to next year
+        if (parsedDate < now) {
+          parsedDate.setFullYear(parsedDate.getFullYear() + 1);
+        }
+        // Format as YYYY-MM-DD
+        const yyyy = parsedDate.getFullYear();
+        const mm = String(parsedDate.getMonth() + 1).padStart(2, '0');
+        const dd = String(parsedDate.getDate()).padStart(2, '0');
+        action.details.due_date = `${yyyy}-${mm}-${dd}`;
       }
-      // If the date is in the past, move to next year
-      if (parsed < now) {
-        parsed.setFullYear(parsed.getFullYear() + 1);
-      }
-      // Format as YYYY-MM-DD
-      const yyyy = parsed.getFullYear();
-      const mm = String(parsed.getMonth() + 1).padStart(2, '0');
-      const dd = String(parsed.getDate()).padStart(2, '0');
-      action.details.due_date = `${yyyy}-${mm}-${dd}`;
     }
   }
 

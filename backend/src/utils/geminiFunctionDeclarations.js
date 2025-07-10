@@ -3,7 +3,7 @@ import { Type } from '@google/genai';
 // Task Functions
 export const createTaskFunctionDeclaration = {
   name: 'create_task',
-  description: 'Creates a new task for the user. Use this when the user wants to add a new task to their planner. Example user prompts: "Add a task to buy groceries", "Create a new task for tomorrow", "Remind me to call mom".',
+  description: 'Creates a new task for the user. Use this when the user wants to add a new task to their planner. Before calling this function, call "lookup_task" to check if the goal already exists. If the task exists, ask the user if they really want to add it, or update it. Example user prompts: "Add a task to buy groceries", "Create a new task for tomorrow", "Remind me to call mom".',
   parameters: {
     type: Type.OBJECT,
     properties: {

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { dateParser } from '../utils/dateParser.js';
 
 export async function createTask(req, res) {
   const { title, description, due_date, priority, goal_id, completed } = req.body;
@@ -238,13 +239,19 @@ export async function createTaskFromAI(args, userId, userContext) {
     if (match) goalId = match.id;
   }
 
+  // Use DateParser utility for due_date parsing
+  let parsedDueDate = due_date;
+  if (due_date && typeof due_date === 'string') {
+    parsedDueDate = dateParser.parse(due_date);
+  }
+
   const { data, error } = await supabase
     .from('tasks')
     .insert([{ 
       user_id: userId, 
       title, 
       description, 
-      due_date,
+      due_date: parsedDueDate,
       priority,
       goal_id: goalId,
       completed: false
@@ -297,10 +304,12 @@ export async function updateTaskFromAI(args, userId, userContext) {
     if (match) goalId = match.id;
   }
 
-  // Prepare update data
+  // Prepare update data with DateParser for due_date
   const updateData = {};
   if (description !== undefined) updateData.description = description;
-  if (due_date !== undefined) updateData.due_date = due_date;
+  if (due_date !== undefined) {
+    updateData.due_date = typeof due_date === 'string' ? dateParser.parse(due_date) : due_date;
+  }
   if (priority !== undefined) updateData.priority = priority;
   if (related_goal !== undefined) updateData.goal_id = goalId;
   if (completed !== undefined) updateData.completed = completed;
@@ -359,14 +368,14 @@ export async function deleteTaskFromAI(args, userId, userContext) {
 }
 
 export async function lookupTaskbyTitle(userId, token) {
-  console.log('=== LOOKUP GOAL DEBUG ===');
+  console.log('=== LOOKUP TASK DEBUG ===');
   console.log('User ID:', userId);
   console.log('Token (first 50 chars):', token ? token.substring(0, 50) + '...' : 'No token');
   console.log('Token type:', typeof token);
   console.log('Token length:', token ? token.length : 0);
   
   if (!token) {
-    console.log('ERROR: No token provided to lookupGoalbyTitle');
+    console.log('ERROR: No token provided to lookupTaskbyTitle');
     return { error: 'No authentication token provided' };
   }
 

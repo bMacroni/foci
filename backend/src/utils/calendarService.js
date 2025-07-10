@@ -1,6 +1,6 @@
 import { google } from 'googleapis';
 import { getGoogleTokens } from './googleTokenStorage.js';
-import * as chrono from 'chrono-node';
+import { dateParser } from './dateParser.js';
 
 export async function getCalendarClient(userId) {
   try {
@@ -201,8 +201,9 @@ function parseDateRange(dateInput) {
     };
   }
 
-  // Use chrono-node to parse natural language
-  const parsed = chrono.parseDate(dateInput, new Date(), { forwardDate: true });
+  // Use DateParser utility to parse natural language
+  const parsedDate = dateParser.parse(dateInput);
+  const parsed = new Date(parsedDate);
   
   if (parsed && !isNaN(parsed)) {
     const yyyy = parsed.getFullYear();
