@@ -1,531 +1,433 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { calendarAPI } from '../services/api';
 import SuccessToast from './SuccessToast';
+import { DndProvider, useDrag, useDrop } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
 
-// Accept events and error as props for AI integration
-const CalendarEvents = ({ events: propEvents, error: propError }) => {
-  // If events are provided as props, use them directly (AI mode)
-  if (propEvents !== undefined) {
-    if (propError) {
-      return (
-        <div className="mb-6 bg-red-50/80 backdrop-blur-sm border border-red-200 text-red-700 px-6 py-4 rounded-2xl shadow-sm">
-          <div className="flex items-center space-x-2">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span className="font-medium">{propError}</span>
-          </div>
-        </div>
-      );
-    }
-    if (!Array.isArray(propEvents) || propEvents.length === 0) {
-      return (
-        <div className="text-center py-8">
-          <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-          </div>
-          <h3 className="text-xl font-semibold text-black mb-2">No events scheduled for this date</h3>
-          <p className="text-gray-600">Perfect time to plan your day and add some structure!</p>
-        </div>
-      );
-    }
-    // Render a simple list of events for the date
-    return (
-      <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl border border-black/10 p-8 my-6">
-        <h3 className="text-2xl font-bold text-black mb-4 flex items-center">
-          <svg className="w-6 h-6 mr-2 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          Events for Selected Date
-        </h3>
-        <ul className="divide-y divide-gray-200">
-          {propEvents.map(event => (
-            <li key={event.id} className="py-4">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-                <div>
-                  <div className="font-semibold text-lg text-black">{event.title || event.summary}</div>
-                  {event.description && <div className="text-gray-600 text-sm mb-1">{event.description}</div>}
-                  <div className="text-gray-500 text-sm">
-                    <span>🕒 {formatEventTime(event.start)}{event.end ? ` → ${formatEventTime(event.end)}` : ''}</span>
-                    {event.location && <span className="ml-4">📍 {event.location}</span>}
-                  </div>
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
-      </div>
-    );
-  }
-
+const CalendarEvents = () => {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [editingEvent, setEditingEvent] = useState(null);
-  const [viewMode, setViewMode] = useState('daily'); // 'daily' or 'weekly'
-  const [selectedDate, setSelectedDate] = useState(new Date());
   const [toast, setToast] = useState({ isVisible: false, message: '', type: 'success' });
-  const showToast = (message, type = 'success') => {
-    setToast({ isVisible: true, message, type });
-  };
-  const handleCloseToast = () => setToast({ ...toast, isVisible: false });
+  const [selectedRange, setSelectedRange] = useState({ start: null, end: null });
+  const [dragging, setDragging] = useState(false);
+  const calendarRef = useRef(null);
+  const [editingEvent, setEditingEvent] = useState(null);
 
   useEffect(() => {
     loadEvents();
-  }, [selectedDate]);
+  }, []);
 
   const loadEvents = async () => {
     try {
       setLoading(true);
-      const response = await calendarAPI.getEvents(50);
+      const response = await calendarAPI.getEvents(100);
       setEvents(Array.isArray(response.data) ? response.data : []);
       setError(null);
+      console.log('[CalendarEvents] Events loaded:', response.data);
     } catch (err) {
-      console.error('Error loading calendar events:', err);
-      if (err.response?.status === 401) {
-        setError('Google Calendar not connected. Please connect your account first.');
-      } else {
         setError('Failed to load calendar events');
-      }
+      console.error('[CalendarEvents] Error loading events:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const formatEventTime = (dateTime) => {
-    if (!dateTime) return 'No time specified';
-    const date = new Date(dateTime.dateTime || dateTime);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const showToast = (message, type = 'success') => {
+    setToast({ isVisible: true, message, type });
+  };
+  const handleCloseToast = () => setToast({ ...toast, isVisible: false });
+
+  // --- Monthly Calendar Logic ---
+  const today = new Date();
+  const [currentMonth, setCurrentMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
+
+  const getMonthDays = (month) => {
+    const year = month.getFullYear();
+    const monthIndex = month.getMonth();
+    const firstDay = new Date(year, monthIndex, 1);
+    const lastDay = new Date(year, monthIndex + 1, 0);
+    const days = [];
+    // Fill leading days from previous month
+    for (let i = 0; i < firstDay.getDay(); i++) {
+      days.push(null);
+    }
+    // Fill current month days
+    for (let d = 1; d <= lastDay.getDate(); d++) {
+      days.push(new Date(year, monthIndex, d));
+    }
+    // Fill trailing days to complete the grid
+    while (days.length % 7 !== 0) {
+      days.push(null);
+    }
+    return days;
   };
 
-  const formatEventDate = (dateTime) => {
-    if (!dateTime) return '';
-    const date = new Date(dateTime.dateTime || dateTime);
-    return date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+  const monthDays = getMonthDays(currentMonth);
+
+  // --- Click and Drag Selection ---
+  const handleDayMouseDown = (date) => {
+    setSelectedRange({ start: date, end: date });
+    setDragging(true);
+  };
+  const handleDayMouseEnter = (date) => {
+    if (dragging && selectedRange.start) {
+      setSelectedRange({ start: selectedRange.start, end: date });
+    }
+  };
+  const handleMouseUp = () => {
+    setDragging(false);
+  };
+  useEffect(() => {
+    if (dragging) {
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => document.removeEventListener('mouseup', handleMouseUp);
+    }
+  }, [dragging]);
+
+  const isSelected = (date) => {
+    if (!selectedRange.start || !date) return false;
+    const start = selectedRange.start < selectedRange.end ? selectedRange.start : selectedRange.end;
+    const end = selectedRange.start > selectedRange.end ? selectedRange.start : selectedRange.end;
+    return date >= start && date <= end;
   };
 
-  const getEventsForDate = (date) => {
-    const targetDate = new Date(date);
-    targetDate.setHours(0, 0, 0, 0);
-    const nextDate = new Date(targetDate);
-    nextDate.setDate(nextDate.getDate() + 1);
+  // Utility to check if a date is today
+  function isToday(date) {
+    const now = new Date();
+    return (
+      date.getFullYear() === now.getFullYear() &&
+      date.getMonth() === now.getMonth() &&
+      date.getDate() === now.getDate()
+    );
+    }
 
-    const eventsArray = Array.isArray(events) ? events : [];
-    return eventsArray.filter(event => {
-      const eventStart = new Date(event.start.dateTime || event.start);
-      return eventStart >= targetDate && eventStart < nextDate;
-    }).sort((a, b) => {
-      const timeA = new Date(a.start.dateTime || a.start);
-      const timeB = new Date(b.start.dateTime || b.start);
-      return timeA - timeB;
+  // --- Filter Events for Selected Range ---
+  const getEventsForRange = () => {
+    if (!selectedRange.start || !selectedRange.end) return [];
+    const start = selectedRange.start < selectedRange.end ? selectedRange.start : selectedRange.end;
+    const end = selectedRange.start > selectedRange.end ? selectedRange.start : selectedRange.end;
+    return events.filter(event => {
+      const eventDate = new Date(event.start.dateTime || event.start);
+      eventDate.setHours(0, 0, 0, 0);
+      return eventDate >= start && eventDate <= end;
     });
   };
 
-  const getEventsForWeek = () => {
-    const weekEvents = [];
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(selectedDate);
-      date.setDate(date.getDate() - date.getDay() + i);
-      weekEvents.push({
-        date: new Date(date),
-        events: getEventsForDate(date)
-      });
+  // --- Calendar Navigation ---
+  const prevMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
+  const nextMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
+
+  // --- Drag-and-drop event move handler ---
+  const handleMoveEvent = async (event, newDay, newHour, newMin) => {
+    const start = new Date(newDay);
+    start.setHours(newHour, newMin, 0, 0);
+    let end = null;
+    if (event.end) {
+      const duration = new Date(event.end.dateTime || event.end) - new Date(event.start.dateTime || event.start);
+      end = new Date(start.getTime() + (duration > 0 ? duration : 60 * 60 * 1000));
+    } else {
+      // Default to 1 hour if no end
+      end = new Date(start.getTime() + 60 * 60 * 1000);
     }
-    return weekEvents;
+    // Optimistically update local state
+    const prevEvents = [...events];
+    setEvents(events => events.map(ev =>
+      ev.id === event.id
+        ? {
+            ...ev,
+            startTime: start.toISOString(),
+            endTime: end.toISOString(),
+            start: { ...ev.start, dateTime: start.toISOString() },
+            end: { ...ev.end, dateTime: end.toISOString() }
+          }
+        : ev
+    ));
+    try {
+      const payload = {
+        summary: event.summary || event.title || '',
+        description: event.description || '',
+        startTime: start.toISOString(),
+        endTime: end.toISOString()
+      };
+      await calendarAPI.updateEvent(event.id, payload);
+      showToast('Event updated!', 'success');
+      // Optionally reload events for full sync
+      // await loadEvents();
+    } catch (err) {
+      setEvents(prevEvents);
+      showToast('Failed to update event', 'error');
+      console.error('[CalendarEvents] Error updating event:', err);
+      console.error('[CalendarEvents] Backend error:', err.response?.data);
+    }
   };
 
-  const getTimeSlots = () => {
+  // --- Events for selected range, grouped by day and hour ---
+  function getTimeSlots() {
     const slots = [];
-    for (let hour = 6; hour <= 22; hour++) {
-      slots.push(hour);
+    for (let hour = 4; hour <= 22; hour++) { // Start at 4:00 AM
+      for (let min = 0; min < 60; min += 15) {
+        slots.push({ hour, min });
+      }
     }
     return slots;
-  };
-
-  const getEventColor = (event) => {
-    // Simple color coding based on event title
-    const colors = [
-      'bg-blue-100 border-blue-300 text-blue-800',
-      'bg-green-100 border-green-300 text-green-800',
-      'bg-purple-100 border-purple-300 text-purple-800',
-      'bg-orange-100 border-orange-300 text-orange-800',
-      'bg-pink-100 border-pink-300 text-pink-800',
-      'bg-indigo-100 border-indigo-300 text-indigo-800'
-    ];
-    const index = event.summary?.length || 0;
-    return colors[index % colors.length];
-  };
-
-  const getMotivationalMessage = () => {
-    const messages = [
-      "Today is your day to shine!",
-      "Small steps lead to big changes!",
-      "You've got this! Every task completed is progress!",
-      "Focus on what you can control today!",
-      "Your future self will thank you!",
-      "One task at a time, you're building your dreams!"
-    ];
-    return messages[Math.floor(Math.random() * messages.length)];
-  };
-
-  const handleCreateEvent = async (eventData) => {
-    try {
-      await calendarAPI.createEvent(eventData);
-      setShowCreateForm(false);
-      loadEvents();
-      showToast('Event created successfully!', 'success');
-    } catch (err) {
-      console.error('Error creating event:', err);
-      showToast('Failed to create event', 'error');
     }
-  };
+  const TIME_SLOTS = getTimeSlots();
 
-  const handleUpdateEvent = async (eventId, eventData) => {
-    try {
-      await calendarAPI.updateEvent(eventId, eventData);
-      setEditingEvent(null);
-      loadEvents();
-      showToast('Event updated successfully!', 'success');
-    } catch (err) {
-      console.error('Error updating event:', err);
-      showToast('Failed to update event', 'error');
+  function getRangeDays(start, end) {
+    if (!start || !end) return [];
+    const days = [];
+    let d = new Date(start < end ? start : end);
+    const last = new Date(start > end ? start : end);
+    d.setHours(0, 0, 0, 0);
+    last.setHours(0, 0, 0, 0);
+    while (d <= last) {
+      days.push(new Date(d));
+      d.setDate(d.getDate() + 1);
     }
-  };
+    return days;
+  }
 
-  const handleDeleteEvent = async (eventId) => {
-    if (!window.confirm('Are you sure you want to delete this event?')) {
-      return;
+  const ItemTypes = { EVENT: 'event' };
+
+  // Utility to strip HTML tags from a string
+  function stripHtml(html) {
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    return div.textContent || div.innerText || '';
+  }
+
+  // Utility to get the number of 15-min slots an event spans
+  function getEventSlotSpan(event) {
+    const start = new Date(event.startTime || event.start?.dateTime || event.start);
+    const end = new Date(event.endTime || event.end?.dateTime || event.end);
+    const duration = Math.max(15, (end - start) / (1000 * 60)); // at least 15 min
+    return Math.ceil(duration / 15);
+  }
+
+  // Utility to check if two events overlap in time
+  function eventsOverlap(eventA, eventB) {
+    const startA = new Date(eventA.startTime || eventA.start?.dateTime || eventA.start);
+    const endA = new Date(eventA.endTime || eventA.end?.dateTime || eventA.end);
+    const startB = new Date(eventB.startTime || eventB.start?.dateTime || eventB.start);
+    const endB = new Date(eventB.endTime || eventB.end?.dateTime || eventB.end);
+    return startA < endB && startB < endA;
+  }
+
+  // Utility to get all events that overlap with a given slot time
+  function getOverlappingEvents(events, slotTime) {
+    return events.filter(event => {
+      const start = new Date(event.startTime || event.start?.dateTime || event.start);
+      const end = new Date(event.endTime || event.end?.dateTime || event.end);
+      return start <= slotTime && end > slotTime;
+    });
     }
 
-    try {
-      await calendarAPI.deleteEvent(eventId);
-      loadEvents();
-      showToast('Event deleted successfully!', 'success');
-    } catch (err) {
-      console.error('Error deleting event:', err);
-      showToast('Failed to delete event', 'error');
-    }
-  };
+  function DraggableEventCard({ event, onClick, slotHeight = 28, style = {} }) {
+    const [{ isDragging }, drag] = useDrag({
+      type: ItemTypes.EVENT,
+      item: { id: event.id, event },
+      collect: (monitor) => ({
+        isDragging: monitor.isDragging(),
+      }),
+      canDrag: () => !resizing, // Prevent drag when resizing
+    });
+    const slotSpan = getEventSlotSpan(event);
+    const [resizing, setResizing] = useState(false);
+    const [resizeEnd, setResizeEnd] = useState(null);
+    const [justResized, setJustResized] = useState(false); // Track if last action was resize
+    const startTime = new Date(event.startTime || event.start?.dateTime || event.start);
+    const endTime = resizeEnd || new Date(event.endTime || event.end?.dateTime || event.end);
+    const timeRange = `${startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} — ${endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 
-  const navigateDate = (direction) => {
-    const newDate = new Date(selectedDate);
-    if (viewMode === 'daily') {
-      newDate.setDate(newDate.getDate() + direction);
-    } else {
-      newDate.setDate(newDate.getDate() + (direction * 7));
-    }
-    setSelectedDate(newDate);
-  };
+    // Handle resizing logic
+    const cardRef = useRef();
+    useEffect(() => {
+      if (!resizing) return;
+      function onMouseMove(e) {
+        const cardRect = cardRef.current.getBoundingClientRect();
+        const y = e.clientY - cardRect.top;
+        let minutes = Math.round(y / slotHeight * 15);
+        minutes = Math.max(15, Math.round(minutes / 15) * 15); // snap to 15 min, min 15 min
+        const newEnd = new Date(startTime.getTime() + minutes * 60 * 1000);
+        if (newEnd > startTime) setResizeEnd(newEnd);
+      }
+      function onMouseUp() {
+        setResizing(false);
+        if (resizeEnd && resizeEnd > startTime) {
+          // Save new end time
+          handleResizeEnd(event, resizeEnd);
+          setJustResized(true); // Mark that we just resized
+        }
+        setResizeEnd(null);
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+      }
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
+      return () => {
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+      };
+    }, [resizing, resizeEnd, startTime]);
 
-  if (loading) {
+    // Only attach drag ref if not resizing
+    const setRefs = node => {
+      cardRef.current = node;
+      if (node && !resizing) {
+        drag(node);
+      }
+    };
+
+    // Prevent modal opening if just resized
+    const handleCardClick = e => {
+      e.stopPropagation();
+      if (justResized) {
+        setJustResized(false);
+        return;
+      }
+      onClick(event);
+    };
+
     return (
-      <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl border border-black/10 p-8">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded-2xl w-1/3 mb-6"></div>
-          <div className="space-y-4">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="h-16 bg-gray-200 rounded-2xl"></div>
-            ))}
+      <div
+        ref={setRefs}
+        onClick={handleCardClick}
+        className={`bg-white border border-gray-200 rounded-xl shadow-md p-2 mb-2 cursor-pointer transition-all absolute left-0 w-full
+          ${isDragging ? 'opacity-40 scale-95' : ''}
+          hover:shadow-xl hover:scale-[1.03] focus:shadow-xl focus:scale-[1.03] active:scale-100
+          flex flex-col justify-center items-center relative
+          ${resizing ? 'ring-2 ring-blue-400 z-30' : ''}
+        `}
+        style={{
+          minHeight: slotHeight,
+          height: ((resizeEnd ? (resizeEnd - startTime) / (1000 * 60) : slotSpan * 15) / 15) * slotHeight - 4,
+          zIndex: resizing ? 30 : 2,
+          ...style,
+          transition: resizing ? 'none' : 'box-shadow 0.25s cubic-bezier(.4,0,.2,1), transform 0.25s cubic-bezier(.4,0,.2,1), height 0.3s cubic-bezier(.4,0,.2,1)',
+        }}
+        tabIndex={0}
+      >
+        <span
+          className="inline-block bg-black/90 text-white text-xs font-semibold px-3 py-1 rounded-full shadow-sm absolute top-0 right-0 z-10"
+          style={{
+            marginTop: '-8px',
+            marginRight: '-8px',
+            boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10)',
+            transition: 'box-shadow 0.2s',
+          }}
+        >
+          {timeRange}
+        </span>
+        <div className="flex-1 w-full flex items-center justify-center">
+          <div className="font-semibold text-black text-sm truncate text-center w-full px-2">
+            {event.title || event.summary}
           </div>
+        </div>
+        {/* Resize handle at bottom */}
+        <div
+          className="absolute left-1/2 -translate-x-1/2 bottom-0 w-8 h-3 flex items-center justify-center cursor-ns-resize z-20"
+          style={{
+            borderRadius: 4,
+            background: resizing ? '#3b82f6' : '#e5e7eb',
+            boxShadow: resizing ? '0 0 0 2px #3b82f6' : '0 1px 4px 0 rgba(0,0,0,0.07)',
+            transition: 'background 0.2s, box-shadow 0.2s',
+            marginBottom: -6,
+          }}
+          onMouseDown={e => {
+            e.stopPropagation();
+            e.preventDefault();
+            setResizing(true);
+          }}
+          draggable={false}
+          title="Resize event"
+        >
+          <div className="w-4 h-1 rounded-full bg-gray-400" />
         </div>
       </div>
     );
   }
 
+  // Update handleResizeEnd to reload events after resize
+  async function handleResizeEnd(event, newEnd) {
+    const start = new Date(event.startTime || event.start?.dateTime || event.start);
+    if (newEnd <= start) return;
+    // Optimistically update local state
+    const prevEvents = [...events];
+    setEvents(events => events.map(ev =>
+      ev.id === event.id
+        ? { ...ev, endTime: newEnd.toISOString(), end: { ...ev.end, dateTime: newEnd.toISOString() } }
+        : ev
+    ));
+    try {
+      const payload = {
+        summary: event.summary || event.title || '',
+        description: event.description || '',
+        startTime: start.toISOString(),
+        endTime: newEnd.toISOString()
+      };
+      await calendarAPI.updateEvent(event.id, payload);
+      // Optionally reload events for full sync
+      // await loadEvents();
+    } catch (err) {
+      // Revert local change and show error
+      setEvents(prevEvents);
+      showToast('Failed to resize event', 'error');
+      console.error('Failed to resize event', err);
+    }
+  }
+
+  // Event Edit Modal
+  function EventEditModal({ event, onClose, onSave }) {
+    const [form, setForm] = useState({
+      title: event.title || event.summary || '',
+      description: event.description || '',
+      start: event.start?.dateTime || event.start,
+      end: event.end?.dateTime || event.end,
+    });
+    const [saving, setSaving] = useState(false);
+    const [show, setShow] = useState(false);
+    useEffect(() => { setShow(true); }, []);
+    const handleChange = e => {
+      const { name, value } = e.target;
+      setForm(f => ({ ...f, [name]: value }));
+    };
+    const handleSubmit = async e => {
+      e.preventDefault();
+      setSaving(true);
+      try {
+        await onSave({ ...event, ...form });
+        setShow(false);
+        setTimeout(onClose, 200);
+      } finally {
+        setSaving(false);
+      }
+    };
   return (
-    <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl border border-black/10 p-8">
-      <SuccessToast
-        message={toast.message}
-        isVisible={toast.isVisible}
-        onClose={handleCloseToast}
-        type={toast.type}
-      />
-      {/* Header with motivational message */}
-      <div className="mb-8">
-        <div className="flex justify-between items-center mb-4">
-          <div className="flex items-center space-x-3">
-            <div className="w-12 h-12 bg-black rounded-2xl flex items-center justify-center">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            </div>
-            <h3 className="text-2xl font-bold text-black">
-              Daily Agenda
-            </h3>
-          </div>
+    <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/40 overflow-y-auto transition-opacity duration-200 ${show ? 'opacity-100' : 'opacity-0'}`}
+      style={{ transition: 'opacity 0.2s' }}
+    >
+      <div className={`bg-white rounded-3xl shadow-xl border border-black/10 p-8 max-w-md w-full relative max-h-screen overflow-y-auto transform transition-transform duration-200 ${show ? 'scale-100' : 'scale-95'}`}
+        style={{ transition: 'transform 0.2s' }}
+      >
           <button
-            onClick={() => setShowCreateForm(true)}
-            className="px-6 py-3 bg-black text-white rounded-2xl hover:bg-gray-900 focus:outline-none focus:ring-4 focus:ring-black/10 shadow-lg transition-all duration-200 transform hover:scale-105 font-medium"
-          >
-            <span className="flex items-center space-x-2">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              <span>Add Event</span>
-            </span>
-          </button>
-        </div>
-        
-        {/* Motivational message */}
-        <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 mb-6">
-          <p className="text-center text-lg font-semibold text-black">
-            {getMotivationalMessage()}
-          </p>
-        </div>
-
-        {/* View mode toggle and date navigation */}
-        <div className="flex justify-between items-center mb-6">
-          <div className="flex space-x-2 bg-gray-100 rounded-xl p-1">
-            <button
-              onClick={() => setViewMode('daily')}
-              className={`px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 ${
-                viewMode === 'daily'
-                  ? 'bg-white text-black shadow-sm'
-                  : 'text-gray-600 hover:text-black'
-              }`}
-            >
-              Today
-            </button>
-            <button
-              onClick={() => setViewMode('weekly')}
-              className={`px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 ${
-                viewMode === 'weekly'
-                  ? 'bg-white text-black shadow-sm'
-                  : 'text-gray-600 hover:text-black'
-              }`}
-            >
-              This Week
-            </button>
-          </div>
-          
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={() => navigateDate(-1)}
-              className="p-2 text-gray-600 hover:text-black hover:bg-gray-100 rounded-xl transition-colors duration-200"
+          className="absolute top-3 right-3 p-1 rounded hover:bg-gray-200"
+          onClick={() => { setShow(false); setTimeout(onClose, 200); }}
+          aria-label="Close"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <span className="font-semibold text-black">
-              {viewMode === 'daily' 
-                ? selectedDate.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })
-                : `Week of ${selectedDate.toLocaleDateString([], { month: 'short', day: 'numeric' })}`
-              }
-            </span>
-            <button
-              onClick={() => navigateDate(1)}
-              className="p-2 text-gray-600 hover:text-black hover:bg-gray-100 rounded-xl transition-colors duration-200"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {error && (
-        <div className="mb-6 bg-red-50/80 backdrop-blur-sm border border-red-200 text-red-700 px-6 py-4 rounded-2xl shadow-sm">
-          <div className="flex items-center space-x-2">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span className="font-medium">{error}</span>
-          </div>
-        </div>
-      )}
-
-      {showCreateForm && (
-        <EventForm
-          onSubmit={handleCreateEvent}
-          onCancel={() => setShowCreateForm(false)}
-          title="Create New Event"
-        />
-      )}
-
-      {editingEvent && (
-        <EventForm
-          event={editingEvent}
-          onSubmit={(data) => handleUpdateEvent(editingEvent.id, data)}
-          onCancel={() => setEditingEvent(null)}
-          title="Edit Event"
-        />
-      )}
-
-      {/* Calendar View */}
-      {viewMode === 'daily' ? (
-        <DailyView 
-          events={getEventsForDate(selectedDate)}
-          onEdit={setEditingEvent}
-          onDelete={handleDeleteEvent}
-          getEventColor={getEventColor}
-          formatEventTime={formatEventTime}
-          getTimeSlots={getTimeSlots}
-        />
-      ) : (
-        <WeeklyView 
-          weekEvents={getEventsForWeek()}
-          onEdit={setEditingEvent}
-          onDelete={handleDeleteEvent}
-          getEventColor={getEventColor}
-          formatEventTime={formatEventTime}
-        />
-      )}
-    </div>
-  );
-};
-
-// Daily View Component
-const DailyView = ({ events, onEdit, onDelete, getEventColor, formatEventTime, getTimeSlots }) => {
-  const timeSlots = getTimeSlots();
-  const eventsArray = Array.isArray(events) ? events : [];
-
-  if (eventsArray.length === 0) {
-    return (
-      <div className="text-center py-16">
-        <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
-          <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-        </div>
-        <h3 className="text-xl font-semibold text-black mb-2">No events scheduled for today</h3>
-        <p className="text-gray-600">Perfect time to plan your day and add some structure!</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-gray-50/50 rounded-2xl p-6">
-      <div className="space-y-4">
-        {timeSlots.map(hour => {
-          const hourEvents = eventsArray.filter(event => {
-            const eventHour = new Date(event.start.dateTime || event.start).getHours();
-            return eventHour === hour;
-          });
-
-          return (
-            <div key={hour} className="flex">
-              <div className="w-20 flex-shrink-0 text-sm font-medium text-gray-500 pt-2">
-                {hour === 12 ? '12 PM' : hour > 12 ? `${hour - 12} PM` : `${hour} AM`}
-              </div>
-              <div className="flex-1 ml-4">
-                {hourEvents.map(event => (
-                  <div
-                    key={event.id}
-                    className={`mb-3 p-4 rounded-xl border-2 ${getEventColor(event)} hover:shadow-lg transition-all duration-200`}
-                  >
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <h4 className="font-bold text-lg mb-1">{event.summary}</h4>
-                        {event.description && (
-                          <p className="text-sm opacity-80 mb-2">{event.description}</p>
-                        )}
-                        <div className="flex items-center space-x-4 text-sm">
-                          <span className="font-medium">⏰ {formatEventTime(event.start)}</span>
-                          {event.end && (
-                            <span className="font-medium">→ {formatEventTime(event.end)}</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex space-x-2 ml-4">
-                        <button
-                          onClick={() => onEdit(event)}
-                          className="p-1 text-current opacity-70 hover:opacity-100 transition-opacity"
-                          title="Edit event"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           </svg>
                         </button>
-                        <button
-                          onClick={() => onDelete(event.id)}
-                          className="p-1 text-current opacity-70 hover:opacity-100 transition-opacity"
-                          title="Delete event"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
-
-// Weekly View Component
-const WeeklyView = ({ weekEvents, onEdit, onDelete, getEventColor, formatEventTime }) => {
-  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-  return (
-    <div className="bg-gray-50/50 rounded-2xl p-6">
-      <div className="grid grid-cols-7 gap-4">
-        {days.map((day, index) => (
-          <div key={day} className="space-y-2">
-            <div className="text-center">
-              <div className="text-sm font-medium text-gray-500">{day}</div>
-              <div className={`text-lg font-bold ${
-                weekEvents[index]?.date.toDateString() === new Date().toDateString()
-                  ? 'text-blue-600'
-                  : 'text-black'
-              }`}>
-                {weekEvents[index]?.date.getDate()}
-              </div>
-            </div>
-            <div className="space-y-2 min-h-[200px]">
-              {weekEvents[index]?.events.map(event => (
-                <div
-                  key={event.id}
-                  className={`p-2 rounded-lg border text-xs ${getEventColor(event)} hover:shadow-md transition-all duration-200 cursor-pointer`}
-                  onClick={() => onEdit(event)}
-                >
-                  <div className="font-medium truncate">{event.summary}</div>
-                  <div className="opacity-80">{formatEventTime(event.start)}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-// Event Form Component (simplified for brevity)
-const EventForm = ({ event, onSubmit, onCancel, title }) => {
-  const [formData, setFormData] = useState({
-    summary: event?.summary || '',
-    description: event?.description || '',
-    start: event?.start?.dateTime ? event.start.dateTime.split('T')[0] + 'T' + event.start.dateTime.split('T')[1].substring(0, 5) : '',
-    end: event?.end?.dateTime ? event.end.dateTime.split('T')[0] + 'T' + event.end.dateTime.split('T')[1].substring(0, 5) : '',
-  });
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSubmit(formData);
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-3xl p-8 max-w-md w-full mx-4">
-        <h3 className="text-xl font-bold mb-4">{title}</h3>
+        <h3 className="text-xl font-bold mb-4">Edit Event</h3>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Event Title</label>
+            <label className="block text-sm font-medium mb-1">Title</label>
             <input
               type="text"
-              value={formData.summary}
-              onChange={(e) => setFormData({...formData, summary: e.target.value})}
+              name="title"
+              value={form.title}
+              onChange={handleChange}
               className="w-full px-3 py-2 border rounded-lg"
               required
             />
@@ -533,8 +435,9 @@ const EventForm = ({ event, onSubmit, onCancel, title }) => {
           <div>
             <label className="block text-sm font-medium mb-1">Description</label>
             <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({...formData, description: e.target.value})}
+              name="description"
+              value={form.description}
+              onChange={handleChange}
               className="w-full px-3 py-2 border rounded-lg"
               rows="3"
             />
@@ -543,8 +446,9 @@ const EventForm = ({ event, onSubmit, onCancel, title }) => {
             <label className="block text-sm font-medium mb-1">Start Time</label>
             <input
               type="datetime-local"
-              value={formData.start}
-              onChange={(e) => setFormData({...formData, start: e.target.value})}
+              name="start"
+              value={form.start ? form.start.slice(0, 16) : ''}
+              onChange={handleChange}
               className="w-full px-3 py-2 border rounded-lg"
               required
             />
@@ -553,8 +457,9 @@ const EventForm = ({ event, onSubmit, onCancel, title }) => {
             <label className="block text-sm font-medium mb-1">End Time</label>
             <input
               type="datetime-local"
-              value={formData.end}
-              onChange={(e) => setFormData({...formData, end: e.target.value})}
+              name="end"
+              value={form.end ? form.end.slice(0, 16) : ''}
+              onChange={handleChange}
               className="w-full px-3 py-2 border rounded-lg"
               required
             />
@@ -562,20 +467,258 @@ const EventForm = ({ event, onSubmit, onCancel, title }) => {
           <div className="flex space-x-4 pt-4">
             <button
               type="button"
-              onClick={onCancel}
+              onClick={() => { setShow(false); setTimeout(onClose, 200); }}
               className="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50"
+              disabled={saving}
             >
               Cancel
             </button>
             <button
               type="submit"
               className="flex-1 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800"
+              disabled={saving}
             >
               Save
             </button>
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+  function TimeSlot({ day, hour, min, events, onDropEvent, slotHeight = 28, className = '' }) {
+    const [{ isOver, canDrop }, drop] = useDrop({
+      accept: ItemTypes.EVENT,
+      drop: (item) => {
+        console.log('[CalendarEvents] Drop event:', {
+          eventId: item.event.id,
+          targetDay: day,
+          targetHour: hour,
+          targetMin: min
+        });
+        onDropEvent(item.event, day, hour, min);
+      },
+      collect: (monitor) => ({
+        isOver: monitor.isOver(),
+        canDrop: monitor.canDrop(),
+      }),
+    });
+    // Calculate slot time
+    const slotTime = new Date(day);
+    slotTime.setHours(hour, min, 0, 0);
+    // Get all events that overlap with this slot
+    const overlappingEvents = getOverlappingEvents(events, slotTime);
+    // Assign column index for each overlapping event
+    let columns = [];
+    overlappingEvents.forEach(event => {
+      // Find the first available column for this event
+      let col = 0;
+      while (columns.some(e => e.col === col && eventsOverlap(e.event, event))) {
+        col++;
+      }
+      columns.push({ event, col });
+    });
+    const totalCols = columns.length > 0 ? Math.max(...columns.map(e => e.col)) + 1 : 1;
+    return (
+      <div
+        ref={drop}
+        className={`min-h-[${slotHeight}px] border-b border-gray-100 px-1 ${className} relative transition-all duration-150
+          ${isOver && canDrop ? 'ring-2 ring-blue-500 bg-blue-100/40 z-20' : ''}
+        `}
+        style={{ position: 'relative', height: slotHeight }}
+      >
+        {columns.map(({ event, col }) => (
+          // Only render the card if this is the first slot of the event
+          (() => {
+            const eventStart = new Date(event.startTime || event.start?.dateTime || event.start);
+            if (eventStart.getTime() !== slotTime.getTime()) return null;
+            const width = `${100 / totalCols}%`;
+            const left = `${(100 / totalCols) * col}%`;
+            return (
+              <DraggableEventCard
+                key={event.id}
+                event={event}
+                onClick={setEditingEvent}
+                slotHeight={slotHeight}
+                style={{ width, left }}
+              />
+            );
+          })()
+        ))}
+      </div>
+    );
+  }
+
+  // --- Calculate rangeDays and eventsByDayHour for rendering ---
+  const rangeDays = getRangeDays(selectedRange.start, selectedRange.end);
+  const eventsByDayTime = {};
+  rangeDays.forEach(day => {
+    const key = day.toDateString();
+    eventsByDayTime[key] = {};
+    TIME_SLOTS.forEach(({ hour, min }) => {
+      eventsByDayTime[key][`${hour}:${min}`] = [];
+    });
+  });
+  events.forEach(event => {
+    const eventDate = new Date(event.start.dateTime || event.start);
+    eventDate.setSeconds(0, 0);
+    const dayKey = eventDate.toDateString();
+    const hour = eventDate.getHours();
+    const min = eventDate.getMinutes() - (eventDate.getMinutes() % 15);
+    if (eventsByDayTime[dayKey] && eventsByDayTime[dayKey][`${hour}:${min}`]) {
+      eventsByDayTime[dayKey][`${hour}:${min}`].push(event);
+    }
+  });
+
+  // --- Render ---
+  return (
+    <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl border border-black/10 p-4 sm:p-6 md:p-8 w-full max-w-full overflow-x-auto">
+      <SuccessToast
+        message={toast.message}
+        isVisible={toast.isVisible}
+        onClose={handleCloseToast}
+        type={toast.type}
+      />
+      <div className="flex items-center justify-between mb-4 sm:mb-6 flex-wrap gap-2">
+        <div className="flex items-center space-x-3">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-black rounded-2xl flex items-center justify-center">
+            <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <h3 className="text-lg sm:text-2xl font-bold text-black">Monthly Calendar</h3>
+        </div>
+        <div className="flex space-x-2">
+          <button onClick={prevMonth} className="p-2 rounded hover:bg-gray-100">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <span className="font-semibold text-black text-base sm:text-lg">
+            {currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
+          </span>
+          <button onClick={nextMonth} className="p-2 rounded hover:bg-gray-100">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+      </div>
+      {error && (
+        <div className="mb-4 sm:mb-6 bg-red-50/80 border border-red-200 text-red-700 px-4 sm:px-6 py-3 sm:py-4 rounded-2xl shadow-sm text-sm sm:text-base">
+          <span className="font-medium">{error}</span>
+        </div>
+      )}
+      <div ref={calendarRef} className="grid grid-cols-7 gap-1 sm:gap-2 mb-4 sm:mb-8 select-none w-full min-w-[420px] sm:min-w-[560px]">
+        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
+          <div key={d} className="text-center font-semibold text-xs sm:text-base text-gray-500 mb-1 sm:mb-2">{d}</div>
+        ))}
+        {monthDays.map((date, idx) => (
+          <div
+            key={idx}
+            className={`h-10 sm:h-16 flex items-center justify-center rounded-xl cursor-pointer border transition-all
+              ${date ?
+                isSelected(date)
+                  ? 'bg-black text-white border-black scale-105 shadow-lg'
+                  : (date.toDateString() === today.toDateString() ? 'border-black/40 bg-gray-100 text-black font-bold' : 'bg-white border-gray-200 text-black hover:bg-gray-50')
+                : 'bg-transparent border-none cursor-default'}
+            `}
+            onMouseDown={date ? () => handleDayMouseDown(date) : undefined}
+            onMouseEnter={date ? () => handleDayMouseEnter(date) : undefined}
+            onMouseUp={date ? handleMouseUp : undefined}
+            style={{ userSelect: 'none' }}
+          >
+            {date ? date.getDate() : ''}
+          </div>
+        ))}
+      </div>
+      {/* --- Time Grid for Selected Range --- */}
+      {rangeDays.length > 0 && (
+        <DndProvider backend={HTML5Backend}>
+          <div className="overflow-x-auto w-full">
+            <div className="min-w-[600px] sm:min-w-[900px]">
+              <div className="grid gap-x-1 sm:gap-x-2" style={{ gridTemplateColumns: `60px repeat(${rangeDays.length}, 1fr)` }}>
+                {/* Header Row */}
+                <div></div>
+                {rangeDays.map((day, idx) => (
+                  <div
+                    key={day.toDateString()}
+                    className={`text-center font-bold text-xs sm:text-base text-black py-1 sm:py-2 border-b border-black/10 ${isToday(day) ? 'bg-blue-50 border-blue-400' : (idx % 2 === 1 ? 'bg-gray-50' : 'bg-white')}`}
+                  >
+                    {day.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
+                  </div>
+                ))}
+                {/* Time Rows */}
+                {TIME_SLOTS.map(({ hour, min }, rowIdx) => (
+                  <React.Fragment key={hour + ':' + min}>
+                    <div
+                      className={
+                        min === 0
+                          ? `text-xs sm:text-sm font-bold text-black py-1 sm:py-2 pr-1 sm:pr-2 border-r border-black border-t-2 text-right align-top ${rowIdx % 8 < 4 ? 'bg-gray-50' : 'bg-white'}` // alternate hour shading
+                          : `text-[10px] sm:text-xs text-gray-400 py-0.5 sm:py-1 pr-1 sm:pr-2 border-r border-gray-100 border-t bg-white text-right align-top`
+                      }
+                      style={{ minHeight: min === 0 ? 28 : 16, maxWidth: 60 }}
+                    >
+                      {min === 0
+                        ? (hour === 12 ? '12 PM' : hour > 12 ? `${hour - 12}:00 PM` : `${hour}:00 AM`)
+                        : `${min.toString().padStart(2, '0')}`}
+                    </div>
+                    {rangeDays.map((day, colIdx) => {
+                      // Alternate day column shading
+                      const isCurrentDay = isToday(day);
+                      const isCurrentRow = isToday(day) && hour === today.getHours() && min === today.getMinutes();
+                      let bg = '';
+                      if (isCurrentDay && isCurrentRow) {
+                        bg = 'bg-blue-100';
+                      } else if (isCurrentDay) {
+                        bg = 'bg-blue-50';
+                      } else if (isCurrentRow) {
+                        bg = 'bg-blue-50';
+                      } else if (colIdx % 2 === 1) {
+                        bg = rowIdx % 8 < 4 ? 'bg-gray-50' : 'bg-white';
+                      } else {
+                        bg = rowIdx % 8 < 4 ? 'bg-white' : 'bg-gray-50';
+                      }
+                      return (
+                        <TimeSlot
+                          key={day.toDateString() + hour + ':' + min}
+                          day={day}
+                          hour={hour}
+                          min={min}
+                          events={eventsByDayTime[day.toDateString()]?.[`${hour}:${min}`] || []}
+                          onDropEvent={handleMoveEvent}
+                          slotHeight={min === 0 ? 28 : 16}
+                          // Add extra padding and background for whitespace and shading
+                          className={`relative ${bg} rounded-md`}
+                        />
+                      );
+                    })}
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+          </div>
+        </DndProvider>
+      )}
+      {rangeDays.length === 0 && (
+        <div className="text-gray-500 text-sm sm:text-base">Select one or more days to view and manage events.</div>
+      )}
+      {editingEvent && (
+        <EventEditModal
+          event={editingEvent}
+          onClose={() => setEditingEvent(null)}
+          onSave={async (updatedEvent) => {
+            await calendarAPI.updateEvent(updatedEvent.id, {
+              ...updatedEvent,
+              start: updatedEvent.start,
+              end: updatedEvent.end,
+            });
+            showToast('Event updated!', 'success');
+            loadEvents();
+          }}
+        />
+      )}
     </div>
   );
 };
