@@ -27,14 +27,11 @@ router.get('/events', requireAuth, async (req, res) => {
   try {
     const maxResults = parseInt(req.query.maxResults) || 10;
     const events = await listCalendarEvents(req.user.id, maxResults);
+    // Always return 200 with an array (possibly empty)
     res.json(events);
   } catch (error) {
     console.error('Error getting calendar events:', error);
-    if (error.message.includes('No Google tokens found')) {
-      res.status(401).json({ error: 'Google Calendar not connected. Please connect your Google account first.' });
-    } else {
-      res.status(500).json({ error: 'Failed to get calendar events' });
-    }
+    res.status(500).json({ error: 'Failed to get calendar events' });
   }
 });
 

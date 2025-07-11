@@ -49,6 +49,10 @@ export async function listCalendarEvents(userId, maxResults = 10) {
 
     return response.data.items;
   } catch (error) {
+    if (error.message && error.message.includes('No Google tokens found for user')) {
+      // Graceful fallback: return empty array if no tokens
+      return [];
+    }
     console.error('Error listing calendar events:', error);
     throw error;
   }
