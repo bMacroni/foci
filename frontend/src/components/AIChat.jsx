@@ -12,8 +12,8 @@ const generateUniqueId = () => {
   return Date.now() + messageIdCounter;
 };
 
-const AIChat = ({ onNavigateToTab }) => {
-  const [messages, setMessages] = useState([]);
+const AIChat = ({ onNavigateToTab, initialMessages }) => {
+  const [messages, setMessages] = useState(initialMessages || []);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [userData, setUserData] = useState({ goals: [], tasks: [] });
@@ -1122,7 +1122,8 @@ const MessageBubble = ({ message, fetchListForMessage, listState }) => {
   } else {
     // AI message: left-justified, full-width, no bubble
     const jsonObjects = extractJsonFromCodeBlock(message.content);
-    const isReadTask = jsonObjects && jsonObjects.some(json => json.action_type === 'read' && json.entity_type === 'task');
+    const readTask = jsonObjects && jsonObjects.find(json => json.action_type === 'read' && json.entity_type === 'task');
+    const isReadTask = !!readTask;
     const isReadGoal = jsonObjects && jsonObjects.some(json => json.action_type === 'read' && json.entity_type === 'goal');
     const hasActions = jsonObjects && jsonObjects.length > 0;
     // --- ADDED: Render goals from message.actions if present ---
@@ -1151,9 +1152,24 @@ const MessageBubble = ({ message, fetchListForMessage, listState }) => {
           {/* Render task or goal list if this is a read-task or read-goal action */}
           {(isReadTask || isReadGoal) && (
             <div className="mt-2">
-              {listState?.loading && <div className="text-xs text-gray-500">Loading {isReadTask ? 'tasks' : 'goals'}...</div>}
-              {listState?.error && <div className="text-xs text-red-500">{listState.error}</div>}
-              {Array.isArray(listState?.items) && listState.items.length > 0 && (
+              {/* Always use tasks from the code block if present */}
+              {isReadTask && Array.isArray(readTask.details?.tasks) && readTask.details.tasks.length > 0 && (
+                <ul className="list-disc pl-5 text-sm mt-1">
+                  {readTask.details.tasks.map((item) => (
+                    <li key={item.id} className={item.completed ? 'line-through text-gray-400' : ''}>
+                      {item.title}
+                      {item.due_date && (
+                        <span className="ml-2 text-xs text-gray-500">(Due: {new Date(item.due_date).toLocaleDateString()})</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {isReadTask && Array.isArray(readTask.details?.tasks) && readTask.details.tasks.length === 0 && (
+                <div className="text-xs text-gray-500">No tasks found.</div>
+              )}
+              {/* Fallback to listState for goals */}
+              {isReadGoal && listState?.items && Array.isArray(listState.items) && listState.items.length > 0 && (
                 <ul className="list-disc pl-5 text-sm mt-1">
                   {listState.items.map((item) => (
                     <li key={item.id} className={item.completed ? 'line-through text-gray-400' : ''}>
@@ -1165,8 +1181,8 @@ const MessageBubble = ({ message, fetchListForMessage, listState }) => {
                   ))}
                 </ul>
               )}
-              {Array.isArray(listState?.items) && listState.items.length === 0 && !listState.loading && !listState.error && (
-                <div className="text-xs text-gray-500">No {isReadTask ? 'tasks' : 'goals'} found.</div>
+              {isReadGoal && listState?.items && Array.isArray(listState.items) && listState.items.length === 0 && (
+                <div className="text-xs text-gray-500">No goals found.</div>
               )}
             </div>
           )}

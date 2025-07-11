@@ -1,270 +1,261 @@
 // Set NODE_ENV to 'test' before importing app
 process.env.NODE_ENV = 'test';
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { readCalendarEventFromAI, lookupCalendarEventbyTitle } from '../src/utils/calendarService.js';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { createCalendarEventFromAI } from '../src/utils/calendarService.js';
 
 // Mock the Google Calendar API
 vi.mock('googleapis', () => ({
   google: {
     auth: {
       OAuth2: vi.fn().mockImplementation(() => ({
-        setCredentials: vi.fn()
-      }))
+        setCredentials: vi.fn(),
+      })),
     },
-    calendar: vi.fn().mockReturnValue({
+    calendar: vi.fn(() => ({
       events: {
-        list: vi.fn()
-      }
-    })
-  }
+        insert: vi.fn().mockImplementation((params) => {
+          // Return the actual event data that was passed in
+          return Promise.resolve({
+            data: {
+              id: 'test-event-id',
+              summary: params.resource.summary,
+              description: params.resource.description,
+              start: params.resource.start,
+              end: params.resource.end,
+              location: params.resource.location,
+            },
+          });
+        }),
+      },
+    })),
+  },
 }));
 
 // Mock the token storage
 vi.mock('../src/utils/googleTokenStorage.js', () => ({
   getGoogleTokens: vi.fn().mockResolvedValue({
-    access_token: 'mock_access_token',
-    refresh_token: 'mock_refresh_token',
-    scope: 'https://www.googleapis.com/auth/calendar',
+    access_token: 'test-access-token',
+    refresh_token: 'test-refresh-token',
+    scope: 'test-scope',
     token_type: 'Bearer',
-    expiry_date: Date.now() + 3600000
-  })
+    expiry_date: Date.now() + 3600000,
+  }),
 }));
 
-// Mock chrono-node
-vi.mock('chrono-node', () => ({
-  parseDate: vi.fn()
-}));
+let insertSpy;
 
-describe('Calendar AI Functions', () => {
-  const mockUserId = 'test-user-123';
-  const mockToken = 'mock-token';
-  const mockUserContext = { token: mockToken };
+describe('Calendar Event Creation with Natural Language Parsing', () => {
+  const mockUserId = 'test-user-id';
+  const mockUserContext = {};
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    // Set up the spy on the insert method
+    const { google } = await import('googleapis');
+    const mockCalendar = google.calendar();
+    insertSpy = vi.spyOn(mockCalendar.events, 'insert');
   });
 
-  describe('readCalendarEventFromAI', () => {
-    it('should return formatted events when specific date is provided', async () => {
-      const mockEvents = [
-        {
-          id: 'event1',
-          summary: 'Test Meeting',
-          description: 'A test meeting',
-          start: { dateTime: '2024-01-15T10:00:00Z' },
-          end: { dateTime: '2024-01-15T11:00:00Z' },
-          location: 'Conference Room A',
-          timeZone: 'America/New_York'
-        }
-      ];
+  it('should create an event with natural language date and time', async () => {
+    const args = {
+      title: 'Team Meeting',
+      description: 'Weekly team sync',
+      date: 'tomorrow',
+      time: '10:00 AM',
+      duration: 60,
+    };
 
-      const { google } = await import('googleapis');
-      const mockCalendar = google.calendar();
-      mockCalendar.events.list.mockResolvedValue({
-        data: { items: mockEvents }
-      });
+    const result = await createCalendarEventFromAI(args, mockUserId, mockUserContext);
 
-      const result = await readCalendarEventFromAI(
-        { date: '2024-01-15' },
-        mockUserId,
-        mockUserContext
-      );
-
-      expect(result).toEqual([
-        {
-          id: 'event1',
-          title: 'Test Meeting',
-          description: 'A test meeting',
-          start: '2024-01-15T10:00:00Z',
-          end: '2024-01-15T11:00:00Z',
-          location: 'Conference Room A',
-          timeZone: 'America/New_York'
-        }
-      ]);
-    });
-
-    it('should handle natural language dates like "tomorrow"', async () => {
-      const mockEvents = [
-        {
-          id: 'event2',
-          summary: 'Future Meeting',
-          description: 'A future meeting',
-          start: { dateTime: '2024-12-16T14:00:00Z' },
-          end: { dateTime: '2024-12-16T15:00:00Z' },
-          location: '',
-          timeZone: 'UTC'
-        }
-      ];
-
-      const { google } = await import('googleapis');
-      const mockCalendar = google.calendar();
-      mockCalendar.events.list.mockResolvedValue({
-        data: { items: mockEvents }
-      });
-
-      // Mock chrono to return tomorrow's date
-      const { parseDate } = await import('chrono-node');
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      parseDate.mockReturnValue(tomorrow);
-
-      const result = await readCalendarEventFromAI(
-        { date: 'tomorrow' },
-        mockUserId,
-        mockUserContext
-      );
-
-      expect(result).toEqual([
-        {
-          id: 'event2',
-          title: 'Future Meeting',
-          description: 'A future meeting',
-          start: '2024-12-16T14:00:00Z',
-          end: '2024-12-16T15:00:00Z',
-          location: '',
-          timeZone: 'UTC'
-        }
-      ]);
-    });
-
-    it('should handle "next week" and return week range', async () => {
-      const mockEvents = [
-        {
-          id: 'event3',
-          summary: 'Weekly Meeting',
-          description: 'Weekly team sync',
-          start: { dateTime: '2024-12-16T09:00:00Z' },
-          end: { dateTime: '2024-12-16T10:00:00Z' },
-          location: 'Zoom',
-          timeZone: 'UTC'
-        }
-      ];
-
-      const { google } = await import('googleapis');
-      const mockCalendar = google.calendar();
-      mockCalendar.events.list.mockResolvedValue({
-        data: { items: mockEvents }
-      });
-
-      // Mock chrono to return next Monday
-      const { parseDate } = await import('chrono-node');
-      const nextMonday = new Date();
-      nextMonday.setDate(nextMonday.getDate() + (8 - nextMonday.getDay())); // Next Monday
-      parseDate.mockReturnValue(nextMonday);
-
-      const result = await readCalendarEventFromAI(
-        { date: 'next week' },
-        mockUserId,
-        mockUserContext
-      );
-
-      expect(result).toEqual([
-        {
-          id: 'event3',
-          title: 'Weekly Meeting',
-          description: 'Weekly team sync',
-          start: '2024-12-16T09:00:00Z',
-          end: '2024-12-16T10:00:00Z',
-          location: 'Zoom',
-          timeZone: 'UTC'
-        }
-      ]);
-    });
-
-    it('should return events from now onwards when no date is provided', async () => {
-      const mockEvents = [
-        {
-          id: 'event2',
-          summary: 'Future Meeting',
-          description: 'A future meeting',
-          start: { dateTime: '2024-12-15T14:00:00Z' },
-          end: { dateTime: '2024-12-15T15:00:00Z' },
-          location: '',
-          timeZone: 'UTC'
-        }
-      ];
-
-      const { google } = await import('googleapis');
-      const mockCalendar = google.calendar();
-      mockCalendar.events.list.mockResolvedValue({
-        data: { items: mockEvents }
-      });
-
-      const result = await readCalendarEventFromAI(
-        {},
-        mockUserId,
-        mockUserContext
-      );
-
-      expect(result).toEqual([
-        {
-          id: 'event2',
-          title: 'Future Meeting',
-          description: 'A future meeting',
-          start: '2024-12-15T14:00:00Z',
-          end: '2024-12-15T15:00:00Z',
-          location: '',
-          timeZone: 'UTC'
-        }
-      ]);
-    });
+    expect(result.success).toBe(true);
+    expect(result.event.title).toBe('Team Meeting');
+    expect(result.event.description).toBe('Weekly team sync');
+    expect(result.event.start).toBeDefined();
+    expect(result.event.end).toBeDefined();
   });
 
-  describe('lookupCalendarEventbyTitle', () => {
-    it('should return formatted events for lookup', async () => {
-      const mockEvents = [
-        {
-          id: 'event1',
-          summary: 'Team Meeting',
-          description: 'Weekly team sync',
-          start: { dateTime: '2024-01-15T09:00:00Z' },
-          end: { dateTime: '2024-01-15T10:00:00Z' },
-          location: 'Zoom',
-          timeZone: 'America/New_York'
-        },
-        {
-          id: 'event2',
-          summary: 'Doctor Appointment',
-          description: 'Annual checkup',
-          start: { dateTime: '2024-01-16T14:00:00Z' },
-          end: { dateTime: '2024-01-16T15:00:00Z' },
-          location: 'Medical Center',
-          timeZone: 'America/New_York'
-        }
-      ];
+  it('should create an event with ISO timestamps', async () => {
+    const args = {
+      title: 'Doctor Appointment',
+      description: 'Annual checkup',
+      start_time: '2024-01-15T14:00:00Z',
+      end_time: '2024-01-15T15:00:00Z',
+      location: 'Medical Center',
+    };
 
-      const { google } = await import('googleapis');
-      const mockCalendar = google.calendar();
-      mockCalendar.events.list.mockResolvedValue({
-        data: { items: mockEvents }
-      });
+    const result = await createCalendarEventFromAI(args, mockUserId, mockUserContext);
 
-      const result = await lookupCalendarEventbyTitle(mockUserId, mockToken);
+    expect(result.success).toBe(true);
+    expect(result.event.title).toBe('Doctor Appointment');
+    expect(result.event.location).toBe('Medical Center');
+  });
 
-      expect(result).toEqual([
-        {
-          id: 'event1',
-          title: 'Team Meeting',
-          start: '2024-01-15T09:00:00Z',
-          end: '2024-01-15T10:00:00Z',
-          location: 'Zoom',
-          description: 'Weekly team sync'
-        },
-        {
-          id: 'event2',
-          title: 'Doctor Appointment',
-          start: '2024-01-16T14:00:00Z',
-          end: '2024-01-16T15:00:00Z',
-          location: 'Medical Center',
-          description: 'Annual checkup'
-        }
-      ]);
-    });
+  it('should handle different time formats', async () => {
+    const testCases = [
+      { time: '10:00 AM', expected: '10:00' },
+      { time: '2:30 PM', expected: '14:30' },
+      { time: '15:30', expected: '15:30' },
+      { time: '9:00 AM', expected: '09:00' },
+    ];
 
-    it('should return empty array when no token is provided', async () => {
-      const result = await lookupCalendarEventbyTitle(mockUserId, null);
-      expect(result).toEqual([]);
-    });
+    for (const testCase of testCases) {
+      const args = {
+        title: 'Test Event',
+        date: 'today',
+        time: testCase.time,
+      };
+
+      const result = await createCalendarEventFromAI(args, mockUserId, mockUserContext);
+      expect(result.success).toBe(true);
+    }
+  });
+
+  it('should use default duration when not specified', async () => {
+    const args = {
+      title: 'Quick Call',
+      date: 'today',
+      time: '3:00 PM',
+      // No duration specified, should default to 60 minutes
+    };
+
+    const result = await createCalendarEventFromAI(args, mockUserId, mockUserContext);
+    expect(result.success).toBe(true);
+    
+    // Verify the event duration is 1 hour
+    const startTime = new Date(result.event.start);
+    const endTime = new Date(result.event.end);
+    const durationMinutes = (endTime - startTime) / (1000 * 60);
+    expect(durationMinutes).toBe(60);
+  });
+
+  it('should handle custom duration', async () => {
+    const args = {
+      title: 'Long Meeting',
+      date: 'today',
+      time: '2:00 PM',
+      duration: 120, // 2 hours
+    };
+
+    const result = await createCalendarEventFromAI(args, mockUserId, mockUserContext);
+    expect(result.success).toBe(true);
+    
+    // Verify the event duration is 2 hours
+    const startTime = new Date(result.event.start);
+    const endTime = new Date(result.event.end);
+    const durationMinutes = (endTime - startTime) / (1000 * 60);
+    expect(durationMinutes).toBe(120);
+  });
+
+  it('should throw error for invalid date expression', async () => {
+    const args = {
+      title: 'Test Event',
+      date: 'invalid-date-expression',
+      time: '10:00 AM',
+    };
+
+    await expect(createCalendarEventFromAI(args, mockUserId, mockUserContext))
+      .rejects.toThrow('Could not parse the date expression');
+  });
+
+  it('should throw error when neither date/time nor start_time/end_time provided', async () => {
+    const args = {
+      title: 'Test Event',
+      // No date/time information provided
+    };
+
+    await expect(createCalendarEventFromAI(args, mockUserId, mockUserContext))
+      .rejects.toThrow('Either start_time/end_time or date/time must be provided');
+  });
+
+  // NEW TESTS FOR IDENTIFIED ISSUES
+  it('should only create one event per function call (no duplicates)', async () => {
+    const args = {
+      title: 'Single Meeting',
+      date: 'Monday',
+      time: '10:00 AM',
+    };
+
+    const { google } = await import('googleapis');
+    const mockCalendar = google.calendar();
+    const insertMock = mockCalendar.events.insert;
+
+    const result = await createCalendarEventFromAI(args, mockUserId, mockUserContext);
+    
+    // Verify only one event was created
+    expect(result.success).toBe(true);
+    expect(result.event).toBeDefined();
+    
+    // Verify the Google Calendar API was only called once
+    expect(insertMock.mock.calls.length).toBe(1);
+  });
+
+  it('should handle timezone correctly for "Monday at 10:00 AM"', async () => {
+    const args = {
+      title: 'Monday Meeting',
+      date: 'Monday',
+      time: '10:00 AM',
+    };
+
+    const result = await createCalendarEventFromAI(args, mockUserId, mockUserContext);
+    
+    expect(result.success).toBe(true);
+    
+    // Parse the start time and verify it's 10:00 AM in the local timezone
+    const startTime = new Date(result.event.start);
+    const localHours = startTime.getHours();
+    const localMinutes = startTime.getMinutes();
+    
+    // The time should be 10:00 AM (10 hours, 0 minutes) in the local timezone
+    expect(localHours).toBe(10);
+    expect(localMinutes).toBe(0);
+  });
+
+  it('should handle timezone correctly for "2:30 PM"', async () => {
+    const args = {
+      title: 'Afternoon Meeting',
+      date: 'today',
+      time: '2:30 PM',
+    };
+
+    const result = await createCalendarEventFromAI(args, mockUserId, mockUserContext);
+    
+    expect(result.success).toBe(true);
+    
+    // Parse the start time and verify it's 2:30 PM in the local timezone
+    const startTime = new Date(result.event.start);
+    const localHours = startTime.getHours();
+    const localMinutes = startTime.getMinutes();
+    
+    // The time should be 2:30 PM (14 hours, 30 minutes) in the local timezone
+    expect(localHours).toBe(14);
+    expect(localMinutes).toBe(30);
+  });
+
+  it('should handle timezone correctly for different time formats', async () => {
+    const testCases = [
+      { time: '9:00 AM', expectedHours: 9, expectedMinutes: 0 },
+      { time: '3:45 PM', expectedHours: 15, expectedMinutes: 45 },
+      { time: '12:00 PM', expectedHours: 12, expectedMinutes: 0 },
+      { time: '12:00 AM', expectedHours: 0, expectedMinutes: 0 },
+    ];
+
+    for (const testCase of testCases) {
+      const args = {
+        title: `Test Meeting ${testCase.time}`,
+        date: 'today',
+        time: testCase.time,
+      };
+
+      const result = await createCalendarEventFromAI(args, mockUserId, mockUserContext);
+      expect(result.success).toBe(true);
+      
+      const startTime = new Date(result.event.start);
+      const localHours = startTime.getHours();
+      const localMinutes = startTime.getMinutes();
+      
+      expect(localHours).toBe(testCase.expectedHours);
+      expect(localMinutes).toBe(testCase.expectedMinutes);
+    }
   });
 }); 

@@ -42,7 +42,7 @@ IMPORTANT: When you call lookup_goal and receive a list of goals, you MUST immed
 
 If a user request requires information you do not have (such as a goal ID), first call the appropriate function (e.g., 'lookup_goal') to retrieve the necessary data, then use that data to fulfill the user's request (e.g., call 'update_goal' with the correct ID). Only return plain text if no function is appropriate. Chain function calls as needed to fully satisfy the user's intent.
 
-
+IMPORTANT: When you run a read function, like read_goal, read_task, or read_calendar_event, make sure your response is in the format of a JSON object.
 
 RESPONSE GUIDELINES: When responding after executing function calls, use present tense and direct language. Say "I've added..." or "I've created..." or "Task created successfully" rather than "I've already added..." or "I've already created...". Be clear and concise about what action was just performed.`;
       // Trim conversation history to the last MAX_HISTORY_MESSAGES
@@ -198,6 +198,11 @@ RESPONSE GUIDELINES: When responding after executing function calls, use present
           }
           
           message = finalResponse.text ? await finalResponse.text() : '';
+          // Always inject code block for the first read_task action if present
+          const firstReadTask = actions.find(a => a.action_type === 'read' && a.entity_type === 'task');
+          if (firstReadTask) {
+            message = `Here are your tasks:\n\n\`\`\`json\n${JSON.stringify(firstReadTask, null, 2)}\`\`\``;
+          }
           // DEBUG: Log the final Gemini response
           console.log('DEBUG: Final Gemini response:', finalResponse);
           console.log('DEBUG: Final message:', message);

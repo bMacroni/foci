@@ -432,7 +432,6 @@ export async function readTaskFromAI(args, userId, userContext) {
   if (due_date) {
     query = query.eq('due_date', due_date);
   }
-
   if (related_goal) {
     // First get the goal ID
     const { data: goals, error: goalError } = await supabase
@@ -444,6 +443,18 @@ export async function readTaskFromAI(args, userId, userContext) {
     if (match) {
       query = query.eq('goal_id', match.id);
     }
+  }
+  if (args.priority) {
+    query = query.eq('priority', args.priority);
+  }
+  if (args.status) {
+    query = query.eq('status', args.status);
+  }
+  if (args.completed !== undefined) {
+    query = query.eq('completed', args.completed);
+  }
+  if (args.category) {
+    query = query.eq('category', args.category);
   }
 
   const { data, error } = await query.order('created_at', { ascending: false });

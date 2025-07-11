@@ -50,12 +50,16 @@ export const deleteTaskFunctionDeclaration = {
 
 export const readTaskFunctionDeclaration = {
   name: 'read_task',
-  description: 'Reads or lists tasks for the user. Use this when the user wants to see their tasks or filter by due date or goal. Example user prompts: "Show me my tasks", "List my tasks for today", "What tasks are related to my fitness goal?"',
+  description: 'Reads or lists tasks for the user. Use this when the user wants to see their tasks or filter by due date, goal, priority, status, completion, or category. Example user prompts: "Show me my tasks", "List my tasks for today", "What tasks are related to my fitness goal?", "Show me all my high priority tasks", "List my completed tasks in the work category"',
   parameters: {
     type: Type.OBJECT,
     properties: {
       due_date: { type: Type.STRING, description: 'Due date (YYYY-MM-DD)' },
-      related_goal: { type: Type.STRING, description: 'Associated goal title' }
+      related_goal: { type: Type.STRING, description: 'Associated goal title' },
+      priority: { type: Type.STRING, enum: ['high', 'medium', 'low'], description: 'Task priority' },
+      status: { type: Type.STRING, description: 'Task status (e.g., not_started, in_progress, completed)' },
+      completed: { type: Type.BOOLEAN, description: 'Task completion status' },
+      category: { type: Type.STRING, description: 'Task category (e.g., work, personal, health, etc.)' }
     },
     required: []
   }
@@ -138,18 +142,21 @@ export const readGoalFunctionDeclaration = {
 // Calendar Event Functions
 export const createCalendarEventFunctionDeclaration = {
   name: 'create_calendar_event',
-  description: 'Creates a new calendar event for the user. Use this when the user wants to schedule an event. Example user prompts: "Schedule a meeting for tomorrow at 10am", "Add a calendar event for my doctor appointment".',
+  description: 'Creates a new calendar event for the user. Use this when the user wants to schedule an event. You can parse natural language date/time expressions like "tomorrow at 10:00 AM", "next Friday at 2:30 PM", or use specific ISO timestamps. Example user prompts: "Schedule a meeting for tomorrow at 10am", "Add a calendar event for my doctor appointment next Friday at 2:30 PM", "Create an event called team meeting today at 3pm".',
   parameters: {
     type: Type.OBJECT,
     properties: {
       title: { type: Type.STRING, description: 'Event title' },
       description: { type: Type.STRING, description: 'Event details' },
-      start_time: { type: Type.STRING, description: 'Event start time (ISO 8601)' },
-      end_time: { type: Type.STRING, description: 'Event end time (ISO 8601)' },
+      start_time: { type: Type.STRING, description: 'Event start time (ISO 8601) - use this if you have exact timestamps' },
+      end_time: { type: Type.STRING, description: 'Event end time (ISO 8601) - use this if you have exact timestamps' },
+      date: { type: Type.STRING, description: 'Natural language date (e.g., "tomorrow", "next Friday", "2024-01-15") - use this with time parameter' },
+      time: { type: Type.STRING, description: 'Natural language time (e.g., "10:00 AM", "2:30 PM", "15:30") - use this with date parameter' },
+      duration: { type: Type.NUMBER, description: 'Event duration in minutes (default: 60) - use this with date/time parameters' },
       location: { type: Type.STRING, description: 'Event location' },
       time_zone: { type: Type.STRING, description: 'Time zone (e.g., UTC, America/New_York)' }
     },
-    required: ['title', 'start_time', 'end_time']
+    required: ['title']
   }
 };
 

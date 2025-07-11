@@ -140,4 +140,43 @@ describe('AIChat Component', () => {
     expect(getByText((content) => content.includes('Morning Event'))).toBeInTheDocument();
     expect(queryByText((content) => content.includes('Other Day'))).not.toBeInTheDocument();
   });
+
+  it('should render only the filtered tasks from the code block (e.g., high priority)', async () => {
+    // Simulate a Gemini/AI response with a code block containing only high priority tasks
+    const highPriorityTask = {
+      id: '1',
+      title: 'High Priority Task',
+      priority: 'high',
+      completed: false,
+    };
+    const lowPriorityTask = {
+      id: '2',
+      title: 'Low Priority Task',
+      priority: 'low',
+      completed: false,
+    };
+    // The code block only contains the high priority task
+    const aiMessage = `Here are your tasks:\n\n\`\`\`json\n${JSON.stringify({
+      action_type: 'read',
+      entity_type: 'task',
+      details: { tasks: [highPriorityTask] }
+    }, null, 2)}\`\`\``;
+
+    // Render the chat with a message containing the code block
+    render(
+      <AIChat
+        initialMessages={[{
+          id: 'msg-1',
+          type: 'ai',
+          content: aiMessage,
+          timestamp: new Date(),
+        }]}
+      />
+    );
+
+    // The high priority task should be visible
+    expect(await screen.findByText('High Priority Task')).toBeInTheDocument();
+    // The low priority task should NOT be visible
+    expect(screen.queryByText('Low Priority Task')).not.toBeInTheDocument();
+  });
 }); 

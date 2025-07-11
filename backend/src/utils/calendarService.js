@@ -365,3 +365,135 @@ export async function lookupCalendarEventbyTitle(userId, token) {
     throw error;
   }
 } 
+
+/**
+ * Helper function to parse natural language time expressions
+ * @param {string} timeExpression - Natural language time (e.g., "10:00 AM", "2:30 PM", "15:30")
+ * @returns {string} Time in HH:MM format (24-hour)
+ */
+function parseTimeExpression(timeExpression) {
+  if (!timeExpression) return null;
+  
+  // Handle 12-hour format with AM/PM
+  const timePattern = /^(\d{1,2}):?(\d{2})?\s*(AM|PM|am|pm)?$/i;
+  const match = timeExpression.trim().match(timePattern);
+  
+  if (match) {
+    let hours = parseInt(match[1]);
+    const minutes = match[2] ? parseInt(match[2]) : 0;
+    const period = match[3] ? match[3].toUpperCase() : null;
+    
+    // Convert 12-hour to 24-hour format
+    if (period === 'PM' && hours !== 12) {
+      hours += 12;
+    } else if (period === 'AM' && hours === 12) {
+      hours = 0;
+    }
+    
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+  }
+  
+  // Handle 24-hour format
+  const militaryPattern = /^(\d{1,2}):(\d{2})$/;
+  const militaryMatch = timeExpression.trim().match(militaryPattern);
+  
+  if (militaryMatch) {
+    const hours = parseInt(militaryMatch[1]);
+    const minutes = parseInt(militaryMatch[2]);
+    
+    if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Helper function to combine date and time into ISO string
+ * @param {string} dateStr - Date in YYYY-MM-DD format
+ * @param {string} timeStr - Time in HH:MM format
+ * @param {string} timeZone - Time zone (default: 'UTC')
+ * @returns {string} ISO 8601 timestamp
+ */
+function combineDateAndTime(dateStr, timeStr, timeZone = 'UTC') {
+  if (!dateStr || !timeStr) return null;
+  
+  // Create a date object in the local timezone
+  const dateTimeStr = `${dateStr}T${timeStr}:00`;
+  
+  // Create the date in local timezone (don't add Z to keep it local)
+  const localDate = new Date(dateTimeStr);
+  
+  // Return ISO string in local timezone
+  return localDate.toISOString();
+}
+
+/**
+ * AI-specific function to create calendar events with natural language date/time parsing
+ * @param {Object} args - Arguments from Gemini AI
+ * @param {string} userId - User ID
+ * @param {Object} userContext - User context
+ * @returns {Promise<Object>} created event
+ */
+export async function createCalendarEventFromAI(args, userId, userContext) {
+  try {
+    // Parse natural language date/time expressions
+    let startDateTime = null;
+    let endDateTime = null;
+    
+    // Handle different input formats
+    if (args.start_time && args.end_time) {
+      // Direct ISO timestamps provided
+      startDateTime = args.start_time;
+      endDateTime = args.end_time;
+    } else if (args.date || args.time) {
+      // Natural language date/time provided
+      const dateStr = args.date ? dateParser.parse(args.date) : dateParser.parse('today');
+      const timeStr = args.time ? parseTimeExpression(args.time) : '09:00'; // Default to 9 AM
+      
+      if (!dateStr) {
+        throw new Error('Could not parse the date expression');
+      }
+      
+      startDateTime = combineDateAndTime(dateStr, timeStr, args.time_zone);
+      
+      // Calculate end time (default to 1 hour duration)
+      const duration = args.duration || 60; // minutes
+      const endTime = new Date(startDateTime);
+      endTime.setMinutes(endTime.getMinutes() + duration);
+      endDateTime = endTime.toISOString();
+    } else {
+      throw new Error('Either start_time/end_time or date/time must be provided');
+    }
+    
+    // Prepare event data
+    const eventData = {
+      summary: args.title || 'Untitled Event',
+      description: args.description || '',
+      startTime: startDateTime,
+      endTime: endDateTime,
+      timeZone: args.time_zone || 'UTC',
+      location: args.location // Always include location, even if undefined
+    };
+    
+    // Create the calendar event
+    const createdEvent = await createCalendarEvent(userId, eventData);
+    
+    return {
+      success: true,
+      event: {
+        id: createdEvent.id,
+        title: createdEvent.summary,
+        description: createdEvent.description,
+        start: createdEvent.start?.dateTime,
+        end: createdEvent.end?.dateTime,
+        location: createdEvent.location, // Always include location
+        timeZone: createdEvent.start?.timeZone
+      }
+    };
+  } catch (error) {
+    console.error('Error in createCalendarEventFromAI:', error);
+    throw error;
+  }
+} 
