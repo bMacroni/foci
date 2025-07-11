@@ -33,11 +33,12 @@ if (supabaseUrl && supabaseKey) {
   console.warn('Supabase credentials not found. Some features may not work.')
 }
 
-console.log('Loaded GOOGLE_REDIRECT_URI:', process.env.GOOGLE_REDIRECT_URI);
-console.log('FRONTEND_URL:', process.env.FRONTEND_URL);
+// Environment check - only log non-sensitive info
 console.log('NODE_ENV:', process.env.NODE_ENV);
 console.log('PORT:', process.env.PORT);
-console.log('All environment variables:', Object.keys(process.env).filter(key => key.includes('URL') || key.includes('GOOGLE') || key.includes('FRONTEND')));
+console.log('Environment variables loaded:', Object.keys(process.env).filter(key => 
+  key.includes('URL') || key.includes('GOOGLE') || key.includes('FRONTEND')
+).length, 'configured');
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

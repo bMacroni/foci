@@ -9,6 +9,7 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_REDIRECT_URI
 );
 
-console.log('Google Redirect URI:', process.env.GOOGLE_REDIRECT_URI);
+// Google OAuth client initialized
+console.log('Google OAuth client initialized');
 
 export default oauth2Client;

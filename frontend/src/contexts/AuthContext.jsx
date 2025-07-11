@@ -2,9 +2,8 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { goalsAPI, tasksAPI } from '../services/api';
 import api from '../services/api';
 
-// Debug: Log the API URL being used
+// API Base URL configuration
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-console.log('AuthContext - API Base URL:', API_BASE_URL);
 
 const AuthContext = createContext();
 
