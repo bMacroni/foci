@@ -8,6 +8,7 @@ import AIChat from '../components/AIChat'
 function Dashboard({ showSuccess }) {
   const [activeTab, setActiveTab] = useState('ai');
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  const [isHorizontal, setIsHorizontal] = useState(false);
 
   // --- Draggable nav pill state ---
   const defaultPos = { x: 40, y: window.innerHeight / 2 - 140 };
@@ -107,63 +108,40 @@ function Dashboard({ showSuccess }) {
       {/* Draggable pill nav */}
       <div
         ref={navRef}
-        className="z-50 flex flex-col items-center shadow-2xl"
+        className={`z-50 shadow-2xl bg-white/95 ${isHorizontal ? 'flex flex-row items-center' : 'flex flex-col items-center'}`}
         style={{
-          position: 'absolute',
+          position: 'fixed',
           left: navPos.x,
           top: navPos.y,
           borderRadius: 9999,
           background: 'rgba(255,255,255,0.97)',
-          padding: '16px 10px',
+          padding: isHorizontal ? '10px 16px' : '16px 10px',
+          minWidth: isHorizontal ? 0 : 72,
+          minHeight: isHorizontal ? 72 : 0,
           boxShadow: '0 8px 32px 0 rgba(0,0,0,0.18)',
-          minWidth: 72,
-          transition: dragging.current ? 'none' : 'box-shadow 0.2s',
+          transition: dragging.current ? 'none' : 'all 0.3s ease',
         }}
       >
         {/* Handle */}
         <div
-          className="w-8 h-3 mb-3 flex items-center justify-center cursor-move select-none"
+          className={
+            isHorizontal
+              ? 'h-8 w-3 mr-3 flex items-center justify-center cursor-move select-none'
+              : 'w-8 h-3 mb-3 flex items-center justify-center cursor-move select-none'
+          }
           style={{ borderRadius: 8, background: '#e5e7eb', boxShadow: '0 1px 4px 0 rgba(0,0,0,0.07)' }}
           onMouseDown={onDragStart}
           onTouchStart={onDragStart}
           title="Move navigation"
         >
-          <div className="w-6 h-1 rounded-full bg-gray-400" />
+          <div className={isHorizontal ? 'h-6 w-1 rounded-full bg-gray-400' : 'w-6 h-1 rounded-full bg-gray-400'} />
         </div>
-        {/* Nav buttons */}
-        {navTabs.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`relative border rounded-full p-3 shadow hover:bg-gray-100 transition-colors flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-blue-400 mb-2
-              ${activeTab === tab.id ? 'bg-black border-white text-white' : 'bg-white border-black/10 text-black'}`}
-            style={{ width: 52, height: 52 }}
-            aria-label={tab.label}
-            tabIndex={0}
-            onMouseEnter={e => {
-              const tooltip = e.currentTarget.querySelector('.nav-tooltip');
-              if (tooltip) tooltip.style.opacity = 1;
-            }}
-            onMouseLeave={e => {
-              const tooltip = e.currentTarget.querySelector('.nav-tooltip');
-              if (tooltip) tooltip.style.opacity = 0;
-            }}
-          >
-            {React.cloneElement(tab.icon, { className: 'w-6 h-6', color: activeTab === tab.id ? 'white' : 'black', stroke: activeTab === tab.id ? 'white' : 'currentColor' })}
-            <span
-              className="nav-tooltip absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1 bg-black text-white text-xs rounded shadow-lg whitespace-nowrap opacity-0 pointer-events-none transition-opacity duration-150"
-              style={{ zIndex: 100 }}
-            >
-              {tab.label}
-            </span>
-          </button>
-        ))}
-        {/* Logout button at the bottom */}
+        {/* Orientation toggle button (now after handle) */}
         <button
-          onClick={handleLogout}
-          className="relative mt-4 border rounded-full p-3 shadow hover:bg-red-100 text-red-600 hover:text-red-800 transition-colors flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-red-400 bg-white border-black/10"
-          style={{ width: 52, height: 52 }}
-          aria-label="Logout"
+          onClick={() => setIsHorizontal(!isHorizontal)}
+          className={`relative border rounded-full p-2 shadow hover:bg-gray-100 transition-colors flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white border-black/10 ${isHorizontal ? 'mr-2' : 'mb-2'}`}
+          style={{ width: 40, height: 40 }}
+          aria-label="Toggle orientation"
           tabIndex={0}
           onMouseEnter={e => {
             const tooltip = e.currentTarget.querySelector('.nav-tooltip');
@@ -174,16 +152,87 @@ function Dashboard({ showSuccess }) {
             if (tooltip) tooltip.style.opacity = 0;
           }}
         >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2h4a2 2 0 012 2v1" />
+          {/* Curved arrow icon for rotate/flip */}
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path d="M17.657 6.343A8 8 0 106.343 17.657" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M15 3h6v6" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M9 21h-6v-6" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
           <span
-            className="nav-tooltip absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1 bg-black text-white text-xs rounded shadow-lg whitespace-nowrap opacity-0 pointer-events-none transition-opacity duration-150"
+            className={`nav-tooltip absolute px-3 py-1 bg-black text-white text-xs rounded shadow-lg whitespace-nowrap opacity-0 pointer-events-none transition-opacity duration-150 ${
+              isHorizontal 
+                ? 'left-1/2 -translate-x-1/2 top-full mt-3' 
+                : 'left-full top-1/2 -translate-y-1/2 ml-3'
+            }`}
             style={{ zIndex: 100 }}
           >
-            Logout
+            {isHorizontal ? 'Vertical' : 'Horizontal'}
           </span>
         </button>
+        {/* Nav buttons */}
+        <div className={`flex ${isHorizontal ? 'flex-row items-center' : 'flex-col items-center'}`}>
+          {navTabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`relative border rounded-full p-3 shadow hover:bg-gray-100 transition-colors flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-blue-400 ${isHorizontal ? 'mr-2' : 'mb-2'}
+                ${activeTab === tab.id ? 'bg-black border-white text-white' : 'bg-white border-black/10 text-black'}`}
+              style={{ width: 52, height: 52 }}
+              aria-label={tab.label}
+              tabIndex={0}
+              onMouseEnter={e => {
+                const tooltip = e.currentTarget.querySelector('.nav-tooltip');
+                if (tooltip) tooltip.style.opacity = 1;
+              }}
+              onMouseLeave={e => {
+                const tooltip = e.currentTarget.querySelector('.nav-tooltip');
+                if (tooltip) tooltip.style.opacity = 0;
+              }}
+            >
+              {React.cloneElement(tab.icon, { className: 'w-6 h-6', color: activeTab === tab.id ? 'white' : 'black', stroke: activeTab === tab.id ? 'white' : 'currentColor' })}
+              <span
+                className={`nav-tooltip absolute px-3 py-1 bg-black text-white text-xs rounded shadow-lg whitespace-nowrap opacity-0 pointer-events-none transition-opacity duration-150 ${
+                  isHorizontal 
+                    ? 'left-1/2 -translate-x-1/2 top-full mt-3' 
+                    : 'left-full top-1/2 -translate-y-1/2 ml-3'
+                }`}
+                style={{ zIndex: 100 }}
+              >
+                {tab.label}
+              </span>
+            </button>
+          ))}
+          {/* Logout button */}
+          <button
+            onClick={handleLogout}
+            className={`relative border rounded-full p-3 shadow hover:bg-red-100 text-red-600 hover:text-red-800 transition-colors flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-red-400 bg-white border-black/10 ${isHorizontal ? 'mr-0' : 'mb-0'}`}
+            style={{ width: 52, height: 52 }}
+            aria-label="Logout"
+            tabIndex={0}
+            onMouseEnter={e => {
+              const tooltip = e.currentTarget.querySelector('.nav-tooltip');
+              if (tooltip) tooltip.style.opacity = 1;
+            }}
+            onMouseLeave={e => {
+              const tooltip = e.currentTarget.querySelector('.nav-tooltip');
+              if (tooltip) tooltip.style.opacity = 0;
+            }}
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2h4a2 2 0 012 2v1" />
+            </svg>
+            <span
+              className={`nav-tooltip absolute px-3 py-1 bg-black text-white text-xs rounded shadow-lg whitespace-nowrap opacity-0 pointer-events-none transition-opacity duration-150 ${
+                isHorizontal 
+                  ? 'left-1/2 -translate-x-1/2 top-full mt-3' 
+                  : 'left-full top-1/2 -translate-y-1/2 ml-3'
+              }`}
+              style={{ zIndex: 100 }}
+            >
+              Logout
+            </span>
+          </button>
+        </div>
       </div>
       {/* Foci app name badge */}
       <div className="fixed top-6 left-1/2 -translate-x-1/2 z-40">
