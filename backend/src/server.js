@@ -41,10 +41,10 @@ console.log('NODE_ENV:', process.env.NODE_ENV);
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
-    message: 'Foci API is running',
-    timestamp: new Date().toISOString()
-  })
-})
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
 
 // Basic API routes
 app.get('/api', (req, res) => {
@@ -87,9 +87,20 @@ console.log('Conversations router registered');
 // Start server only if run directly
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => {
-    console.log(`🚀 Foci API server running on port ${PORT}`)
-    console.log(`📊 Health check: http://localhost:${PORT}/api/health`)
+    console.log(`🚀 Foci API server running on port ${PORT}`);
+    console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
   });
 }
+
+// Add error handlers
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
+});
 
 export default app; 
