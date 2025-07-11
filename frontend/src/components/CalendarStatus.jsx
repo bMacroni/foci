@@ -28,7 +28,10 @@ const CalendarStatus = () => {
   const connectGoogleCalendar = () => {
     const token = localStorage.getItem('jwt_token');
     if (token) {
-      const url = `http://localhost:5000/api/auth/google/login?state=${token}`;
+      // Use the same base URL as the API service
+      const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const backendUrl = apiBaseUrl.replace('/api', ''); // Remove /api to get the base backend URL
+      const url = `${backendUrl}/api/auth/google/login?state=${token}`;
       window.location.href = url;
     } else {
       setError('Please log in first');
