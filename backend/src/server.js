@@ -34,6 +34,8 @@ if (supabaseUrl && supabaseKey) {
 }
 
 console.log('Loaded GOOGLE_REDIRECT_URI:', process.env.GOOGLE_REDIRECT_URI);
+console.log('FRONTEND_URL:', process.env.FRONTEND_URL);
+console.log('NODE_ENV:', process.env.NODE_ENV);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
