@@ -48,6 +48,8 @@ router.get('/callback', async (req, res) => {
 
     // 4. Redirect to frontend with a success message
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    console.log('FRONTEND_URL from env:', process.env.FRONTEND_URL);
+    console.log('Using frontendUrl:', frontendUrl);
     res.redirect(`${frontendUrl}/dashboard?google=success`);
   } catch (err) {
     console.error('Error in Google OAuth callback:', err);
