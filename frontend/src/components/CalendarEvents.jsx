@@ -13,9 +13,16 @@ const CalendarEvents = () => {
   const [dragging, setDragging] = useState(false);
   const calendarRef = useRef(null);
   const [editingEvent, setEditingEvent] = useState(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
     loadEvents();
+  }, []);
+
+  // Update current time every minute
+  useEffect(() => {
+    const interval = setInterval(() => setCurrentTime(new Date()), 60000);
+    return () => clearInterval(interval);
   }, []);
 
   const loadEvents = async () => {
@@ -186,7 +193,7 @@ const CalendarEvents = () => {
       d.setDate(d.getDate() + 1);
     }
     return days;
-  }
+    }
 
   const ItemTypes = { EVENT: 'event' };
 
@@ -276,7 +283,7 @@ const CalendarEvents = () => {
       cardRef.current = node;
       if (node && !resizing) {
         drag(node);
-      }
+    }
     };
 
     // Prevent modal opening if just resized
@@ -288,6 +295,16 @@ const CalendarEvents = () => {
       }
       onClick(event);
     };
+
+    // Tooltip logic for truncated text
+    const titleRef = useRef();
+    const [showTooltip, setShowTooltip] = useState(false);
+    const [isTruncated, setIsTruncated] = useState(false);
+    useEffect(() => {
+      if (titleRef.current) {
+        setIsTruncated(titleRef.current.scrollWidth > titleRef.current.clientWidth);
+      }
+    }, [event.title, event.summary]);
 
     return (
       <div
@@ -320,8 +337,19 @@ const CalendarEvents = () => {
           {timeRange}
         </span>
         <div className="flex-1 w-full flex items-center justify-center">
-          <div className="font-semibold text-black text-sm truncate text-center w-full px-2">
+          <div
+            ref={titleRef}
+            className="font-semibold text-black text-sm truncate text-center w-full px-2 relative"
+            onMouseEnter={() => isTruncated && setShowTooltip(true)}
+            onMouseLeave={() => setShowTooltip(false)}
+            style={{ cursor: isTruncated ? 'pointer' : 'default' }}
+          >
             {event.title || event.summary}
+            {showTooltip && isTruncated && (
+              <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-1 bg-black text-white text-xs rounded shadow-lg whitespace-nowrap z-50 pointer-events-none animate-fade-in">
+                {event.title || event.summary}
+              </div>
+            )}
           </div>
         </div>
         {/* Resize handle at bottom */}
@@ -404,8 +432,9 @@ const CalendarEvents = () => {
       }
     };
   return (
-    <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/40 overflow-y-auto transition-opacity duration-200 ${show ? 'opacity-100' : 'opacity-0'}`}
-      style={{ transition: 'opacity 0.2s' }}
+    <div
+      className={`fixed inset-0 z-50 flex items-center justify-center transition-opacity duration-300 ${show ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+      style={{ background: 'rgba(0,0,0,0.40)' }}
     >
       <div className={`bg-white rounded-3xl shadow-xl border border-black/10 p-8 max-w-md w-full relative max-h-screen overflow-y-auto transform transition-transform duration-200 ${show ? 'scale-100' : 'scale-95'}`}
         style={{ transition: 'transform 0.2s' }}
@@ -573,21 +602,21 @@ const CalendarEvents = () => {
 
   // --- Render ---
   return (
-    <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl border border-black/10 p-4 sm:p-6 md:p-8 w-full max-w-full overflow-x-auto">
+    <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl border border-black/10 p-8">
       <SuccessToast
         message={toast.message}
         isVisible={toast.isVisible}
         onClose={handleCloseToast}
         type={toast.type}
       />
-      <div className="flex items-center justify-between mb-4 sm:mb-6 flex-wrap gap-2">
+      <div className="flex items-center justify-between mb-6">
         <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-black rounded-2xl flex items-center justify-center">
-            <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="w-10 h-10 bg-black rounded-2xl flex items-center justify-center">
+            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
           </div>
-          <h3 className="text-lg sm:text-2xl font-bold text-black">Monthly Calendar</h3>
+          <h3 className="text-2xl font-bold text-black">Monthly Calendar</h3>
         </div>
         <div className="flex space-x-2">
           <button onClick={prevMonth} className="p-2 rounded hover:bg-gray-100">
@@ -595,7 +624,7 @@ const CalendarEvents = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <span className="font-semibold text-black text-base sm:text-lg">
+          <span className="font-semibold text-black text-lg">
             {currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
           </span>
           <button onClick={nextMonth} className="p-2 rounded hover:bg-gray-100">
@@ -606,18 +635,18 @@ const CalendarEvents = () => {
         </div>
       </div>
       {error && (
-        <div className="mb-4 sm:mb-6 bg-red-50/80 border border-red-200 text-red-700 px-4 sm:px-6 py-3 sm:py-4 rounded-2xl shadow-sm text-sm sm:text-base">
+        <div className="mb-6 bg-red-50/80 border border-red-200 text-red-700 px-6 py-4 rounded-2xl shadow-sm">
           <span className="font-medium">{error}</span>
         </div>
       )}
-      <div ref={calendarRef} className="grid grid-cols-7 gap-1 sm:gap-2 mb-4 sm:mb-8 select-none w-full min-w-[420px] sm:min-w-[560px]">
+      <div ref={calendarRef} className="grid grid-cols-7 gap-2 mb-8 select-none">
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-          <div key={d} className="text-center font-semibold text-xs sm:text-base text-gray-500 mb-1 sm:mb-2">{d}</div>
+          <div key={d} className="text-center font-semibold text-gray-500 mb-2">{d}</div>
         ))}
         {monthDays.map((date, idx) => (
           <div
             key={idx}
-            className={`h-10 sm:h-16 flex items-center justify-center rounded-xl cursor-pointer border transition-all
+            className={`h-16 flex items-center justify-center rounded-xl cursor-pointer border transition-all
               ${date ?
                 isSelected(date)
                   ? 'bg-black text-white border-black scale-105 shadow-lg'
@@ -636,15 +665,60 @@ const CalendarEvents = () => {
       {/* --- Time Grid for Selected Range --- */}
       {rangeDays.length > 0 && (
         <DndProvider backend={HTML5Backend}>
-          <div className="overflow-x-auto w-full">
-            <div className="min-w-[600px] sm:min-w-[900px]">
-              <div className="grid gap-x-1 sm:gap-x-2" style={{ gridTemplateColumns: `60px repeat(${rangeDays.length}, 1fr)` }}>
+          <div className="overflow-x-auto">
+            <div className="min-w-[900px] relative">
+              {/* Current time line overlay */}
+              {(() => {
+                // Only show if today is in rangeDays
+                const todayIdx = rangeDays.findIndex(day => isToday(day));
+                if (todayIdx === -1) return null;
+                // Calculate vertical position
+                const startHour = 4;
+                const endHour = 22;
+                const totalMinutes = (endHour - startHour) * 60;
+                const now = currentTime;
+                if (!isToday(now)) return null;
+                const minutesSinceStart = (now.getHours() - startHour) * 60 + now.getMinutes();
+                if (minutesSinceStart < 0 || minutesSinceStart > totalMinutes) return null;
+                // Height of one minute in px (based on slotHeight=22 for 15min slots)
+                const slotHeight = 22;
+                const pxPerMinute = slotHeight / 15;
+                const top = minutesSinceStart * pxPerMinute + 36; // +36 for header offset
+                // Calculate left/width for the current day column
+                const left = `calc(80px + ${todayIdx} * (100% - 80px) / ${rangeDays.length})`;
+                const width = `calc((100% - 80px) / ${rangeDays.length})`;
+                // Debug log
+                console.log('[CurrentTimeLine]', { top, left, width, todayIdx, now });
+                return (
+                  <div
+                    className="pointer-events-none absolute left-0 w-full z-50"
+                    style={{
+                      top,
+                      height: 0,
+                    }}
+                  >
+                    <div
+                      className="absolute"
+                      style={{
+                        left,
+                        width,
+                        borderTop: '3px solid #ef4444', // red-500
+                        boxShadow: '0 0 8px 0 #ef4444',
+                        zIndex: 50,
+                        borderRadius: 2,
+                        borderBottom: '1px dashed #ef4444', // debug border
+                      }}
+                    />
+                  </div>
+                );
+              })()}
+              <div className="grid gap-x-2" style={{ gridTemplateColumns: `80px repeat(${rangeDays.length}, 1fr)` }}>
                 {/* Header Row */}
                 <div></div>
                 {rangeDays.map((day, idx) => (
                   <div
                     key={day.toDateString()}
-                    className={`text-center font-bold text-xs sm:text-base text-black py-1 sm:py-2 border-b border-black/10 ${isToday(day) ? 'bg-blue-50 border-blue-400' : (idx % 2 === 1 ? 'bg-gray-50' : 'bg-white')}`}
+                    className={`text-center font-bold text-black py-2 border-b border-black/10 ${isToday(day) ? 'bg-blue-50 border-blue-400' : (idx % 2 === 1 ? 'bg-gray-50' : 'bg-white')}`}
                   >
                     {day.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
                   </div>
@@ -655,10 +729,10 @@ const CalendarEvents = () => {
                     <div
                       className={
                         min === 0
-                          ? `text-xs sm:text-sm font-bold text-black py-1 sm:py-2 pr-1 sm:pr-2 border-r border-black border-t-2 text-right align-top ${rowIdx % 8 < 4 ? 'bg-gray-50' : 'bg-white'}` // alternate hour shading
-                          : `text-[10px] sm:text-xs text-gray-400 py-0.5 sm:py-1 pr-1 sm:pr-2 border-r border-gray-100 border-t bg-white text-right align-top`
+                          ? `text-sm font-bold text-black py-2 pr-2 border-r border-black border-t-2 text-right align-top ${rowIdx % 8 < 4 ? 'bg-gray-50' : 'bg-white'}` // alternate hour shading
+                          : `text-xs text-gray-400 py-1 pr-2 border-r border-gray-100 border-t bg-white text-right align-top`
                       }
-                      style={{ minHeight: min === 0 ? 28 : 16, maxWidth: 60 }}
+                      style={{ minHeight: min === 0 ? 36 : 22 }}
                     >
                       {min === 0
                         ? (hour === 12 ? '12 PM' : hour > 12 ? `${hour - 12}:00 PM` : `${hour}:00 AM`)
@@ -688,7 +762,7 @@ const CalendarEvents = () => {
                           min={min}
                           events={eventsByDayTime[day.toDateString()]?.[`${hour}:${min}`] || []}
                           onDropEvent={handleMoveEvent}
-                          slotHeight={min === 0 ? 28 : 16}
+                          slotHeight={min === 0 ? 36 : 22}
                           // Add extra padding and background for whitespace and shading
                           className={`relative ${bg} rounded-md`}
                         />
@@ -702,7 +776,7 @@ const CalendarEvents = () => {
         </DndProvider>
       )}
       {rangeDays.length === 0 && (
-        <div className="text-gray-500 text-sm sm:text-base">Select one or more days to view and manage events.</div>
+        <div className="text-gray-500">Select one or more days to view and manage events.</div>
       )}
       {editingEvent && (
         <EventEditModal
