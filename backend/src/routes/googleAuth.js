@@ -47,7 +47,8 @@ router.get('/callback', async (req, res) => {
     console.log('Google tokens stored for user:', user.email);
 
     // 4. Redirect to frontend with a success message
-    res.redirect('http://localhost:5173/dashboard?google=success');
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    res.redirect(`${frontendUrl}/dashboard?google=success`);
   } catch (err) {
     console.error('Error in Google OAuth callback:', err);
     res.status(500).send('Error processing Google OAuth callback');
