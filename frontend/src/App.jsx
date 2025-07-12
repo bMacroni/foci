@@ -43,6 +43,7 @@ const AppContent = () => {
     <div className="App">
       <Routes>
         <Route path="/" element={<Dashboard showSuccess={showSuccess} />} />
+        <Route path="/dashboard" element={<Dashboard showSuccess={showSuccess} />} />
       </Routes>
       <SuccessToast 
         message={successToast.message}
