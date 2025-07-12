@@ -6,56 +6,15 @@ import CalendarEvents from '../components/CalendarEvents'
 import AIChat from '../components/AIChat'
 
 function Dashboard({ showSuccess }) {
+  // Remove draggable nav pill state and drag logic
+  // const [activeTab, setActiveTab] = useState('ai');
   const [activeTab, setActiveTab] = useState('ai');
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
-  const [isHorizontal, setIsHorizontal] = useState(false);
+  const [isHorizontal, setIsHorizontal] = useState(false); // Remove if not needed
 
-  // --- Draggable nav pill state ---
-  const defaultPos = { x: 40, y: window.innerHeight / 2 - 140 };
-  const [navPos, setNavPos] = useState(() => {
-    const saved = localStorage.getItem('navPillPos');
-    return saved ? JSON.parse(saved) : defaultPos;
-  });
-  const navRef = useRef();
-  const dragOffset = useRef({ x: 0, y: 0 });
-  const dragging = useRef(false);
+  // Remove navPos, navRef, dragOffset, dragging, and related useEffect
 
-  // Save position to localStorage
-  useEffect(() => {
-    localStorage.setItem('navPillPos', JSON.stringify(navPos));
-  }, [navPos]);
-
-  // Drag handlers
-  const onDragStart = (e) => {
-    dragging.current = true;
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    dragOffset.current = {
-      x: clientX - navPos.x,
-      y: clientY - navPos.y,
-    };
-    document.addEventListener('mousemove', onDragMove);
-    document.addEventListener('mouseup', onDragEnd);
-    document.addEventListener('touchmove', onDragMove, { passive: false });
-    document.addEventListener('touchend', onDragEnd);
-  };
-  const onDragMove = (e) => {
-    if (!dragging.current) return;
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    setNavPos({
-      x: Math.max(0, Math.min(window.innerWidth - 80, clientX - dragOffset.current.x)),
-      y: Math.max(0, Math.min(window.innerHeight - 300, clientY - dragOffset.current.y)),
-    });
-    if (e.touches) e.preventDefault();
-  };
-  const onDragEnd = () => {
-    dragging.current = false;
-    document.removeEventListener('mousemove', onDragMove);
-    document.removeEventListener('mouseup', onDragEnd);
-    document.removeEventListener('touchmove', onDragMove);
-    document.removeEventListener('touchend', onDragEnd);
-  };
+  // Remove drag handlers
 
   // Icon-only nav buttons (like CalendarStatus)
   const navTabs = [
@@ -73,7 +32,7 @@ function Dashboard({ showSuccess }) {
       label: 'Goals',
       icon: (
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m4 0h-1V7h-1m-4 0h1v4h1m-4 0h1v4h1" />
         </svg>
       )
     },
@@ -82,7 +41,7 @@ function Dashboard({ showSuccess }) {
       label: 'Tasks',
       icon: (
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-3-3v6m9 4a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2h10a2 2 0 012 2v10z" />
         </svg>
       )
     },
@@ -105,134 +64,76 @@ function Dashboard({ showSuccess }) {
 
   return (
     <div className="min-h-screen bg-white flex">
-      {/* Draggable pill nav */}
+      {/* Top-Center Horizontal Nav Pill */}
       <div
-        ref={navRef}
-        className={`z-50 shadow-2xl bg-white/95 ${isHorizontal ? 'flex flex-row items-center' : 'flex flex-col items-center'}`}
+        className="z-50 shadow-2xl bg-white/95 flex flex-row items-center fixed left-1/2 top-6 transform -translate-x-1/2 rounded-full px-8 py-3"
         style={{
-          position: 'fixed',
-          left: navPos.x,
-          top: navPos.y,
-          borderRadius: 9999,
           background: 'rgba(255,255,255,0.97)',
-          padding: isHorizontal ? '10px 16px' : '16px 10px',
-          minWidth: isHorizontal ? 0 : 72,
-          minHeight: isHorizontal ? 72 : 0,
           boxShadow: '0 8px 32px 0 rgba(0,0,0,0.18)',
-          transition: dragging.current ? 'none' : 'all 0.3s ease',
+          minWidth: 0,
+          minHeight: 0,
         }}
       >
-        {/* Handle */}
-        <div
-          className={
-            isHorizontal
-              ? 'h-8 w-3 mr-3 flex items-center justify-center cursor-move select-none'
-              : 'w-8 h-3 mb-3 flex items-center justify-center cursor-move select-none'
+        {/* Nav Buttons */}
+        {[
+          {
+            id: 'ai',
+            label: 'Foci.ai',
+            icon: (
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+            )
+          },
+          {
+            id: 'goals',
+            label: 'Goals',
+            icon: (
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m4 0h-1V7h-1m-4 0h1v4h1m-4 0h1v4h1" />
+              </svg>
+            )
+          },
+          {
+            id: 'tasks',
+            label: 'Tasks',
+            icon: (
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-3-3v6m9 4a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2h10a2 2 0 012 2v10z" />
+              </svg>
+            )
+          },
+          {
+            id: 'calendar',
+            label: 'Calendar',
+            icon: (
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            )
           }
-          style={{ borderRadius: 8, background: '#e5e7eb', boxShadow: '0 1px 4px 0 rgba(0,0,0,0.07)' }}
-          onMouseDown={onDragStart}
-          onTouchStart={onDragStart}
-          title="Move navigation"
-        >
-          <div className={isHorizontal ? 'h-6 w-1 rounded-full bg-gray-400' : 'w-6 h-1 rounded-full bg-gray-400'} />
-        </div>
-        {/* Orientation toggle button (now after handle) */}
-        <button
-          onClick={() => setIsHorizontal(!isHorizontal)}
-          className={`relative border rounded-full p-2 shadow hover:bg-gray-100 transition-colors flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white border-black/10 ${isHorizontal ? 'mr-2' : 'mb-2'}`}
-          style={{ width: 40, height: 40 }}
-          aria-label="Toggle orientation"
-          tabIndex={0}
-          onMouseEnter={e => {
-            const tooltip = e.currentTarget.querySelector('.nav-tooltip');
-            if (tooltip) tooltip.style.opacity = 1;
-          }}
-          onMouseLeave={e => {
-            const tooltip = e.currentTarget.querySelector('.nav-tooltip');
-            if (tooltip) tooltip.style.opacity = 0;
-          }}
-        >
-          {/* Curved arrow icon for rotate/flip */}
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path d="M17.657 6.343A8 8 0 106.343 17.657" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M15 3h6v6" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M9 21h-6v-6" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          <span
-            className={`nav-tooltip absolute px-3 py-1 bg-black text-white text-xs rounded shadow-lg whitespace-nowrap opacity-0 pointer-events-none transition-opacity duration-150 ${
-              isHorizontal 
-                ? 'left-1/2 -translate-x-1/2 top-full mt-3' 
-                : 'left-full top-1/2 -translate-y-1/2 ml-3'
-            }`}
-            style={{ zIndex: 100 }}
-          >
-            {isHorizontal ? 'Vertical' : 'Horizontal'}
-          </span>
-        </button>
-        {/* Nav buttons */}
-        <div className={`flex ${isHorizontal ? 'flex-row items-center' : 'flex-col items-center'}`}>
-          {navTabs.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`relative border rounded-full p-3 shadow hover:bg-gray-100 transition-colors flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-blue-400 ${isHorizontal ? 'mr-2' : 'mb-2'}
-                ${activeTab === tab.id ? 'bg-black border-white text-white' : 'bg-white border-black/10 text-black'}`}
-              style={{ width: 52, height: 52 }}
-              aria-label={tab.label}
-              tabIndex={0}
-              onMouseEnter={e => {
-                const tooltip = e.currentTarget.querySelector('.nav-tooltip');
-                if (tooltip) tooltip.style.opacity = 1;
-              }}
-              onMouseLeave={e => {
-                const tooltip = e.currentTarget.querySelector('.nav-tooltip');
-                if (tooltip) tooltip.style.opacity = 0;
-              }}
-            >
-              {React.cloneElement(tab.icon, { className: 'w-6 h-6', color: activeTab === tab.id ? 'white' : 'black', stroke: activeTab === tab.id ? 'white' : 'currentColor' })}
-              <span
-                className={`nav-tooltip absolute px-3 py-1 bg-black text-white text-xs rounded shadow-lg whitespace-nowrap opacity-0 pointer-events-none transition-opacity duration-150 ${
-                  isHorizontal 
-                    ? 'left-1/2 -translate-x-1/2 top-full mt-3' 
-                    : 'left-full top-1/2 -translate-y-1/2 ml-3'
-                }`}
-                style={{ zIndex: 100 }}
-              >
-                {tab.label}
-              </span>
-            </button>
-          ))}
-          {/* Logout button */}
+        ].map(tab => (
           <button
-            onClick={handleLogout}
-            className={`relative border rounded-full p-3 shadow hover:bg-red-100 text-red-600 hover:text-red-800 transition-colors flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-red-400 bg-white border-black/10 ${isHorizontal ? 'mr-0' : 'mb-0'}`}
-            style={{ width: 52, height: 52 }}
-            aria-label="Logout"
-            tabIndex={0}
-            onMouseEnter={e => {
-              const tooltip = e.currentTarget.querySelector('.nav-tooltip');
-              if (tooltip) tooltip.style.opacity = 1;
-            }}
-            onMouseLeave={e => {
-              const tooltip = e.currentTarget.querySelector('.nav-tooltip');
-              if (tooltip) tooltip.style.opacity = 0;
-            }}
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-full font-medium transition-colors duration-200 ${activeTab === tab.id ? 'bg-black text-white' : 'bg-white text-black hover:bg-gray-100'}`}
+            style={{ margin: '0 4px' }}
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2h4a2 2 0 012 2v1" />
-            </svg>
-            <span
-              className={`nav-tooltip absolute px-3 py-1 bg-black text-white text-xs rounded shadow-lg whitespace-nowrap opacity-0 pointer-events-none transition-opacity duration-150 ${
-                isHorizontal 
-                  ? 'left-1/2 -translate-x-1/2 top-full mt-3' 
-                  : 'left-full top-1/2 -translate-y-1/2 ml-3'
-              }`}
-              style={{ zIndex: 100 }}
-            >
-              Logout
-            </span>
+            {tab.icon}
+            <span>{tab.label}</span>
           </button>
-        </div>
+        ))}
+        {/* Logout Button */}
+        <button
+          onClick={handleLogout}
+          className="flex items-center space-x-2 px-4 py-2 rounded-full font-medium transition-colors duration-200 bg-white text-red-600 hover:bg-red-100 ml-2"
+          style={{ margin: '0 4px' }}
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2h4a2 2 0 012 2v1" />
+          </svg>
+          <span>Logout</span>
+        </button>
       </div>
       {/* Foci app name badge */}
       <div className="fixed top-6 left-1/2 -translate-x-1/2 z-40">
