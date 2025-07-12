@@ -89,9 +89,10 @@ console.log('Conversations router registered');
 
 // Start server only if run directly
 if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, () => {
+  app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Foci API server running on port ${PORT}`);
     console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
+    console.log(`🌐 Network access: http://192.168.1.66:${PORT}/api/health`);
   });
 }
 

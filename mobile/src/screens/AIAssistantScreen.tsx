@@ -54,7 +54,9 @@ const AIAssistantScreen: React.FC = () => {
     setIsLoading(true);
 
     try {
+      console.log('Sending message to AI:', userMessage.content);
       const response = await aiAPI.sendMessage(userMessage.content);
+      console.log('AI Response received:', response);
       
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -63,9 +65,12 @@ const AIAssistantScreen: React.FC = () => {
         timestamp: new Date(),
       };
 
+      console.log('Adding assistant message:', assistantMessage);
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
-      Alert.alert('Error', 'Failed to send message');
+      console.error('AI Chat Error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      Alert.alert('Error', `Failed to send message: ${errorMessage}`);
     } finally {
       setIsLoading(false);
     }

@@ -3,13 +3,15 @@ import * as SecureStore from 'expo-secure-store';
 import { User, Goal, Task, CalendarEvent, ConversationThread, ConversationMessage, AuthResponse } from '../types';
 
 // Create axios instance with base configuration
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.66:5000/api';
+console.log('API_BASE_URL:', API_BASE_URL);
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
 
 // Request interceptor to add auth token
 api.interceptors.request.use(
@@ -161,7 +163,10 @@ export const calendarAPI = {
 export const aiAPI = {
   sendMessage: async (message: string, threadId?: string): Promise<{ response: string; threadId?: string }> => {
     const response = await api.post('/ai/chat', { message, threadId });
-    return response.data;
+    return {
+      response: response.data.message, // Map 'message' to 'response' for mobile app
+      threadId: response.data.threadId
+    };
   },
 
   getGoalSuggestions: async (goalTitle: string): Promise<string[]> => {
