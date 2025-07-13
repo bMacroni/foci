@@ -319,6 +319,15 @@ export async function readCalendarEventFromAI(args, userId, userContext) {
     return events;
   } catch (error) {
     console.error('Error in readCalendarEventFromAI:', error);
+    // Handle Google token errors gracefully
+    if (
+      (error.response && error.response.data && error.response.data.error === 'invalid_grant') ||
+      (error.message && error.message.includes('Token has been expired or revoked'))
+    ) {
+      // Optionally: clear user's tokens here for a real implementation
+      // await clearGoogleTokens(userId);
+      return { error: 'google_calendar_disconnected' };
+    }
     throw error;
   }
 }

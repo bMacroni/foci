@@ -138,15 +138,43 @@ router.get('/status', requireAuth, async (req, res) => {
   try {
     const { getGoogleTokens } = await import('../utils/googleTokenStorage.js');
     const tokens = await getGoogleTokens(req.user.id);
-    
-    if (tokens) {
-      res.json({ 
+    if (!tokens) {
+      return res.json({ connected: false });
+    }
+    // Try a lightweight Google Calendar API call to verify token validity
+    try {
+      const { google } = await import('googleapis');
+      const oauth2Client = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+        process.env.GOOGLE_REDIRECT_URI
+      );
+      oauth2Client.setCredentials({
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        scope: tokens.scope,
+        token_type: tokens.token_type,
+        expiry_date: tokens.expiry_date
+      });
+      const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+      // Try to list 1 event as a token check
+      await calendar.events.list({ calendarId: 'primary', maxResults: 1 });
+      // If successful, token is valid
+      return res.json({ 
         connected: true, 
         email: req.user.email,
         lastUpdated: tokens.updated_at 
       });
-    } else {
-      res.json({ connected: false });
+    } catch (err) {
+      // If token is invalid or expired
+      if (
+        (err.response && err.response.data && err.response.data.error === 'invalid_grant') ||
+        (err.message && err.message.includes('Token has been expired or revoked'))
+      ) {
+        return res.json({ connected: false, error: 'google_calendar_disconnected' });
+      }
+      // Other errors
+      return res.json({ connected: false, error: 'calendar_status_error', details: err.message });
     }
   } catch (error) {
     console.error('Error checking calendar status:', error);

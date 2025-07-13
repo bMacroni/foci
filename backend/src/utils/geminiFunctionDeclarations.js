@@ -50,7 +50,7 @@ export const deleteTaskFunctionDeclaration = {
 
 export const readTaskFunctionDeclaration = {
   name: 'read_task',
-  description: 'Reads or lists tasks for the user. Use this when the user wants to see their tasks or filter by due date, goal, priority, status, completion, or category. Example user prompts: "Show me my tasks", "List my tasks for today", "What tasks are related to my fitness goal?", "Show me all my high priority tasks", "List my completed tasks in the work category"',
+  description: 'Reads or lists tasks for the user. Use this when the user wants to see their tasks or filter by due date, goal, priority, status, completion, or category. If the task list is empty, you can reply that the user does not have any tasks for that time period. Example user prompts: "Show me my tasks", "List my tasks for today", "What tasks are related to my fitness goal?", "Show me all my high priority tasks", "List my completed tasks in the work category"',
   parameters: {
     type: Type.OBJECT,
     properties: {
@@ -131,7 +131,18 @@ export const lookupGoalbyTitleFunctionDeclaration = {
 
 export const readGoalFunctionDeclaration = {
   name: 'read_goal',
-  description: 'Reads or lists goals for the user. Use this when the user wants to see their current goals. Example user prompts: "Show me my goals", "List my goals", "What are my current goals?"',
+  description: `Reads or lists goals for the user. Use this when the user wants to see their current goals. 
+
+When returning data to the frontend, always use this format for compatibility:
+{
+  "action_type": "read",
+  "entity_type": "goal",
+  "details": {
+    "goals": ["Goal Title 1", "Goal Title 2", ...]
+  }
+}
+
+Only include the goal title in the list unless the user specifically requests other data. Example user prompts: "Show me my goals", "List my goals", "What are my current goals?"`,
   parameters: {
     type: Type.OBJECT,
     properties: {},

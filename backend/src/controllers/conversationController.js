@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import GeminiService from '../utils/geminiService.js';
 
 // Helper function to create authenticated Supabase client
 const createAuthenticatedSupabase = (jwt) => {
@@ -16,9 +17,11 @@ const getJwtFromHeaders = (headers) => {
   return headers.authorization?.replace('Bearer ', '') || '';
 };
 
+const geminiService = new GeminiService();
+
 export const conversationController = {
   // Simplified methods for direct use by AI route
-  async createThread(userId, title, summary, jwt = null) {
+  async createThread(userId, title, summary, jwt = null, messages = []) {
     try {
       // Use service role key to bypass RLS policies
       const supabase = createClient(
@@ -26,11 +29,21 @@ export const conversationController = {
         process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
       );
 
+      // If no title, try to generate one from messages
+      let finalTitle = title;
+      if (!finalTitle && Array.isArray(messages) && messages.length > 0) {
+        console.log('[createThread] Generating title from messages:', messages);
+        finalTitle = await geminiService.generateConversationTitle(messages);
+        console.log('[createThread] Gemini generated title:', finalTitle);
+      }
+      if (!finalTitle) finalTitle = 'New Conversation';
+      console.log('[createThread] Final title to insert:', finalTitle);
+
       const { data: thread, error } = await supabase
         .from('conversation_threads')
         .insert({
           user_id: userId,
-          title: title,
+          title: finalTitle,
           summary: summary || null
         })
         .select()
@@ -40,7 +53,7 @@ export const conversationController = {
         console.error('Error creating conversation thread:', error);
         throw new Error('Failed to create conversation thread');
       }
-
+      console.log('[createThread] Created thread:', thread);
       return thread;
     } catch (error) {
       console.error('Conversation thread creation error:', error);
@@ -279,15 +292,22 @@ export const conversationController = {
   // Express-style methods for backward compatibility
   async createThreadExpress(req, res) {
     try {
-      const { title, summary } = req.body;
+      const { title, summary, messages } = req.body;
       const userId = req.user.id;
       const token = req.headers.authorization?.replace('Bearer ', '');
 
-      if (!title) {
-        return res.status(400).json({ error: 'Thread title is required' });
+      // If no title, try to generate one from messages
+      let finalTitle = title;
+      if (!finalTitle && Array.isArray(messages) && messages.length > 0) {
+        console.log('[createThreadExpress] Generating title from messages:', messages);
+        finalTitle = await geminiService.generateConversationTitle(messages);
+        console.log('[createThreadExpress] Gemini generated title:', finalTitle);
       }
+      if (!finalTitle) finalTitle = 'New Conversation';
+      console.log('[createThreadExpress] Final title to insert:', finalTitle);
 
-      const thread = await conversationController.createThread(userId, title, summary, token);
+      const thread = await conversationController.createThread(userId, finalTitle, summary, token);
+      console.log('[createThreadExpress] Created thread:', thread);
       res.status(201).json(thread);
     } catch (error) {
       console.error('Conversation thread creation error:', error);

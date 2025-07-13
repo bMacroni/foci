@@ -57,9 +57,6 @@ RESPONSE GUIDELINES: When responding after executing function calls, use present
         })),
         { role: 'user', parts: [{ text: message }] }
       ];
-      // DEBUG: Log the incoming user message and contents
-      console.log('DEBUG: Incoming user message:', message);
-      console.log('DEBUG: Contents sent to Gemini:', JSON.stringify(contents, null, 2));
       // Send to Gemini
       const result = await this.model.generateContent({
         contents,
@@ -68,17 +65,12 @@ RESPONSE GUIDELINES: When responding after executing function calls, use present
       const response = await result.response;
       // Get function calls and text from Gemini response
       const functionCalls = response.functionCalls ? await response.functionCalls() : [];
-      // DEBUG: Log the raw Gemini response and functionCalls
-      console.log('DEBUG: Raw Gemini response:', response);
-      console.log('DEBUG: Gemini functionCalls (evaluated):', functionCalls);
       // Check for function calls
       let actions = [];
       let functionResults = [];
       // Track executed function calls to prevent duplication
       const executedFunctionCalls = new Set();
       if (functionCalls && functionCalls.length > 0) {
-        // DEBUG: Log function calls
-        console.log('DEBUG: Gemini functionCalls:', functionCalls);
         for (const functionCall of functionCalls) {
           // Create a unique key for the function call (name + args JSON)
           const callKey = `${functionCall.name}:${JSON.stringify(functionCall.args)}`;
@@ -149,8 +141,6 @@ RESPONSE GUIDELINES: When responding after executing function calls, use present
             }]
           }))
         ];
-        // DEBUG: Log followup contents sent for final Gemini response
-        console.log('DEBUG: Followup contents sent to Gemini:', JSON.stringify(followupContents, null, 2));
         let message = '';
         if (actions.length > 1) {
           message = `created ${actions.length} actions`;
@@ -163,10 +153,8 @@ RESPONSE GUIDELINES: When responding after executing function calls, use present
           
           // Check for additional function calls in the final response
           const finalFunctionCalls = finalResponse.functionCalls ? await finalResponse.functionCalls() : [];
-          console.log('DEBUG: Final function calls:', finalFunctionCalls);
           
           if (finalFunctionCalls && finalFunctionCalls.length > 0) {
-            console.log('DEBUG: Found additional function calls, processing them...');
             // Process the additional function calls
             for (const functionCall of finalFunctionCalls) {
               // Create a unique key for the function call (name + args JSON)
@@ -177,7 +165,6 @@ RESPONSE GUIDELINES: When responding after executing function calls, use present
               }
               executedFunctionCalls.add(callKey);
               const details = await this._executeFunctionCall(functionCall, userId, userContext);
-              console.log('DEBUG: Additional function result:', details);
               
               // Determine action type and entity type
               let action_type = 'unknown';
@@ -203,14 +190,9 @@ RESPONSE GUIDELINES: When responding after executing function calls, use present
           if (firstReadTask) {
             message = `Here are your tasks:\n\n\`\`\`json\n${JSON.stringify(firstReadTask, null, 2)}\`\`\``;
           }
-          // DEBUG: Log the final Gemini response
-          console.log('DEBUG: Final Gemini response:', finalResponse);
-          console.log('DEBUG: Final message:', message);
         }
         // Add to conversation history
         this._addToHistory(userId, { role: 'model', content: message });
-        // DEBUG: Log the final actions array
-        console.log('DEBUG: Final actions array:', actions);
         return {
           message,
           actions
@@ -219,8 +201,6 @@ RESPONSE GUIDELINES: When responding after executing function calls, use present
         // No function call, just return Gemini's text
         const message = response.text ? await response.text() : '';
         this._addToHistory(userId, { role: 'model', content: message });
-        // DEBUG: Log the final message and empty actions
-        console.log('DEBUG: No function call. Final message:', message);
         return {
           message,
           actions: []
@@ -232,6 +212,40 @@ RESPONSE GUIDELINES: When responding after executing function calls, use present
         message: "I'm sorry, I encountered an error processing your request. Please try again or rephrase your request.",
         actions: []
       };
+    }
+  }
+
+  /**
+   * Generate a short, human-friendly conversation title using Gemini
+   * @param {Array<{role: string, content: string}>} messages
+   * @returns {Promise<string>} title
+   */
+  async generateConversationTitle(messages) {
+    if (!this.enabled) {
+      // Fallback: use first user message
+      const firstUserMsg = messages.find(m => m.role === 'user');
+      return firstUserMsg ? (firstUserMsg.content.substring(0, 40) + (firstUserMsg.content.length > 40 ? '...' : '')) : 'New Conversation';
+    }
+    try {
+      // Use up to the first 6 messages for context
+      const contextMessages = messages.slice(0, 6).map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content}`).join('\n');
+      const prompt = `Summarize the following conversation in 5 words or less for a human-friendly title. Do not use quotes or punctuation.\n\n${contextMessages}`;
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      let title = response.text ? await response.text() : '';
+      // Clean up title: remove quotes, trim, limit length
+      title = title.replace(/^["']|["']$/g, '').trim();
+      if (title.length > 60) title = title.substring(0, 60) + '...';
+      if (!title) {
+        // Fallback: use first user message
+        const firstUserMsg = messages.find(m => m.role === 'user');
+        return firstUserMsg ? (firstUserMsg.content.substring(0, 40) + (firstUserMsg.content.length > 40 ? '...' : '')) : 'New Conversation';
+      }
+      return title;
+    } catch (e) {
+      // Fallback: use first user message
+      const firstUserMsg = messages.find(m => m.role === 'user');
+      return firstUserMsg ? (firstUserMsg.content.substring(0, 40) + (firstUserMsg.content.length > 40 ? '...' : '')) : 'New Conversation';
     }
   }
 
@@ -255,7 +269,6 @@ RESPONSE GUIDELINES: When responding after executing function calls, use present
         case 'read_task':
           return await tasksController.readTaskFromAI(args, userId, userContext);
         case 'lookup_task':
-          console.log('Calling lookupTaskbyTitle with:', { userId, token: userContext.token });
           return await tasksController.lookupTaskbyTitle(userId, userContext.token);
         case 'create_goal':
           return await goalsController.createGoalFromAI(args, userId, userContext);

@@ -42,6 +42,9 @@ const CalendarStatus = () => {
     alert('Disconnect functionality coming soon!');
   };
 
+  // Determine connection status
+  const isDisconnected = status && (status.connected === false || status.error === 'google_calendar_disconnected');
+
   // Small icon button (always visible)
   return (
     <>
@@ -54,7 +57,7 @@ const CalendarStatus = () => {
         <svg className="w-6 h-6 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
-        <span className={`absolute top-1 right-1 w-2 h-2 rounded-full ${status?.connected ? 'bg-green-500' : 'bg-red-500'}`}></span>
+        <span className={`absolute top-1 right-1 w-2 h-2 rounded-full ${isDisconnected ? 'bg-red-500' : (status?.connected ? 'bg-green-500' : 'bg-red-500')}`}></span>
       </button>
       {modalOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
@@ -85,7 +88,21 @@ const CalendarStatus = () => {
               <div className="mb-6 bg-red-50/80 border border-red-200 text-red-700 px-6 py-4 rounded-2xl shadow-sm">
                 <span className="font-medium">{error}</span>
               </div>
-            ) : status?.connected ? (
+            ) : isDisconnected ? (
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2">
+                  <span className="w-3 h-3 bg-red-500 rounded-full"></span>
+                  <span className="text-red-500 font-bold text-lg">Disconnected</span>
+                </div>
+                <div className="bg-gray-50 rounded-2xl p-4">
+                  <p className="text-black font-medium">Your Google Calendar connection has expired or been revoked. Please reconnect to restore calendar features.</p>
+                </div>
+                <button
+                  onClick={connectGoogleCalendar}
+                  className="px-6 py-3 bg-black text-white rounded-xl hover:bg-gray-900 font-medium"
+                >Reconnect Google Calendar</button>
+              </div>
+            ) : (
               <div className="space-y-4">
                 <div className="flex items-center space-x-2">
                   <span className="w-3 h-3 bg-green-500 rounded-full"></span>
@@ -107,20 +124,6 @@ const CalendarStatus = () => {
                     className="px-4 py-2 bg-gray-200 text-black rounded-xl hover:bg-gray-300 font-medium"
                   >Disconnect</button>
                 </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="flex items-center space-x-2">
-                  <span className="w-3 h-3 bg-red-500 rounded-full"></span>
-                  <span className="text-red-500 font-bold text-lg">Not Connected</span>
-                </div>
-                <div className="bg-gray-50 rounded-2xl p-4">
-                  <p className="text-black font-medium">Connect your Google Calendar to sync events with Foci and stay organized.</p>
-                </div>
-                <button
-                  onClick={connectGoogleCalendar}
-                  className="px-6 py-3 bg-black text-white rounded-xl hover:bg-gray-900 font-medium"
-                >Connect Google Calendar</button>
               </div>
             )}
           </div>

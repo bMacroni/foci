@@ -12,6 +12,36 @@ const generateUniqueId = () => {
   return Date.now() + messageIdCounter;
 };
 
+// Utility function for better date formatting
+const formatRelativeTime = (dateString) => {
+  if (!dateString) return '';
+  
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffInMs = now - date;
+  const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+  const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
+  const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+  
+  if (diffInMinutes < 1) return 'Just now';
+  if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+  if (diffInHours < 24) return `${diffInHours}h ago`;
+  if (diffInDays === 1) return 'Yesterday';
+  if (diffInDays < 7) return `${diffInDays} days ago`;
+  if (diffInDays < 30) {
+    const weeks = Math.floor(diffInDays / 7);
+    return `${weeks} week${weeks > 1 ? 's' : ''} ago`;
+  }
+  if (diffInDays < 365) {
+    const months = Math.floor(diffInDays / 30);
+    return `${months} month${months > 1 ? 's' : ''} ago`;
+  }
+  
+  return date.toLocaleDateString();
+};
+
+// Remove getConversationTypeIcon and getConversationTypeColor utility functions
+
 const AIChat = ({ onNavigateToTab, initialMessages }) => {
   const [messages, setMessages] = useState(initialMessages || []);
   const [inputMessage, setInputMessage] = useState('');
@@ -33,6 +63,11 @@ const AIChat = ({ onNavigateToTab, initialMessages }) => {
   };
   const handleCloseToast = () => setToast({ ...toast, isVisible: false });
   const [showLoadingScreen, setShowLoadingScreen] = useState(false);
+  
+  // New state for conversation improvements
+  const [searchQuery, setSearchQuery] = useState('');
+  const [pinnedThreads, setPinnedThreads] = useState(new Set());
+  const [showThreadMenu, setShowThreadMenu] = useState(null);
 
   // Load user data and conversation threads
   useEffect(() => {
@@ -145,6 +180,20 @@ const AIChat = ({ onNavigateToTab, initialMessages }) => {
     scrollToBottom();
   }, [messages]);
 
+  // Close thread menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showThreadMenu && !event.target.closest('.thread-menu-container')) {
+        setShowThreadMenu(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showThreadMenu]);
+
   const refreshUserData = async () => {
     try {
       const [goalsResponse, tasksResponse] = await Promise.all([
@@ -186,27 +235,12 @@ const AIChat = ({ onNavigateToTab, initialMessages }) => {
     }
   };
 
-  const createNewThread = async () => {
-    try {
-      const title = `New Conversation ${new Date().toLocaleDateString()}`;
-      const response = await conversationsAPI.createThread(title);
-      const newThread = response.data;
-      
-      setConversationThreads(prev => Array.isArray(prev) ? [newThread, ...prev] : [newThread]);
-      setCurrentThreadId(newThread.id);
-      setMessages([]);
-      
-      // Set initial welcome message
-      const welcomeMessage = generateWelcomeMessage();
-      setMessages([{
-        id: 1,
-        type: 'ai',
-        content: welcomeMessage,
-        timestamp: new Date()
-      }]);
-    } catch (error) {
-      console.error('Error creating new thread:', error);
-    }
+  const createNewThread = () => {
+    // Instead of creating a thread, just clear the current thread and messages
+    setCurrentThreadId(null);
+    setMessages([]);
+    // Optionally, set a welcome message or leave blank
+    // setMessages([{ id: 1, type: 'ai', content: generateWelcomeMessage(), timestamp: new Date() }]);
   };
 
   const deleteThread = async (threadId) => {
@@ -226,6 +260,43 @@ const AIChat = ({ onNavigateToTab, initialMessages }) => {
       console.error('Error deleting thread:', error);
     }
   };
+
+  // Handle pinning/unpinning threads
+  const togglePinThread = (threadId) => {
+    setPinnedThreads(prev => {
+      const newPinned = new Set(prev);
+      if (newPinned.has(threadId)) {
+        newPinned.delete(threadId);
+      } else {
+        newPinned.add(threadId);
+      }
+      return newPinned;
+    });
+    setShowThreadMenu(null);
+  };
+
+  // Filter threads based on search query
+  const filteredThreads = conversationThreads.filter(thread => {
+    if (!searchQuery) return true;
+    const searchLower = searchQuery.toLowerCase();
+    const title = thread.title || '';
+    const type = thread.title?.match(/^\[(.*?)\]/)?.[1] || '';
+    return title.toLowerCase().includes(searchLower) || type.toLowerCase().includes(searchLower);
+  });
+
+  // Sort threads: pinned first, then by date
+  const sortedThreads = filteredThreads.sort((a, b) => {
+    const aPinned = pinnedThreads.has(a.id);
+    const bPinned = pinnedThreads.has(b.id);
+    
+    if (aPinned && !bPinned) return -1;
+    if (!aPinned && bPinned) return 1;
+    
+    // Both pinned or both unpinned, sort by date (newest first)
+    const aDate = new Date(a.created_at || a.last_message?.created_at || 0);
+    const bDate = new Date(b.created_at || b.last_message?.created_at || 0);
+    return bDate - aDate;
+  });
 
   const generateWelcomeMessage = () => {
     const hasGoals = Array.isArray(userData.goals) ? userData.goals.length > 0 : false;
@@ -387,7 +458,8 @@ const AIChat = ({ onNavigateToTab, initialMessages }) => {
     try {
       let threadId = currentThreadId;
       if (!threadId) {
-        const response = await conversationsAPI.createThread({ title: getSummary(inputMessage) });
+        // Send the first user message to backend for title generation
+        const response = await conversationsAPI.createThread({ title: '', summary: '', messages: [{ role: 'user', content: inputMessage }] });
         threadId = response.data.id;
         setCurrentThreadId(threadId);
         setConversationThreads(prev => [response.data, ...prev]);
@@ -694,6 +766,22 @@ const AIChat = ({ onNavigateToTab, initialMessages }) => {
               </button>
             </div>
             
+            {/* Search Bar */}
+            <div className="p-4 border-b border-black/10">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search conversations..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full px-3 py-2 pl-10 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black/20 focus:border-black"
+                />
+                <svg className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+            </div>
+            
             <div className="flex-1 overflow-y-auto p-4">
               {isLoadingThreads ? (
                 <div className="flex items-center justify-center py-8">
@@ -701,7 +789,7 @@ const AIChat = ({ onNavigateToTab, initialMessages }) => {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {conversationThreads.map((thread) => {
+                  {sortedThreads.map((thread) => {
                     // Try to extract type, summary, and created_at from thread
                     let type = 'General';
                     let summary = '';
@@ -721,11 +809,13 @@ const AIChat = ({ onNavigateToTab, initialMessages }) => {
                     if (!createdAt && thread.last_message && thread.last_message.created_at) {
                       createdAt = thread.last_message.created_at;
                     }
-                    const formattedDate = createdAt ? new Date(createdAt).toLocaleString() : '';
+                    const formattedDate = formatRelativeTime(createdAt);
+                    const isPinned = pinnedThreads.has(thread.id);
+                    
                     return (
                       <div
                         key={thread.id}
-                        className={`p-3 rounded-xl cursor-pointer transition-colors ${
+                        className={`group relative p-3 rounded-xl cursor-pointer transition-colors ${
                           currentThreadId === thread.id
                             ? 'bg-black text-white'
                             : 'hover:bg-gray-100'
@@ -736,34 +826,39 @@ const AIChat = ({ onNavigateToTab, initialMessages }) => {
                         }}
                       >
                         <div className="flex items-center justify-between">
-                          <div className="flex-1 min-w-0">
-                            <p className={`text-sm font-medium truncate ${
-                              currentThreadId === thread.id ? 'text-white' : 'text-black'
-                            }`}>
-                              [{type}] {summary}
-                            </p>
-                            <p className={`text-xs truncate ${
-                              currentThreadId === thread.id ? 'text-gray-200' : 'text-gray-500'
-                            }`}>
-                              {formattedDate}
-                            </p>
-                          </div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteThread(thread.id);
-                            }}
-                            className={`p-1 rounded ${
-                              currentThreadId === thread.id
-                                ? 'hover:bg-white/20'
-                                : 'hover:bg-gray-200'
-                            }`}
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
+                          <span className={`truncate text-sm font-medium ${currentThreadId === thread.id ? 'text-white' : 'text-black'}`}>{summary}</span>
+                          <span className={`ml-2 text-xs whitespace-nowrap ${currentThreadId === thread.id ? 'text-white' : 'text-gray-500'}`}>{formattedDate}</span>
                         </div>
+                        
+                        {/* Thread Menu */}
+                        {showThreadMenu === thread.id && (
+                          <div className="thread-menu-container absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[120px]">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                togglePinThread(thread.id);
+                              }}
+                              className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 flex items-center space-x-2"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                              </svg>
+                              <span>{isPinned ? 'Unpin' : 'Pin'}</span>
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteThread(thread.id);
+                              }}
+                              className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 flex items-center space-x-2 text-red-600"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                              <span>Delete</span>
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -782,7 +877,7 @@ const AIChat = ({ onNavigateToTab, initialMessages }) => {
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-black">Conversations</h3>
               <button
-                onClick={createNewThread}
+                onClick={() => { createNewThread(); setShowMobileSidebar(false); }}
                 className="p-2 text-gray-500 hover:text-black transition-colors"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -791,7 +886,7 @@ const AIChat = ({ onNavigateToTab, initialMessages }) => {
               </button>
             </div>
             <button
-              onClick={createNewThread}
+              onClick={() => { createNewThread(); setShowMobileSidebar(false); }}
               className="w-full px-4 py-2 bg-black text-white rounded-xl hover:bg-gray-800 transition-colors text-sm font-medium"
             >
               <span className="flex items-center justify-center space-x-2">
@@ -803,6 +898,22 @@ const AIChat = ({ onNavigateToTab, initialMessages }) => {
             </button>
           </div>
           
+          {/* Search Bar */}
+          <div className="p-4 border-b border-black/10">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search conversations..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full px-3 py-2 pl-10 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black/20 focus:border-black"
+              />
+              <svg className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+          </div>
+          
           {/* Conversation Threads */}
           <div className="flex-1 overflow-y-auto p-4">
             {isLoadingThreads ? (
@@ -811,7 +922,7 @@ const AIChat = ({ onNavigateToTab, initialMessages }) => {
               </div>
             ) : (
               <div className="space-y-2">
-                {conversationThreads.map((thread) => {
+                {sortedThreads.map((thread) => {
                   // Try to extract type, summary, and created_at from thread
                   let type = 'General';
                   let summary = '';
@@ -831,11 +942,13 @@ const AIChat = ({ onNavigateToTab, initialMessages }) => {
                   if (!createdAt && thread.last_message && thread.last_message.created_at) {
                     createdAt = thread.last_message.created_at;
                   }
-                  const formattedDate = createdAt ? new Date(createdAt).toLocaleString() : '';
+                  const formattedDate = formatRelativeTime(createdAt);
+                  const isPinned = pinnedThreads.has(thread.id);
+                  
                   return (
                     <div
                       key={thread.id}
-                      className={`p-3 rounded-xl cursor-pointer transition-colors ${
+                      className={`group relative p-3 rounded-xl cursor-pointer transition-colors ${
                         currentThreadId === thread.id
                           ? 'bg-black text-white'
                           : 'hover:bg-gray-100'
@@ -843,34 +956,39 @@ const AIChat = ({ onNavigateToTab, initialMessages }) => {
                       onClick={() => loadConversationThread(thread.id)}
                     >
                       <div className="flex items-center justify-between">
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-sm font-medium truncate ${
-                            currentThreadId === thread.id ? 'text-white' : 'text-black'
-                          }`}>
-                            [{type}] {summary}
-                          </p>
-                          <p className={`text-xs truncate ${
-                            currentThreadId === thread.id ? 'text-gray-200' : 'text-gray-500'
-                          }`}>
-                            {formattedDate}
-                          </p>
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteThread(thread.id);
-                          }}
-                          className={`p-1 rounded ${
-                            currentThreadId === thread.id
-                              ? 'hover:bg-white/20'
-                              : 'hover:bg-gray-200'
-                          }`}
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
+                        <span className={`truncate text-sm font-medium ${currentThreadId === thread.id ? 'text-white' : 'text-black'}`}>{summary}</span>
+                        <span className={`ml-2 text-xs whitespace-nowrap ${currentThreadId === thread.id ? 'text-white' : 'text-gray-500'}`}>{formattedDate}</span>
                       </div>
+                      
+                      {/* Thread Menu */}
+                      {showThreadMenu === thread.id && (
+                        <div className="thread-menu-container absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[120px]">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              togglePinThread(thread.id);
+                            }}
+                            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 flex items-center space-x-2"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                            </svg>
+                            <span>{isPinned ? 'Unpin' : 'Pin'}</span>
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteThread(thread.id);
+                            }}
+                            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 flex items-center space-x-2 text-red-600"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            <span>Delete</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -889,8 +1007,17 @@ const AIChat = ({ onNavigateToTab, initialMessages }) => {
               case 'user':
                 return <MessageBubble key={message.id} message={message} />;
               case 'ai':
-                return <MessageBubble key={message.id} message={message} fetchListForMessage={fetchListForMessage} listState={listByMessageId[message.id]} />;
+                return <MessageBubble key={message.id} message={message} />;
               case 'calendar_events':
+                // Handle Google Calendar disconnect error
+                if (message.content && message.content.error === 'google_calendar_disconnected') {
+                  return (
+                    <div key={message.id} className="p-4 bg-red-100 rounded-lg">
+                      <p className="font-semibold text-red-700">Your Google Calendar connection has expired or been revoked.</p>
+                      <p className="text-red-700">Please reconnect your Google account in settings to restore calendar features.</p>
+                    </div>
+                  );
+                }
                 return (
                   <div key={message.id} className="p-4 bg-blue-100 rounded-lg">
                     <p className="font-semibold">Here are your upcoming events:</p>
@@ -981,7 +1108,7 @@ const AIChat = ({ onNavigateToTab, initialMessages }) => {
   );
 };
 
-const MessageBubble = ({ message, fetchListForMessage, listState }) => {
+const MessageBubble = ({ message }) => {
   // Helper to detect and parse Markdown JSON code blocks - now handles multiple JSON objects
   const extractJsonFromCodeBlock = (content) => {
     const codeBlockMatches = content.match(/```json\s*([\s\S]*?)\s*```/gi);
@@ -1001,26 +1128,7 @@ const MessageBubble = ({ message, fetchListForMessage, listState }) => {
     return null;
   };
 
-  // New: If this is a 'read task' or 'read goal' code block, fetch list on first render
-  useEffect(() => {
-    const jsonObjects = extractJsonFromCodeBlock(message.content);
-    if (
-      jsonObjects &&
-      jsonObjects.length > 0 &&
-      fetchListForMessage &&
-      !listState // Only fetch if not already fetched
-    ) {
-      // Check if any of the JSON objects are read actions
-      const readAction = jsonObjects.find(json => 
-        json.action_type === 'read' && 
-        (json.entity_type === 'task' || json.entity_type === 'goal')
-      );
-      
-      if (readAction) {
-        fetchListForMessage(message.id, readAction.entity_type);
-      }
-    }
-  }, [message, fetchListForMessage, listState]);
+  // Remove useEffect that fetches list for read_goal/read_task
 
   const formatAIContent = (content = '') => {
     const jsonObjects = extractJsonFromCodeBlock(content);
@@ -1100,25 +1208,11 @@ const MessageBubble = ({ message, fetchListForMessage, listState }) => {
   } else {
     // AI message: left-justified, full-width, no bubble
     const jsonObjects = extractJsonFromCodeBlock(message.content);
-    const readTask = jsonObjects && jsonObjects.find(json => json.action_type === 'read' && json.entity_type === 'task');
-    const isReadTask = !!readTask;
-    const isReadGoal = jsonObjects && jsonObjects.some(json => json.action_type === 'read' && json.entity_type === 'goal');
-    const hasActions = jsonObjects && jsonObjects.length > 0;
-    // --- ADDED: Render goals from message.actions if present ---
-    let goals = [];
-    if (message.actions && Array.isArray(message.actions)) {
-      const readGoalAction = message.actions.find(
-        a => a.action_type === 'read' && a.entity_type === 'goal'
-      );
-      if (readGoalAction) {
-        if (Array.isArray(readGoalAction.details)) {
-          goals = readGoalAction.details;
-        } else if (Array.isArray(readGoalAction.details?.goals)) {
-          goals = readGoalAction.details.goals;
-        }
-      }
+    const readGoal = jsonObjects && jsonObjects.find(json => json.action_type === 'read' && json.entity_type === 'goal');
+    let goalTitles = [];
+    if (readGoal && readGoal.details && Array.isArray(readGoal.details.goals)) {
+      goalTitles = readGoal.details.goals;
     }
-    // --- END ADDED ---
     return (
       <div className="flex">
         <div className="w-full text-left">
@@ -1127,53 +1221,11 @@ const MessageBubble = ({ message, fetchListForMessage, listState }) => {
             style={{ background: 'none', borderRadius: 0, padding: 0, marginLeft: 0, marginRight: 0 }}
             dangerouslySetInnerHTML={{ __html: formatAIContent(message.content) }}
           />
-          {/* Render task or goal list if this is a read-task or read-goal action */}
-          {(isReadTask || isReadGoal) && (
-            <div className="mt-2">
-              {/* Always use tasks from the code block if present */}
-              {isReadTask && Array.isArray(readTask.details?.tasks) && readTask.details.tasks.length > 0 && (
-                <ul className="list-disc pl-5 text-sm mt-1">
-                  {readTask.details.tasks.map((item) => (
-                    <li key={item.id} className={item.completed ? 'line-through text-gray-400' : ''}>
-                      {item.title}
-                      {item.due_date && (
-                        <span className="ml-2 text-xs text-gray-500">(Due: {new Date(item.due_date).toLocaleDateString()})</span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {isReadTask && Array.isArray(readTask.details?.tasks) && readTask.details.tasks.length === 0 && (
-                <div className="text-xs text-gray-500">No tasks found.</div>
-              )}
-              {/* Fallback to listState for goals */}
-              {isReadGoal && listState?.items && Array.isArray(listState.items) && listState.items.length > 0 && (
-                <ul className="list-disc pl-5 text-sm mt-1">
-                  {listState.items.map((item) => (
-                    <li key={item.id} className={item.completed ? 'line-through text-gray-400' : ''}>
-                      {item.title}
-                      {item.due_date && (
-                        <span className="ml-2 text-xs text-gray-500">(Due: {new Date(item.due_date).toLocaleDateString()})</span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {isReadGoal && listState?.items && Array.isArray(listState.items) && listState.items.length === 0 && (
-                <div className="text-xs text-gray-500">No goals found.</div>
-              )}
-            </div>
-          )}
-          {/* Render goals from message.actions if present */}
-          {goals.length > 0 && (
+          {/* Only render goal titles from backend/AI response */}
+          {goalTitles.length > 0 && (
             <ul className="list-disc pl-5 text-sm mt-1">
-              {goals.map(goal => (
-                <li key={goal.id}>
-                  <strong>{goal.title}</strong>
-                  {goal.description && (
-                    <div className="text-xs text-gray-500">{goal.description}</div>
-                  )}
-                </li>
+              {goalTitles.map((title, idx) => (
+                <li key={idx}><strong>{title}</strong></li>
               ))}
             </ul>
           )}

@@ -69,7 +69,7 @@ export const calendarAPI = {
 export const aiAPI = {
   sendMessage: (message, threadId) => api.post('/ai/chat', { message, threadId }),
   getGoalSuggestions: (goalTitle) => api.post('/ai/goal-suggestions', { goalTitle }),
-  createThread: (title, summary) => api.post('/ai/threads', { title, summary }),
+  createThread: ({ title, summary, messages }) => api.post('/ai/threads', { title, summary, messages }),
   recommendTask: (userRequest) => api.post('/ai/recommend-task', { userRequest }),
 };
 
@@ -77,7 +77,7 @@ export const aiAPI = {
 export const conversationsAPI = {
   getThreads: () => api.get('/conversations/threads'),
   getThread: (threadId) => api.get(`/conversations/threads/${threadId}`),
-  createThread: (title, summary) => api.post('/conversations/threads', { title, summary }),
+  createThread: ({ title, summary, messages }) => api.post('/conversations/threads', { title, summary, messages }),
   addMessage: (threadId, content, role, metadata) => api.post(`/conversations/threads/${threadId}/messages`, { content, role, metadata }),
   updateThread: (threadId, updates) => api.put(`/conversations/threads/${threadId}`, updates),
   deleteThread: (threadId) => api.delete(`/conversations/threads/${threadId}`),
