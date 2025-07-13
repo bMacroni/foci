@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { goalsAPI } from '../services/api';
 import GoalForm from './GoalForm';
+import GoalBreakdownAssistant from './GoalBreakdownAssistant';
 
 const GoalList = ({ showSuccess }) => {
   const [goals, setGoals] = useState([]);
@@ -288,6 +289,8 @@ const GoalList = ({ showSuccess }) => {
                         </div>
                       )}
                       
+                      <GoalBreakdownAssistant goal={goal} subTasks={goal.subTasks || []} onSave={() => {}} />
+
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center space-x-2 text-sm text-gray-500">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

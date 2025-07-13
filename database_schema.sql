@@ -93,6 +93,29 @@ CREATE TABLE public.email_digest_logs (
     error_message TEXT
 );
 
+
+-- Milestones table: Each milestone belongs to a goal
+CREATE TABLE IF NOT EXISTS milestones (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    goal_id UUID NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    "order" INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    metadata JSONB
+);
+
+-- Steps table: Each step belongs to a milestone
+CREATE TABLE IF NOT EXISTS steps (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    milestone_id UUID NOT NULL REFERENCES milestones(id) ON DELETE CASCADE,
+    text VARCHAR(255) NOT NULL,
+    "order" INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    metadata JSONB
+);
+
 -- Create indexes for better performance
 CREATE INDEX idx_goals_user_id ON public.goals(user_id);
 CREATE INDEX idx_goals_category ON public.goals(category);

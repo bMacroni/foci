@@ -84,6 +84,106 @@ export const conversationsAPI = {
   getStats: () => api.get('/conversations/stats'),
 };
 
+// Milestones API
+export const milestonesAPI = {
+  create: async (goalId, milestoneData, token) => {
+    const res = await fetch(`/api/goals/${goalId}/milestones`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(milestoneData),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+  update: async (milestoneId, milestoneData, token) => {
+    const res = await fetch(`/api/goals/milestones/${milestoneId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(milestoneData),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+  delete: async (milestoneId, token) => {
+    const res = await fetch(`/api/goals/milestones/${milestoneId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+  readAll: async (goalId, token) => {
+    const res = await fetch(`/api/goals/${goalId}/milestones`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+  lookup: async ({ milestoneId, goalId, title, token }) => {
+    let url;
+    if (milestoneId) {
+      url = `/api/goals/milestones/${milestoneId}`;
+    } else if (goalId && title) {
+      url = `/api/goals/${goalId}/milestones/lookup?title=${encodeURIComponent(title)}`;
+    } else {
+      throw new Error('Must provide milestoneId or goalId and title');
+    }
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+};
+
+// Steps API
+export const stepsAPI = {
+  create: async (milestoneId, stepData, token) => {
+    const res = await fetch(`/api/goals/milestones/${milestoneId}/steps`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(stepData),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+  update: async (stepId, stepData, token) => {
+    const res = await fetch(`/api/goals/steps/${stepId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(stepData),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+  delete: async (stepId, token) => {
+    const res = await fetch(`/api/goals/steps/${stepId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+  readAll: async (milestoneId, token) => {
+    const res = await fetch(`/api/goals/milestones/${milestoneId}/steps`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+  lookup: async ({ stepId, milestoneId, text, token }) => {
+    let url;
+    if (stepId) {
+      url = `/api/goals/steps/${stepId}`;
+    } else if (milestoneId && text) {
+      url = `/api/goals/milestones/${milestoneId}/steps/lookup?text=${encodeURIComponent(text)}`;
+    } else {
+      throw new Error('Must provide stepId or milestoneId and text');
+    }
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+};
+
 // Health check
 export const healthCheck = () => api.get('/health');
 
