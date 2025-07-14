@@ -4,6 +4,8 @@ import remarkGfm from 'remark-gfm';
 import { goalsAPI } from '../services/api';
 import GoalForm from './GoalForm';
 import GoalBreakdownAssistant from './GoalBreakdownAssistant';
+import { milestonesAPI } from '../services/api';
+import { stepsAPI } from '../services/api';
 
 const GoalList = ({ showSuccess }) => {
   const [goals, setGoals] = useState([]);
@@ -11,6 +13,7 @@ const GoalList = ({ showSuccess }) => {
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingGoal, setEditingGoal] = useState(null);
+  const [progressByGoal, setProgressByGoal] = useState({});
 
   // Category configuration with icons and colors
   const categoryConfig = {
@@ -98,6 +101,71 @@ const GoalList = ({ showSuccess }) => {
   useEffect(() => {
     fetchGoals();
   }, []);
+
+  // Fetch milestones and steps for each goal to calculate progress
+  useEffect(() => {
+    const fetchProgress = async () => {
+      const progressMap = {};
+      for (const goal of goals) {
+        try {
+          const token = localStorage.getItem('jwt_token') || '';
+          const milestones = await milestonesAPI.readAll(goal.id, token);
+          let totalSteps = 0;
+          let completedSteps = 0;
+          for (const milestone of milestones) {
+            const steps = await stepsAPI.readAll(milestone.id, token);
+            totalSteps += steps.length;
+            completedSteps += steps.filter(s => s.completed).length;
+          }
+          progressMap[goal.id] = {
+            total: totalSteps,
+            completed: completedSteps,
+            percent: totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0
+          };
+        } catch (e) {
+          progressMap[goal.id] = { total: 0, completed: 0, percent: 0 };
+        }
+      }
+      setProgressByGoal(progressMap);
+    };
+    if (goals.length > 0) fetchProgress();
+  }, [goals]);
+
+  // Add a function to refresh progress for a specific goal
+  const refreshProgressForGoal = async (goalId) => {
+    console.log('refreshProgressForGoal: Called for goalId:', goalId);
+    try {
+      const token = localStorage.getItem('jwt_token') || '';
+      console.log('refreshProgressForGoal: Fetching milestones for goal:', goalId);
+      const milestones = await milestonesAPI.readAll(goalId, token);
+      console.log('refreshProgressForGoal: Milestones data:', milestones);
+      
+      let totalSteps = 0;
+      let completedSteps = 0;
+      for (const milestone of milestones) {
+        console.log('refreshProgressForGoal: Fetching steps for milestone:', milestone.id);
+        const steps = await stepsAPI.readAll(milestone.id, token);
+        console.log('refreshProgressForGoal: Steps for milestone', milestone.id, ':', steps);
+        totalSteps += steps.length;
+        completedSteps += steps.filter(s => s.completed).length;
+      }
+      
+      const newProgress = {
+        total: totalSteps,
+        completed: completedSteps,
+        percent: totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0
+      };
+      
+      console.log('refreshProgressForGoal: Calculated progress:', newProgress);
+      setProgressByGoal(prev => ({
+        ...prev,
+        [goalId]: newProgress
+      }));
+      console.log('refreshProgressForGoal: Updated progressByGoal state');
+    } catch (e) {
+      console.error('refreshProgressForGoal: Error refreshing progress for goal:', goalId, e);
+    }
+  };
 
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this goal?')) {
@@ -223,9 +291,10 @@ const GoalList = ({ showSuccess }) => {
                   <span className="text-sm text-gray-500">({categoryGoals.length} goal{categoryGoals.length !== 1 ? 's' : ''})</span>
                 </div>
                 
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {/* Change from grid to vertical stack for full-width cards */}
+                <div className="flex flex-col gap-6">
                   {categoryGoals.map((goal) => (
-                    <div key={goal.id} className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl border border-black/10 p-6 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
+                    <div key={goal.id} className="w-full bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl border border-black/10 p-6 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 mx-auto">
                       <div className="flex justify-between items-start mb-4">
                         <h3 className="text-xl font-bold text-black leading-tight">{goal.title}</h3>
                         <div className="flex space-x-1">
@@ -289,7 +358,7 @@ const GoalList = ({ showSuccess }) => {
                         </div>
                       )}
                       
-                      <GoalBreakdownAssistant goal={goal} subTasks={goal.subTasks || []} onSave={() => {}} />
+                      <GoalBreakdownAssistant goal={goal} subTasks={goal.subTasks || []} onSave={() => {}} refreshProgress={refreshProgressForGoal} />
 
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center space-x-2 text-sm text-gray-500">
@@ -307,6 +376,22 @@ const GoalList = ({ showSuccess }) => {
                           }`}></div>
                           {goal.completed ? 'Completed' : 'In Progress'}
                         </span>
+                      </div>
+
+                      {/* Progress Bar */}
+                      <div className="mb-4">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-semibold text-gray-700">Progress</span>
+                          <span className="text-xs font-semibold text-gray-700">
+                            {progressByGoal[goal.id]?.percent ?? 0}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2.5">
+                          <div
+                            className="bg-green-500 h-2.5 rounded-full transition-all duration-300"
+                            style={{ width: `${progressByGoal[goal.id]?.percent ?? 0}%` }}
+                          ></div>
+                        </div>
                       </div>
                     </div>
                   ))}

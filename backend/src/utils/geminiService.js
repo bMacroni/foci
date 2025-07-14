@@ -250,6 +250,116 @@ RESPONSE GUIDELINES: When responding after executing function calls, use present
   }
 
   /**
+   * Generate goal breakdown suggestions using Gemini AI
+   * @param {string} goalTitle - The goal title
+   * @param {string} goalDescription - Optional goal description
+   * @returns {Promise<Object>} breakdown with milestones and steps
+   */
+  async generateGoalBreakdown(goalTitle, goalDescription = '') {
+    if (!this.enabled) {
+      return {
+        milestones: [
+          {
+            title: 'Break down your goal into smaller steps',
+            steps: [
+              { text: 'Start with the very first action you can take' },
+              { text: 'Identify what you need to learn or prepare' },
+              { text: 'Set a specific deadline for each step' }
+            ]
+          }
+        ]
+      };
+    }
+
+    try {
+      const prompt = `You are an AI assistant helping users break down their goals into manageable milestones and steps. This is especially important for users who may struggle with anxiety, depression, or feeling overwhelmed by large goals.
+
+Goal: "${goalTitle}"
+${goalDescription ? `Description: "${goalDescription}"` : ''}
+
+Please create a structured breakdown with 3-5 milestones, each containing 2-4 specific, actionable steps. Consider:
+
+1. **Mental Health Awareness**: Break goals into very small, achievable steps that won't overwhelm someone with anxiety or depression
+2. **Progress Focus**: Each step should feel like a win when completed
+3. **Flexibility**: Include steps that can be adjusted based on energy levels
+4. **Self-Care**: Include steps that acknowledge the user's well-being
+5. **Realistic Timeline**: Consider that some days will be harder than others
+
+Respond with ONLY a JSON object in this exact format:
+{
+  "milestones": [
+    {
+      "title": "Milestone title (clear, encouraging)",
+      "steps": [
+        { "text": "Specific, small action step" },
+        { "text": "Another specific action step" }
+      ]
+    }
+  ]
+}
+
+Make the milestones and steps specific to this goal, encouraging, and achievable even on difficult days.`;
+
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text ? await response.text() : '';
+
+      // Try to parse the JSON response
+      try {
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const breakdown = JSON.parse(jsonMatch[0]);
+          
+          // Validate the structure
+          if (breakdown.milestones && Array.isArray(breakdown.milestones)) {
+            // Add order numbers to milestones and steps
+            breakdown.milestones = breakdown.milestones.map((milestone, index) => ({
+              ...milestone,
+              order: index + 1,
+              steps: milestone.steps.map((step, stepIndex) => ({
+                ...step,
+                order: stepIndex + 1
+              }))
+            }));
+            
+            return breakdown;
+          }
+        }
+      } catch (parseError) {
+        console.error('Failed to parse Gemini response:', parseError);
+      }
+
+      // Fallback if parsing fails
+      return {
+        milestones: [
+          {
+            title: 'Start Small',
+            order: 1,
+            steps: [
+              { text: 'Identify the very first thing you can do', order: 1 },
+              { text: 'Set a specific time to start', order: 2 },
+              { text: 'Celebrate completing this first step', order: 3 }
+            ]
+          },
+          {
+            title: 'Build Momentum',
+            order: 2,
+            steps: [
+              { text: 'Plan your next small action', order: 1 },
+              { text: 'Create a simple checklist', order: 2 },
+              { text: 'Track your progress', order: 3 }
+            ]
+          }
+        ]
+      };
+
+    } catch (error) {
+      console.error('Error generating goal breakdown:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Map Gemini function call to backend logic and execute.
    */
   async _executeFunctionCall(functionCall, userId, userContext) {
@@ -279,7 +389,6 @@ RESPONSE GUIDELINES: When responding after executing function calls, use present
         case 'lookup_goal':
           return await goalsController.lookupGoalbyTitle(userId, userContext.token);
         case 'read_goal':
-          // Use the new utility function, pass userId and token from userContext
           return await goalsController.getGoalsForUser(userId, userContext.token);
         case 'create_calendar_event':
           return await calendarService.createCalendarEventFromAI(args, userId, userContext);

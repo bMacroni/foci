@@ -69,6 +69,7 @@ export const calendarAPI = {
 export const aiAPI = {
   sendMessage: (message, threadId) => api.post('/ai/chat', { message, threadId }),
   getGoalSuggestions: (goalTitle) => api.post('/ai/goal-suggestions', { goalTitle }),
+  getGoalBreakdown: (goalTitle, goalDescription) => api.post('/ai/goal-breakdown', { goalTitle, goalDescription }),
   createThread: ({ title, summary, messages }) => api.post('/ai/threads', { title, summary, messages }),
   recommendTask: (userRequest) => api.post('/ai/recommend-task', { userRequest }),
 };
@@ -146,13 +147,21 @@ export const stepsAPI = {
     return res.json();
   },
   update: async (stepId, stepData, token) => {
+    console.log('stepsAPI.update: Making request to update step:', stepId, 'with data:', stepData);
     const res = await fetch(`/api/goals/steps/${stepId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(stepData),
     });
-    if (!res.ok) throw new Error(await res.text());
-    return res.json();
+    console.log('stepsAPI.update: Response status:', res.status);
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error('stepsAPI.update: Error response:', errorText);
+      throw new Error(errorText);
+    }
+    const result = await res.json();
+    console.log('stepsAPI.update: Success response:', result);
+    return result;
   },
   delete: async (stepId, token) => {
     const res = await fetch(`/api/goals/steps/${stepId}`, {

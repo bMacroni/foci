@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import GoalBreakdownForm from './GoalBreakdownForm';
 import { milestonesAPI } from '../services/api';
 
-export default function GoalBreakdownAssistant({ goal, onSave }) {
+export default function GoalBreakdownAssistant({ goal, onSave, refreshProgress }) {
   const [expanded, setExpanded] = useState(false);
   const [milestones, setMilestones] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -14,9 +14,13 @@ export default function GoalBreakdownAssistant({ goal, onSave }) {
     setError('');
     try {
       // TODO: Replace with real auth token
-      const token = localStorage.getItem('authToken') || '';
+      const token = localStorage.getItem('jwt_token') || '';
       const data = await milestonesAPI.readAll(goal.id, token);
       setMilestones(data);
+      // Refresh progress after milestones are reloaded
+      if (refreshProgress) {
+        await refreshProgress(goal.id);
+      }
     } catch (err) {
       setError('Failed to load milestones');
     } finally {

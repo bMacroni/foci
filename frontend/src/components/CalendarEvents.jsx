@@ -3,6 +3,8 @@ import { calendarAPI } from '../services/api';
 import SuccessToast from './SuccessToast';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
+import * as dateFnsTz from 'date-fns-tz';
+console.log('dateFnsTz exports:', dateFnsTz);
 
 const CalendarEvents = () => {
   const [events, setEvents] = useState([]);
@@ -13,15 +15,21 @@ const CalendarEvents = () => {
   const [dragging, setDragging] = useState(false);
   const calendarRef = useRef(null);
   const [editingEvent, setEditingEvent] = useState(null);
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const CST_TIMEZONE = 'America/Chicago';
+  const [currentTime, setCurrentTime] = useState(() => {
+    // Use date-fns-tz to get CST time, always pass UTC string
+    return dateFnsTz.toZonedTime(new Date().toISOString(), CST_TIMEZONE);
+  });
 
   useEffect(() => {
     loadEvents();
   }, []);
 
-  // Update current time every minute
+  // Update current time every minute, always in CST
   useEffect(() => {
-    const interval = setInterval(() => setCurrentTime(new Date()), 60000);
+    const interval = setInterval(() => {
+      setCurrentTime(dateFnsTz.toZonedTime(new Date().toISOString(), CST_TIMEZONE));
+    }, 60000);
     return () => clearInterval(interval);
   }, []);
 
@@ -669,15 +677,24 @@ const CalendarEvents = () => {
             <div className="min-w-[900px] relative">
               {/* Current time line overlay */}
               {(() => {
-                // Only show if today is in rangeDays
-                const todayIdx = rangeDays.findIndex(day => isToday(day));
+                // Only show if today is in rangeDays (in CST)
+                const todayCST = dateFnsTz.toZonedTime(new Date().toISOString(), CST_TIMEZONE);
+                const todayIdx = rangeDays.findIndex(day =>
+                  day.getFullYear() === todayCST.getFullYear() &&
+                  day.getMonth() === todayCST.getMonth() &&
+                  day.getDate() === todayCST.getDate()
+                );
                 if (todayIdx === -1) return null;
                 // Calculate vertical position
                 const startHour = 4;
                 const endHour = 22;
                 const totalMinutes = (endHour - startHour) * 60;
                 const now = currentTime;
-                if (!isToday(now)) return null;
+                if (
+                  now.getFullYear() !== todayCST.getFullYear() ||
+                  now.getMonth() !== todayCST.getMonth() ||
+                  now.getDate() !== todayCST.getDate()
+                ) return null;
                 const minutesSinceStart = (now.getHours() - startHour) * 60 + now.getMinutes();
                 if (minutesSinceStart < 0 || minutesSinceStart > totalMinutes) return null;
                 // Height of one minute in px (based on slotHeight=22 for 15min slots)

@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 
 export async function createStep(req, res) {
   const { milestoneId } = req.params;
-  const { text, order } = req.body;
+  const { text, order, completed = false } = req.body;
   const token = req.headers.authorization?.split(' ')[1];
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
     global: { headers: { Authorization: `Bearer ${token}` } }
@@ -10,7 +10,7 @@ export async function createStep(req, res) {
 
   const { data, error } = await supabase
     .from('steps')
-    .insert([{ milestone_id: milestoneId, text, order }])
+    .insert([{ milestone_id: milestoneId, text, order, completed }])
     .select()
     .single();
 
@@ -20,20 +20,35 @@ export async function createStep(req, res) {
 
 export async function updateStep(req, res) {
   const { stepId } = req.params;
-  const { text, order } = req.body;
+  const { text, order, completed } = req.body;
   const token = req.headers.authorization?.split(' ')[1];
+  
+  console.log('updateStep: Received request for stepId:', stepId);
+  console.log('updateStep: Request body:', req.body);
+  console.log('updateStep: Token present:', !!token);
+  
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
     global: { headers: { Authorization: `Bearer ${token}` } }
   });
 
+  const updateFields = { text, order, updated_at: new Date().toISOString() };
+  if (typeof completed === 'boolean') updateFields.completed = completed;
+  
+  console.log('updateStep: Update fields:', updateFields);
+  
   const { data, error } = await supabase
     .from('steps')
-    .update({ text, order, updated_at: new Date().toISOString() })
+    .update(updateFields)
     .eq('id', stepId)
     .select()
     .single();
 
-  if (error) return res.status(400).json({ error: error.message });
+  if (error) {
+    console.error('updateStep: Supabase error:', error);
+    return res.status(400).json({ error: error.message });
+  }
+  
+  console.log('updateStep: Successfully updated step:', data);
   res.json(data);
 }
 

@@ -219,6 +219,48 @@ router.post('/goal-suggestions', requireAuth, async (req, res) => {
   }
 });
 
+// Goal breakdown suggestions endpoint
+router.post('/goal-breakdown', requireAuth, async (req, res) => {
+  try {
+    const { goalTitle, goalDescription } = req.body;
+    const userId = req.user.id;
+
+    if (!goalTitle || typeof goalTitle !== 'string') {
+      return res.status(400).json({ 
+        error: 'Goal title is required and must be a string' 
+      });
+    }
+
+    console.log(`Goal Breakdown - User ${userId}: ${goalTitle}`);
+
+    // Generate breakdown suggestions using Gemini
+    let breakdown;
+    try {
+      breakdown = await geminiService.generateGoalBreakdown(goalTitle, goalDescription);
+      console.log(`Goal breakdown generated for: ${goalTitle}`);
+    } catch (error) {
+      console.error('Goal breakdown generation failed:', error);
+      return res.status(500).json({ 
+        error: 'Failed to generate goal breakdown',
+        message: "I'm sorry, I couldn't generate a breakdown right now. Please try again."
+      });
+    }
+
+    res.json({
+      breakdown: breakdown,
+      goalTitle: goalTitle,
+      goalDescription: goalDescription
+    });
+
+  } catch (error) {
+    console.error('Goal Breakdown Error:', error);
+    res.status(500).json({ 
+      error: 'Failed to generate breakdown',
+      message: "I'm sorry, I couldn't generate a breakdown right now. Please try again."
+    });
+  }
+});
+
 // Health check for AI service
 router.get('/health', requireAuth, (req, res) => {
   res.json({ 
