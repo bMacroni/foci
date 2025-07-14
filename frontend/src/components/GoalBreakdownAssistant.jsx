@@ -36,14 +36,21 @@ export default function GoalBreakdownAssistant({ goal, onSave, refreshProgress }
   return (
     <div className="my-2">
       {!expanded ? (
-        <button
-          className="text-sm text-blue-700 underline hover:text-blue-900"
-          onClick={() => setExpanded(true)}
-        >
-          {milestones.length
-            ? `Goal Breakdown: ${milestones.length} milestones defined. [Expand ▼]`
-            : 'Break Down This Goal ▼'}
-        </button>
+        <div className="flex items-center gap-3">
+          {milestones.length > 0 && (
+            <span className="text-sm text-gray-500">{milestones.length} milestone{milestones.length > 1 ? 's' : ''} defined</span>
+          )}
+          <button
+            className="px-4 py-2 bg-blue-100 text-blue-700 rounded-2xl hover:bg-blue-200 transition-all flex items-center gap-2 text-sm font-medium shadow-sm"
+            onClick={() => setExpanded(true)}
+            title="Expand Goal Breakdown"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8v8h16V8M4 8l8 8 8-8" />
+            </svg>
+            Expand
+          </button>
+        </div>
       ) : (
         <GoalBreakdownForm
           goal={goal}

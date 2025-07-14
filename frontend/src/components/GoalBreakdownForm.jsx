@@ -105,27 +105,30 @@ export default function GoalBreakdownForm({ goal, initialMilestones = [], onSave
 
   return (
     <DndProvider backend={HTML5Backend}>
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-4">
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 space-y-6">
         {/* Step 1: Main Goal Statement */}
         <div>
-          <label className="block text-xs font-semibold text-gray-600 mb-1">Main Goal</label>
+          <label className="block text-base font-semibold text-gray-700 mb-2">Main Goal</label>
           <input
-            className="w-full border rounded px-2 py-1 text-sm"
+            className="w-full border rounded px-3 py-2 text-lg"
             value={mainGoal}
             onChange={e => setMainGoal(e.target.value)}
           />
         </div>
 
         {/* AI Suggestions Section */}
-        <div className="border-t pt-4">
-          <div className="flex items-center justify-between mb-3">
-            <label className="block text-xs font-semibold text-gray-600">AI-Powered Breakdown</label>
+        <div className="border-t pt-6">
+          <div className="flex items-center justify-between mb-4">
+            <label className="block text-base font-semibold text-gray-700">AI-Powered Breakdown</label>
             <button
-              className="text-xs bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 disabled:opacity-50"
+              className="px-5 py-2 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 disabled:opacity-50 shadow-md transition-all flex items-center gap-2"
               onClick={generateAISuggestions}
               disabled={aiLoading}
+              title="Get AI Suggestions"
             >
-              {aiLoading ? 'Generating...' : '🤖 Get AI Suggestions'}
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m0 14v1m8-8h1M4 12H3m15.364-6.364l.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M9 12a3 3 0 106 0 3 3 0 00-6 0z" />
+              </svg>
             </button>
           </div>
           
@@ -170,10 +173,10 @@ export default function GoalBreakdownForm({ goal, initialMilestones = [], onSave
 
         {/* Step 2: Milestones */}
         <div>
-          <label className="block text-xs font-semibold text-gray-600 mb-1">Milestones</label>
-          {loading && <div className="text-xs text-gray-400">Loading milestones...</div>}
-          {error && <div className="text-xs text-red-500">{error}</div>}
-          <div className="space-y-4">
+          <label className="block text-base font-semibold text-gray-700 mb-2">Milestones</label>
+          {loading && <div className="text-base text-gray-400">Loading milestones...</div>}
+          {error && <div className="text-base text-red-500">{error}</div>}
+          <div className="space-y-6">
             {/* Only show milestones up to the first incomplete one */}
             {(() => {
               let showNext = true;
@@ -205,8 +208,8 @@ export default function GoalBreakdownForm({ goal, initialMilestones = [], onSave
               return <>
                 {milestoneNodes}
                 {hiddenCount > 0 && (
-                  <div className="flex items-center mt-2 text-sm text-gray-500 bg-blue-50 border border-blue-200 rounded-xl px-3 py-2">
-                    <svg className="w-5 h-5 mr-2 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="flex items-center mt-2 text-base text-gray-500 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
+                    <svg className="w-6 h-6 mr-2 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M12 20a8 8 0 100-16 8 8 0 000 16z" />
                     </svg>
                     {hiddenCount} more milestone{hiddenCount > 1 ? 's' : ''} will unlock as you progress.
@@ -216,26 +219,35 @@ export default function GoalBreakdownForm({ goal, initialMilestones = [], onSave
             })()}
           </div>
           <button
-            className="mt-2 text-xs text-blue-700 underline hover:text-blue-900"
+            className="mt-4 px-5 py-2 bg-green-600 text-white rounded-2xl hover:bg-green-700 transition-all shadow-md flex items-center gap-2"
             onClick={handleAddMilestone}
+            title="Add another milestone"
           >
-            + Add another milestone
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
           </button>
         </div>
 
         {/* Save/Cancel */}
-        <div className="flex space-x-2 mt-4">
+        <div className="flex space-x-4 mt-6 justify-end">
           <button
-            className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 text-sm"
-            onClick={() => onSave(mainGoal, initialMilestones)}
+            className="px-5 py-2 bg-gray-200 text-gray-700 rounded-2xl hover:bg-gray-300 transition-all shadow-md flex items-center gap-2"
+            onClick={onCancel}
+            title="Cancel"
           >
-            Save Breakdown
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
           <button
-            className="bg-gray-200 text-gray-700 px-3 py-1 rounded hover:bg-gray-300 text-sm"
-            onClick={onCancel}
+            className="px-5 py-2 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-all shadow-md flex items-center gap-2"
+            onClick={() => onSave(mainGoal, initialMilestones)}
+            title="Save Breakdown"
           >
-            Cancel
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
           </button>
         </div>
       </div>

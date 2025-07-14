@@ -168,7 +168,16 @@ export default function MilestoneRow({ milestone, onChange, onDelete, onMoveUp, 
             />
           ))}
         </div>
-        <button className="mt-1 text-xs text-blue-700 underline hover:text-blue-900" onClick={handleAddStep}>+ Add step</button>
+        <button
+          className="mt-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-2xl hover:bg-blue-200 transition-all flex items-center gap-2 text-base font-medium shadow-sm"
+          onClick={handleAddStep}
+          title="Add step"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+          </svg>
+          Add step
+        </button>
       </div>
     </div>
   );
