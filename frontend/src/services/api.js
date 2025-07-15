@@ -88,7 +88,7 @@ export const conversationsAPI = {
 // Milestones API
 export const milestonesAPI = {
   create: async (goalId, milestoneData, token) => {
-    const res = await fetch(`${API_BASE_URL}/api/goals/${goalId}/milestones`, {
+    const res = await fetch(`${API_BASE_URL}/goals/${goalId}/milestones`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(milestoneData),
@@ -97,7 +97,7 @@ export const milestonesAPI = {
     return res.json();
   },
   update: async (milestoneId, milestoneData, token) => {
-    const res = await fetch(`${API_BASE_URL}/api/goals/milestones/${milestoneId}`, {
+    const res = await fetch(`${API_BASE_URL}/goals/milestones/${milestoneId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(milestoneData),
@@ -106,7 +106,7 @@ export const milestonesAPI = {
     return res.json();
   },
   delete: async (milestoneId, token) => {
-    const res = await fetch(`${API_BASE_URL}/api/goals/milestones/${milestoneId}`, {
+    const res = await fetch(`${API_BASE_URL}/goals/milestones/${milestoneId}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -114,7 +114,7 @@ export const milestonesAPI = {
     return res.json();
   },
   readAll: async (goalId, token) => {
-    const res = await fetch(`/api/goals/${goalId}/milestones`, {
+    const res = await fetch(`${API_BASE_URL}/goals/${goalId}/milestones`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) throw new Error(await res.text());
@@ -123,9 +123,9 @@ export const milestonesAPI = {
   lookup: async ({ milestoneId, goalId, title, token }) => {
     let url;
     if (milestoneId) {
-      url = `/api/goals/milestones/${milestoneId}`;
+      url = `${API_BASE_URL}/goals/milestones/${milestoneId}`;
     } else if (goalId && title) {
-      url = `/api/goals/${goalId}/milestones/lookup?title=${encodeURIComponent(title)}`;
+      url = `${API_BASE_URL}/goals/${goalId}/milestones/lookup?title=${encodeURIComponent(title)}`;
     } else {
       throw new Error('Must provide milestoneId or goalId and title');
     }
@@ -138,7 +138,7 @@ export const milestonesAPI = {
 // Steps API
 export const stepsAPI = {
   create: async (milestoneId, stepData, token) => {
-    const res = await fetch(`${API_BASE_URL}/api/goals/milestones/${milestoneId}/steps`, {
+    const res = await fetch(`${API_BASE_URL}/goals/milestones/${milestoneId}/steps`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(stepData),
@@ -148,7 +148,7 @@ export const stepsAPI = {
   },
   update: async (stepId, stepData, token) => {
     console.log('stepsAPI.update: Making request to update step:', stepId, 'with data:', stepData);
-    const res = await fetch(`${API_BASE_URL}/api/goals/steps/${stepId}`, {
+    const res = await fetch(`${API_BASE_URL}/goals/steps/${stepId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(stepData),
@@ -164,7 +164,7 @@ export const stepsAPI = {
     return result;
   },
   delete: async (stepId, token) => {
-    const res = await fetch(`${API_BASE_URL}/api/goals/steps/${stepId}`, {
+    const res = await fetch(`${API_BASE_URL}/goals/steps/${stepId}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -172,7 +172,7 @@ export const stepsAPI = {
     return res.json();
   },
   readAll: async (milestoneId, token) => {
-    const res = await fetch(`${API_BASE_URL}/api/goals/milestones/${milestoneId}/steps`, {
+    const res = await fetch(`${API_BASE_URL}/goals/milestones/${milestoneId}/steps`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) throw new Error(await res.text());
@@ -181,9 +181,9 @@ export const stepsAPI = {
   lookup: async ({ stepId, milestoneId, text, token }) => {
     let url;
     if (stepId) {
-      url = `${API_BASE_URL}/api/goals/steps/${stepId}`;
+      url = `${API_BASE_URL}/goals/steps/${stepId}`;
     } else if (milestoneId && text) {
-      url = `${API_BASE_URL}/api/goals/milestones/${milestoneId}/steps/lookup?text=${encodeURIComponent(text)}`;
+      url = `${API_BASE_URL}/goals/milestones/${milestoneId}/steps/lookup?text=${encodeURIComponent(text)}`;
     } else {
       throw new Error('Must provide stepId or milestoneId and text');
     }
