@@ -3,7 +3,7 @@ import { Type } from '@google/genai';
 // Task Functions
 export const createTaskFunctionDeclaration = {
   name: 'create_task',
-  description: 'Creates a new task for the user. Use this when the user wants to add a new task to their planner. Before calling this function, call "lookup_task" to check if the goal already exists. If the task exists, ask the user if they really want to add it, or update it. Example user prompts: "Add a task to buy groceries", "Create a new task for tomorrow", "Remind me to call mom".',
+  description: 'Creates a new task for the user. Use this ONLY when the user explicitly asks to add, create, or set up a new task. Do NOT use this for requests like "What are my tasks?" or "Show me my tasks". Example user prompts: "Add a task to buy groceries", "Create a new task for tomorrow", "Remind me to call mom".',
   parameters: {
     type: Type.OBJECT,
     properties: {
@@ -50,7 +50,7 @@ export const deleteTaskFunctionDeclaration = {
 
 export const readTaskFunctionDeclaration = {
   name: 'read_task',
-  description: 'Reads or lists tasks for the user. Use this when the user wants to see their tasks or filter by due date, goal, priority, status, completion, or category. If the task list is empty, you can reply that the user does not have any tasks for that time period. Example user prompts: "Show me my tasks", "List my tasks for today", "What tasks are related to my fitness goal?", "Show me all my high priority tasks", "List my completed tasks in the work category"',
+  description: 'Reads or lists tasks for the user. Use this for any request where the user wants to see, list, or review their tasks. Example user prompts: "Show me my tasks", "List my tasks for today", "What are my tasks?", "What tasks are related to my fitness goal?", "Show me all my high priority tasks", "List my completed tasks in the work category". Do NOT use this for requests to add or create new tasks.',
   parameters: {
     type: Type.OBJECT,
     properties: {
