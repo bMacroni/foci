@@ -1128,7 +1128,169 @@ const MessageBubble = ({ message }) => {
     return null;
   };
 
-  // Remove useEffect that fetches list for read_goal/read_task
+  // Editable Table State
+  const [editingTaskId, setEditingTaskId] = React.useState(null);
+  const [editField, setEditField] = React.useState(null); // 'due_date' or 'status'
+  const [editValue, setEditValue] = React.useState('');
+  const [saving, setSaving] = React.useState(false);
+  const [tasksState, setTasksState] = React.useState(null); // For local UI update
+
+  // Helper to update task in local state
+  const updateTaskInState = (taskId, field, value) => {
+    setTasksState((prev) =>
+      prev.map((task) =>
+        task.id === taskId ? { ...task, [field]: value } : task
+      )
+    );
+  };
+
+  // Save handler
+  const handleSave = async (task, field) => {
+    setSaving(true);
+    try {
+      const updated = { ...task, [field]: editValue };
+      // For due_date, ensure ISO string
+      if (field === 'due_date') {
+        updated.due_date = editValue;
+      }
+      if (field === 'status') {
+        updated.status = editValue;
+      }
+      await tasksAPI.update(task.id, updated);
+      updateTaskInState(task.id, field, editValue);
+      setEditingTaskId(null);
+      setEditField(null);
+      setEditValue('');
+    } catch (e) {
+      alert('Failed to update task.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Cancel handler
+  const handleCancel = () => {
+    setEditingTaskId(null);
+    setEditField(null);
+    setEditValue('');
+  };
+
+  // Responsive Task Table/Card rendering
+  const renderTaskList = (tasks) => {
+    if (!Array.isArray(tasks) || tasks.length === 0) {
+      return <div className="text-gray-500 italic mt-2">No tasks found.</div>;
+    }
+    // Use local state for edits
+    const displayTasks = Array.isArray(tasksState) ? tasksState : tasks;
+    return (
+      <div>
+        {/* Desktop Table */}
+        <div className="hidden sm:block">
+          <table className="min-w-full border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+            <thead className="bg-gray-100">
+              <tr>
+                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Task</th>
+                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Due Date</th>
+                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {displayTasks.map((task) => (
+                <tr key={task.id} className="border-t border-gray-100 hover:bg-gray-50">
+                  <td className="px-4 py-2 font-medium text-gray-900">{task.title}</td>
+                  {/* Due Date Cell */}
+                  <td className="px-4 py-2 text-gray-700">
+                    {editingTaskId === task.id && editField === 'due_date' ? (
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="date"
+                          className="border rounded px-2 py-1 text-sm"
+                          value={editValue}
+                          onChange={e => setEditValue(e.target.value)}
+                          disabled={saving}
+                        />
+                        <button
+                          className="text-green-600 hover:underline text-xs"
+                          onClick={() => handleSave(task, 'due_date')}
+                          disabled={saving}
+                        >Save</button>
+                        <button
+                          className="text-gray-500 hover:underline text-xs"
+                          onClick={handleCancel}
+                          disabled={saving}
+                        >Cancel</button>
+                      </div>
+                    ) : (
+                      <span
+                        className="cursor-pointer hover:underline"
+                        onClick={() => {
+                          setEditingTaskId(task.id);
+                          setEditField('due_date');
+                          setEditValue(task.due_date ? task.due_date.slice(0, 10) : '');
+                        }}
+                        title="Click to edit due date"
+                      >
+                        {task.due_date ? new Date(task.due_date).toLocaleDateString() : <span className="italic text-gray-400">None</span>}
+                      </span>
+                    )}
+                  </td>
+                  {/* Status Cell */}
+                  <td className="px-4 py-2 text-gray-700 capitalize">
+                    {editingTaskId === task.id && editField === 'status' ? (
+                      <div className="flex items-center space-x-2">
+                        <select
+                          className="border rounded px-2 py-1 text-sm"
+                          value={editValue}
+                          onChange={e => setEditValue(e.target.value)}
+                          disabled={saving}
+                        >
+                          <option value="not_started">Not Started</option>
+                          <option value="in_progress">In Progress</option>
+                          <option value="completed">Completed</option>
+                        </select>
+                        <button
+                          className="text-green-600 hover:underline text-xs"
+                          onClick={() => handleSave(task, 'status')}
+                          disabled={saving}
+                        >Save</button>
+                        <button
+                          className="text-gray-500 hover:underline text-xs"
+                          onClick={handleCancel}
+                          disabled={saving}
+                        >Cancel</button>
+                      </div>
+                    ) : (
+                      <span
+                        className="cursor-pointer hover:underline"
+                        onClick={() => {
+                          setEditingTaskId(task.id);
+                          setEditField('status');
+                          setEditValue(task.status || 'not_started');
+                        }}
+                        title="Click to edit status"
+                      >
+                        {task.status ? task.status.replace('_', ' ') : '—'}
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {/* Mobile Card/List */}
+        <div className="sm:hidden space-y-3 mt-2">
+          {displayTasks.map((task) => (
+            <div key={task.id} className="bg-white border border-gray-200 rounded-lg shadow-sm p-3 flex flex-col">
+              <div className="font-semibold text-gray-900 text-base mb-1">{task.title}</div>
+              <div className="text-sm text-gray-700">Due: {task.due_date ? new Date(task.due_date).toLocaleDateString() : <span className="italic text-gray-400">None</span>}</div>
+              <div className="text-sm text-gray-700">Status: <span className="capitalize">{task.status ? task.status.replace('_', ' ') : '—'}</span></div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   const formatAIContent = (content = '') => {
     const jsonObjects = extractJsonFromCodeBlock(content);
@@ -1138,17 +1300,22 @@ const MessageBubble = ({ message }) => {
       const readGoal = jsonObjects.find(json => json.action_type === 'read' && json.entity_type === 'goal');
       
       if (readTask) {
-        return '<strong>Here are your tasks:</strong>';
+        // Render the task list responsively
+        const tasks = readTask.details && (Array.isArray(readTask.details.tasks) ? readTask.details.tasks : readTask.details);
+        return (
+          <div>
+            <div className="font-semibold mb-2">Here are your tasks:</div>
+            {renderTaskList(tasks)}
+          </div>
+        );
       }
       if (readGoal) {
         return '<strong>Here are your goals:</strong>';
       }
-      
       // For create/update/delete actions, show a summary
       const createActions = jsonObjects.filter(json => json.action_type === 'create');
       const updateActions = jsonObjects.filter(json => json.action_type === 'update');
       const deleteActions = jsonObjects.filter(json => json.action_type === 'delete');
-      
       let summary = '';
       if (createActions.length > 0) {
         summary += `Created ${createActions.length} item${createActions.length > 1 ? 's' : ''}`;
@@ -1159,10 +1326,8 @@ const MessageBubble = ({ message }) => {
       if (deleteActions.length > 0) {
         summary += `${summary ? ', ' : ''}Deleted ${deleteActions.length} item${deleteActions.length > 1 ? 's' : ''}`;
       }
-      
       return `<strong>${summary}</strong>`;
     }
-    
     // Fallback to normal formatting
     let formatted = content
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
@@ -1205,34 +1370,46 @@ const MessageBubble = ({ message }) => {
         </div>
       </div>
     );
-  } else {
-    // AI message: left-justified, full-width, no bubble
-    const jsonObjects = extractJsonFromCodeBlock(message.content);
-    const readGoal = jsonObjects && jsonObjects.find(json => json.action_type === 'read' && json.entity_type === 'goal');
-    let goalTitles = [];
-    if (readGoal && readGoal.details && Array.isArray(readGoal.details.goals)) {
-      goalTitles = readGoal.details.goals;
-    }
+  }
+
+  // AI message: left-justified, full-width, no bubble
+  const jsonObjects = extractJsonFromCodeBlock(message.content);
+  const readTask = jsonObjects && jsonObjects.find(json => json.action_type === 'read' && json.entity_type === 'task');
+  if (readTask) {
+    const tasks = readTask.details && (Array.isArray(readTask.details.tasks) ? readTask.details.tasks : readTask.details);
     return (
       <div className="flex">
         <div className="w-full text-left">
-          <div
-            className="prose prose-sm max-w-none text-black text-left"
-            style={{ background: 'none', borderRadius: 0, padding: 0, marginLeft: 0, marginRight: 0 }}
-            dangerouslySetInnerHTML={{ __html: formatAIContent(message.content) }}
-          />
-          {/* Only render goal titles from backend/AI response */}
-          {goalTitles.length > 0 && (
-            <ul className="list-disc pl-5 text-sm mt-1">
-              {goalTitles.map((title, idx) => (
-                <li key={idx}><strong>{title}</strong></li>
-              ))}
-            </ul>
-          )}
+          {formatAIContent(message.content)}
         </div>
       </div>
     );
   }
+  // Only render goal titles from backend/AI response */}
+  const readGoal = jsonObjects && jsonObjects.find(json => json.action_type === 'read' && json.entity_type === 'goal');
+  let goalTitles = [];
+  if (readGoal && readGoal.details && Array.isArray(readGoal.details.goals)) {
+    goalTitles = readGoal.details.goals;
+  }
+  return (
+    <div className="flex">
+      <div className="w-full text-left">
+        <div
+          className="prose prose-sm max-w-none text-black text-left"
+          style={{ background: 'none', borderRadius: 0, padding: 0, marginLeft: 0, marginRight: 0 }}
+          dangerouslySetInnerHTML={{ __html: formatAIContent(message.content) }}
+        />
+        {/* Only render goal titles from backend/AI response */}
+        {goalTitles.length > 0 && (
+          <ul className="list-disc pl-5 text-sm mt-1">
+            {goalTitles.map((title, idx) => (
+              <li key={idx}><strong>{title}</strong></li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
 };
 
 export default function AIChatWithProvider(props) {
