@@ -331,16 +331,17 @@ const AIChat = ({ onNavigateToTab, initialMessages }) => {
       const completedTasks = tasksArray.filter(task => task.completed).length;
       const totalTasks = tasksArray.length;
       
-      return `🎯 **Welcome back!** Great progress - you have ${goalsCount} goal${goalsCount !== 1 ? 's' : ''} and ${totalTasks} task${totalTasks !== 1 ? 's' : ''} (${completedTasks} completed).
-
-**Let's keep the momentum going!** I can help you:
-
-• **Review your progress** and celebrate wins
-• **Create new tasks** for your goals
-• **Prioritize what's next** for today
-• **Adjust your goals** if needed
-
-**What's your focus for today?**`;
+      return `🎯 **Welcome back!**  
+You’re making great strides!  
+  
+**Here’s how I can help you today:**  
+• Review your progress and celebrate wins  
+• Create, update, or organize your goals and tasks  
+• Plan your day or week with the calendar  
+• Get personalized suggestions and productivity tips  
+• Ask for help breaking down big goals into manageable steps  
+  
+**What would you like to focus on or ask me today?**`;
     } else {
       const tasksCount = Array.isArray(userData.tasks) ? userData.tasks.length : 0;
       return `📝 **Welcome back!** I see you have ${tasksCount} task${tasksCount !== 1 ? 's' : ''} to work on.
@@ -1001,7 +1002,7 @@ const AIChat = ({ onNavigateToTab, initialMessages }) => {
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        <div className="flex-1 overflow-y-auto p-6 space-y-4 mt-20">
           {messages.map((message) => {
             switch (message.type) {
               case 'user':
