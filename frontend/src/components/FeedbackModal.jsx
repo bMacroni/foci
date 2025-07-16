@@ -7,13 +7,15 @@ export default function FeedbackModal({ onClose }) {
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
 
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     setSuccess('');
     try {
-      const res = await fetch('http://localhost:5000/api/ai/feedback', {
+      const res = await fetch(`${API_BASE_URL}/ai/feedback`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, message }),
