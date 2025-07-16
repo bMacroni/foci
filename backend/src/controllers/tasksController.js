@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { dateParser } from '../utils/dateParser.js';
 
 export async function createTask(req, res) {
-  const { title, description, due_date, priority, goal_id, completed } = req.body;
+  const { title, description, due_date, priority, goal_id, completed, preferred_time_of_day, deadline_type, travel_time_minutes } = req.body;
   const user_id = req.user.id;
   
   // Get the JWT from the request
@@ -27,7 +27,7 @@ export async function createTask(req, res) {
   
   const { data, error } = await supabase
     .from('tasks')
-    .insert([{ user_id, title, description, due_date: sanitizedDueDate, priority, goal_id: sanitizedGoalId, completed }])
+    .insert([{ user_id, title, description, due_date: sanitizedDueDate, priority, goal_id: sanitizedGoalId, completed, preferred_time_of_day, deadline_type, travel_time_minutes }])
     .select()
     .single();
   
@@ -113,7 +113,7 @@ export async function getTaskById(req, res) {
 export async function updateTask(req, res) {
   const user_id = req.user.id;
   const { id } = req.params;
-  const { title, description, due_date, priority, goal_id, completed } = req.body;
+  const { title, description, due_date, priority, goal_id, completed, preferred_time_of_day, deadline_type, travel_time_minutes, status } = req.body;
   
   // Get the JWT from the request
   const token = req.headers.authorization?.split(' ')[1];
@@ -133,9 +133,22 @@ export async function updateTask(req, res) {
   // Convert empty string due_date to null
   const sanitizedDueDate = due_date === '' ? null : due_date;
   
+  const updateFields = {
+    ...(title !== undefined && { title }),
+    ...(description !== undefined && { description }),
+    ...(due_date !== undefined && { due_date: sanitizedDueDate }),
+    ...(priority !== undefined && { priority }),
+    ...(goal_id !== undefined && { goal_id: sanitizedGoalId }),
+    ...(completed !== undefined && { completed }),
+    ...(preferred_time_of_day !== undefined && { preferred_time_of_day }),
+    ...(deadline_type !== undefined && { deadline_type }),
+    ...(travel_time_minutes !== undefined && { travel_time_minutes }),
+    ...(status !== undefined && { status })
+  };
+  
   const { data, error } = await supabase
     .from('tasks')
-    .update({ title, description, due_date: sanitizedDueDate, priority, goal_id: sanitizedGoalId, completed })
+    .update(updateFields)
     .eq('id', id)
     .eq('user_id', user_id)
     .select()
@@ -201,7 +214,10 @@ export async function bulkCreateTasks(req, res) {
     due_date: task.due_date || null,
     priority: task.priority || null,
     goal_id: task.goal_id === '' ? null : (task.goal_id || null),
-    completed: task.completed || false
+    completed: task.completed || false,
+    preferred_time_of_day: task.preferred_time_of_day || null,
+    deadline_type: task.deadline_type || null,
+    travel_time_minutes: task.travel_time_minutes || null
   }));
 
   const { data, error } = await supabase
@@ -217,7 +233,7 @@ export async function bulkCreateTasks(req, res) {
 }
 
 export async function createTaskFromAI(args, userId, userContext) {
-  const { title, description, due_date, priority, related_goal } = args;
+  const { title, description, due_date, priority, related_goal, preferred_time_of_day, deadline_type, travel_time_minutes } = args;
   const token = userContext?.token;
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
     global: {
@@ -254,7 +270,10 @@ export async function createTaskFromAI(args, userId, userContext) {
       due_date: parsedDueDate,
       priority,
       goal_id: goalId,
-      completed: false
+      completed: false,
+      preferred_time_of_day,
+      deadline_type,
+      travel_time_minutes
     }])
     .select()
     .single();
@@ -266,7 +285,7 @@ export async function createTaskFromAI(args, userId, userContext) {
 }
 
 export async function updateTaskFromAI(args, userId, userContext) {
-  const { id, title, description, due_date, priority, related_goal, completed } = args;
+  const { id, title, description, due_date, priority, related_goal, completed, preferred_time_of_day, deadline_type, travel_time_minutes } = args;
   const token = userContext?.token;
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
     global: {
@@ -313,6 +332,9 @@ export async function updateTaskFromAI(args, userId, userContext) {
   if (priority !== undefined) updateData.priority = priority;
   if (related_goal !== undefined) updateData.goal_id = goalId;
   if (completed !== undefined) updateData.completed = completed;
+  if (preferred_time_of_day !== undefined) updateData.preferred_time_of_day = preferred_time_of_day;
+  if (deadline_type !== undefined) updateData.deadline_type = deadline_type;
+  if (travel_time_minutes !== undefined) updateData.travel_time_minutes = travel_time_minutes;
 
   const { data, error } = await supabase
     .from('tasks')

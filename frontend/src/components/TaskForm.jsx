@@ -9,6 +9,9 @@ const TaskForm = ({ task = null, onSuccess, onCancel }) => {
     priority: task?.priority || 'medium',
     goal_id: task?.goal_id || null,
     completed: task?.completed || false,
+    preferred_time_of_day: task?.preferred_time_of_day || 'any',
+    deadline_type: task?.deadline_type || 'soft',
+    travel_time_minutes: task?.travel_time_minutes || ''
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -136,6 +139,57 @@ const TaskForm = ({ task = null, onSuccess, onCancel }) => {
               <option value="medium">Medium</option>
               <option value="high">High</option>
             </select>
+          </div>
+        </div>
+
+        {/* New fields for AI scheduling */}
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <label htmlFor="preferred_time_of_day" className="block text-sm font-medium text-gray-700 mb-1">
+              Preferred Time of Day
+            </label>
+            <select
+              id="preferred_time_of_day"
+              name="preferred_time_of_day"
+              value={formData.preferred_time_of_day}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="any">Any</option>
+              <option value="morning">Morning</option>
+              <option value="afternoon">Afternoon</option>
+              <option value="evening">Evening</option>
+            </select>
+          </div>
+          <div>
+            <label htmlFor="deadline_type" className="block text-sm font-medium text-gray-700 mb-1">
+              Deadline Type
+            </label>
+            <select
+              id="deadline_type"
+              name="deadline_type"
+              value={formData.deadline_type}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="soft">Soft</option>
+              <option value="hard">Hard</option>
+            </select>
+          </div>
+          <div>
+            <label htmlFor="travel_time_minutes" className="block text-sm font-medium text-gray-700 mb-1">
+              Travel Time (minutes)
+            </label>
+            <input
+              type="number"
+              id="travel_time_minutes"
+              name="travel_time_minutes"
+              value={formData.travel_time_minutes}
+              onChange={handleChange}
+              min="0"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="0"
+            />
           </div>
         </div>
 

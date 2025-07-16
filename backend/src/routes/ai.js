@@ -3,6 +3,7 @@ import { requireAuth } from '../middleware/auth.js';
 import GeminiService from '../utils/geminiService.js';
 // import AIService from '../utils/aiService.js';
 import { conversationController } from '../controllers/conversationController.js';
+import { sendFeedback } from '../controllers/feedbackController.js';
 
 const router = express.Router();
 const geminiService = new GeminiService();
@@ -269,5 +270,7 @@ router.get('/health', requireAuth, (req, res) => {
     timestamp: new Date().toISOString()
   });
 });
+
+router.post('/feedback', sendFeedback);
 
 export default router; 

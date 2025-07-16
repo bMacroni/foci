@@ -11,7 +11,10 @@ export const createTaskFunctionDeclaration = {
       description: { type: Type.STRING, description: 'Task details' },
       due_date: { type: Type.STRING, description: 'Due date (YYYY-MM-DD)' },
       priority: { type: Type.STRING, enum: ['high', 'medium', 'low'], description: 'Task priority' },
-      related_goal: { type: Type.STRING, description: 'Associated goal title' }
+      related_goal: { type: Type.STRING, description: 'Associated goal title' },
+      preferred_time_of_day: { type: Type.STRING, description: 'Preferred time of day for the task (morning, afternoon, evening, any)' },
+      deadline_type: { type: Type.STRING, description: 'Deadline type: hard (must be done by due date) or soft (flexible)' },
+      travel_time_minutes: { type: Type.NUMBER, description: 'Estimated travel time in minutes to the task location' }
     },
     required: ['title']
   }
@@ -29,7 +32,10 @@ export const updateTaskFunctionDeclaration = {
       due_date: { type: Type.STRING, description: 'Due date (YYYY-MM-DD)' },
       priority: { type: Type.STRING, enum: ['high', 'medium', 'low'], description: 'Task priority' },
       related_goal: { type: Type.STRING, description: 'Associated goal title' },
-      completed: { type: Type.BOOLEAN, description: 'Task completion status' }
+      completed: { type: Type.BOOLEAN, description: 'Task completion status' },
+      preferred_time_of_day: { type: Type.STRING, description: 'Preferred time of day for the task (morning, afternoon, evening, any)' },
+      deadline_type: { type: Type.STRING, description: 'Deadline type: hard (must be done by due date) or soft (flexible)' },
+      travel_time_minutes: { type: Type.NUMBER, description: 'Estimated travel time in minutes to the task location' }
     },
     required: [] // id is required if known, but not always present
   }

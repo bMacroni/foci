@@ -4,6 +4,7 @@ import TaskList from '../components/TaskList'
 import CalendarStatus from '../components/CalendarStatus'
 import CalendarEvents from '../components/CalendarEvents'
 import AIChat from '../components/AIChat'
+import FeedbackModal from '../components/FeedbackModal';
 
 function Dashboard({ showSuccess }) {
   // Remove draggable nav pill state and drag logic
@@ -11,6 +12,7 @@ function Dashboard({ showSuccess }) {
   const [activeTab, setActiveTab] = useState('ai');
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [isHorizontal, setIsHorizontal] = useState(false); // Remove if not needed
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
 
   // Remove navPos, navRef, dragOffset, dragging, and related useEffect
 
@@ -123,6 +125,17 @@ function Dashboard({ showSuccess }) {
             <span>{tab.label}</span>
           </button>
         ))}
+        {/* Help Button */}
+        <button
+          onClick={() => setShowFeedbackModal(true)}
+          className="flex items-center space-x-2 px-4 py-2 rounded-full font-medium transition-colors duration-200 bg-white text-blue-600 hover:bg-blue-100 ml-2"
+          style={{ margin: '0 4px' }}
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 14h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8s-9-3.582-9-8 4.03-8 9-8 9 3.582 9 8z" />
+          </svg>
+          <span>Help</span>
+        </button>
         {/* Logout Button */}
         <button
           onClick={handleLogout}
@@ -229,6 +242,10 @@ function Dashboard({ showSuccess }) {
             </nav>
           </div>
         </div>
+      )}
+      {/* Feedback Modal */}
+      {showFeedbackModal && (
+        <FeedbackModal onClose={() => setShowFeedbackModal(false)} />
       )}
     </div>
   );
