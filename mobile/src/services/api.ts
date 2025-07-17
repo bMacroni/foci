@@ -1,16 +1,16 @@
-import axios, { AxiosInstance, AxiosResponse } from 'axios';
+// import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { User, Goal, Task, CalendarEvent, ConversationThread, ConversationMessage, AuthResponse } from '../types';
 
 // Create axios instance with base configuration
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.66:5000/api';
 console.log('API_BASE_URL:', API_BASE_URL);
-const api: AxiosInstance = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
+const api = {
+  // baseURL: API_BASE_URL,
+  // headers: {
+  //   'Content-Type': 'application/json',
+  // },
+};
 
 
 // Request interceptor to add auth token
@@ -29,7 +29,7 @@ api.interceptors.request.use(
 
 // Response interceptor for error handling
 api.interceptors.response.use(
-  (response: AxiosResponse) => response,
+  (response: any) => response,
   async (error) => {
     if (error.response?.status === 401) {
       // Token expired or invalid

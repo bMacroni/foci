@@ -16,6 +16,7 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 const MainNavigator: React.FC = () => {
   return (
     <Tab.Navigator
+      initialRouteName="AIAssistant"
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
           let iconName: string;
@@ -48,10 +49,10 @@ const MainNavigator: React.FC = () => {
         headerTintColor: theme.colors.text,
       })}
     >
+      <Tab.Screen name="AIAssistant" component={AIAssistantScreen} />
       <Tab.Screen name="Goals" component={GoalsScreen} />
       <Tab.Screen name="Tasks" component={TasksScreen} />
       <Tab.Screen name="Calendar" component={CalendarScreen} />
-      <Tab.Screen name="AIAssistant" component={AIAssistantScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
