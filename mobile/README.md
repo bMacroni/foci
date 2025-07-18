@@ -1,168 +1,97 @@
-# Foci Mobile App 🎯
+This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
 
-A React Native mobile application for the Foci goal and task management system.
+# Getting Started
 
-## Features
+> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
 
-### 🤖 AI-Powered Assistant
-- Natural language conversation with AI
-- Quick action buttons for common tasks
-- Context-aware responses
+## Step 1: Start Metro
 
-### 🎯 Goal Management
-- View and manage goals by category
-- Progress tracking with visual indicators
-- Goal status management (active, completed, archived)
+First, you will need to run **Metro**, the JavaScript build tool for React Native.
 
-### 📋 Task Management
-- Create and manage tasks with priorities
-- Link tasks to goals
-- Task status tracking (not started, in progress, completed)
+To start the Metro dev server, run the following command from the root of your React Native project:
 
-### 📅 Calendar Integration
-- View Google Calendar events
-- Calendar connection status
-- Event details with time and location
-
-### 🔐 Authentication
-- Secure login and signup
-- JWT token management with secure storage
-- User profile management
-
-## Tech Stack
-
-- **React Native** with Expo
-- **TypeScript** for type safety
-- **React Navigation** for navigation
-- **Expo Secure Store** for secure token storage
-- **Axios** for API communication
-- **Ionicons** for icons
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js (v18 or higher)
-- npm or yarn
-- Expo CLI (`npm install -g @expo/cli`)
-- Expo Go app on your mobile device
-
-### Installation
-
-1. Install dependencies:
-```bash
-npm install
-```
-
-2. Create environment file:
-```bash
-echo "EXPO_PUBLIC_API_URL=http://localhost:5000/api" > .env
-```
-
-3. Start the development server:
-```bash
+```sh
+# Using npm
 npm start
+
+# OR using Yarn
+yarn start
 ```
 
-4. Scan the QR code with Expo Go app on your mobile device
+## Step 2: Build and run your app
 
-### Development
-
-- **iOS Simulator**: Press `i` in the terminal
-- **Android Emulator**: Press `a` in the terminal
-- **Web**: Press `w` in the terminal
-
-## Project Structure
-
-```
-src/
-├── components/          # Reusable React components
-├── contexts/           # React contexts (AuthContext)
-├── navigation/         # Navigation configuration
-├── screens/           # Screen components
-├── services/          # API services
-├── types/             # TypeScript type definitions
-└── utils/             # Utility functions and theme
-```
-
-## API Integration
-
-The mobile app connects to the same backend API as the web application:
-
-- **Authentication**: Login, signup, and profile management
-- **Goals**: CRUD operations for goals
-- **Tasks**: CRUD operations for tasks
-- **Calendar**: Google Calendar integration
-- **AI**: Conversation and AI assistant features
-
-## Design System
-
-The app follows a minimal black and white design:
-
-- **Primary Color**: Black (#000000)
-- **Background**: White (#FFFFFF)
-- **Surface**: Light gray (#F8F8F8)
-- **Text**: Black (#000000)
-- **Secondary Text**: Gray (#666666)
-
-## Navigation
-
-- **Bottom Tabs**: Goals, Tasks, Calendar, AI Assistant, Profile
-- **Authentication Flow**: Login/Signup screens
-- **Stack Navigation**: Detail screens and forms
-
-## Security
-
-- JWT tokens stored securely using Expo Secure Store
-- Automatic token refresh and logout on authentication errors
-- Secure API communication with HTTPS
-
-## Testing
-
-Run tests with:
-```bash
-npm test
-```
-
-## Building for Production
-
-### iOS
-```bash
-eas build --platform ios
-```
+With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
 
 ### Android
-```bash
-eas build --platform android
+
+```sh
+# Using npm
+npm run android
+
+# OR using Yarn
+yarn android
 ```
 
-## Deployment
+### iOS
 
-The app can be deployed using Expo Application Services (EAS):
+For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
 
-1. Install EAS CLI:
-```bash
-npm install -g @expo/eas-cli
+The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
+
+```sh
+bundle install
 ```
 
-2. Configure EAS:
-```bash
-eas build:configure
+Then, and every time you update your native dependencies, run:
+
+```sh
+bundle exec pod install
 ```
 
-3. Build for production:
-```bash
-eas build --platform all
+For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
+
+```sh
+# Using npm
+npm run ios
+
+# OR using Yarn
+yarn ios
 ```
 
-## Contributing
+If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+This is one way to run your app — you can also build it directly from Android Studio or Xcode.
 
-## License
+## Step 3: Modify your app
 
-This project is licensed under the ISC License. 
+Now that you have successfully run the app, let's make changes!
+
+Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
+
+When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
+
+- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
+- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
+
+## Congratulations! :tada:
+
+You've successfully run and modified your React Native App. :partying_face:
+
+### Now what?
+
+- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
+- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
+
+# Troubleshooting
+
+If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
+
+# Learn More
+
+To learn more about React Native, take a look at the following resources:
+
+- [React Native Website](https://reactnative.dev) - learn more about React Native.
+- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
+- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
+- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
+- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.

@@ -7,6 +7,7 @@ export default function FeedbackModal({ onClose }) {
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
 
+  // Get API base URL from environment variable or fallback to localhost
   const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   const handleSubmit = async (e) => {

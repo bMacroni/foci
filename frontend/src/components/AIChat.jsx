@@ -871,8 +871,8 @@ You’re making great strides!
       )}
 
       {/* Desktop Sidebar */}
-      <div className="hidden lg:flex lg:w-80 flex-shrink-0 border-r border-black/10">
-        <div className="w-full flex flex-col">
+      <div className="hidden lg:flex lg:w-80 flex-shrink-0 border-r border-black/10 h-screen">
+        <div className="w-full flex flex-col h-full">
           {/* Sidebar Header */}
           <div className="p-4 border-b border-black/10">
             <div className="flex items-center justify-between mb-4">
@@ -898,7 +898,6 @@ You’re making great strides!
               </span>
             </button>
           </div>
-          
           {/* Search Bar */}
           <div className="p-4 border-b border-black/10">
             <div className="relative">
@@ -914,9 +913,8 @@ You’re making great strides!
               </svg>
             </div>
           </div>
-          
           {/* Conversation Threads */}
-          <div className="flex-1 overflow-y-auto p-4">
+          <div className="flex-1 overflow-y-auto p-4 h-0 min-h-0 scrollbar-hover">
             {isLoadingThreads ? (
               <div className="flex items-center justify-center py-8">
                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-black"></div>
@@ -1002,7 +1000,7 @@ You’re making great strides!
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4 mt-20">
+        <div className="flex-1 overflow-y-auto p-6 space-y-4 mt-20 scrollbar-hover">
           {messages.map((message) => {
             switch (message.type) {
               case 'user':

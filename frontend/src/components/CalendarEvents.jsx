@@ -4,6 +4,7 @@ import SuccessToast from './SuccessToast';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import * as dateFnsTz from 'date-fns-tz';
+import timezones from '../utils/timezones'; // We'll create this file for the timezone list
 console.log('dateFnsTz exports:', dateFnsTz);
 
 const CalendarEvents = () => {
@@ -20,6 +21,48 @@ const CalendarEvents = () => {
     // Use date-fns-tz to get CST time, always pass UTC string
     return dateFnsTz.toZonedTime(new Date().toISOString(), CST_TIMEZONE);
   });
+  const [showSettings, setShowSettings] = useState(false);
+  const [userTimezone, setUserTimezone] = useState('');
+  const [detectedTimezone, setDetectedTimezone] = useState('');
+  const [savingTimezone, setSavingTimezone] = useState(false);
+  const [timezoneError, setTimezoneError] = useState('');
+
+  // Fetch user timezone on mount
+  useEffect(() => {
+    const fetchTimezone = async () => {
+      try {
+        const res = await fetch('/api/user/settings', { credentials: 'include' });
+        if (!res.ok) throw new Error('Failed to fetch user settings');
+        const data = await res.json();
+        setUserTimezone(data.timezone || '');
+      } catch (err) {
+        setTimezoneError('Could not load timezone');
+      }
+    };
+    fetchTimezone();
+    // Auto-detect timezone
+    setDetectedTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  }, []);
+
+  const handleSaveTimezone = async () => {
+    setSavingTimezone(true);
+    setTimezoneError('');
+    try {
+      const res = await fetch('/api/user/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ timezone: userTimezone })
+      });
+      if (!res.ok) throw new Error('Failed to save timezone');
+      setShowSettings(false);
+      showToast('Timezone updated!', 'success');
+    } catch (err) {
+      setTimezoneError('Could not save timezone');
+    } finally {
+      setSavingTimezone(false);
+    }
+  };
 
   useEffect(() => {
     loadEvents();
@@ -626,7 +669,17 @@ const CalendarEvents = () => {
           </div>
           <h3 className="text-2xl font-bold text-black">Monthly Calendar</h3>
         </div>
-        <div className="flex space-x-2">
+        <div className="flex space-x-2 items-center">
+          <button
+            onClick={() => setShowSettings(true)}
+            className="p-2 rounded hover:bg-gray-100 border border-gray-200"
+            title="Calendar Settings"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6l4 2" />
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none" />
+            </svg>
+          </button>
           <button onClick={prevMonth} className="p-2 rounded hover:bg-gray-100">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -809,6 +862,50 @@ const CalendarEvents = () => {
             loadEvents();
           }}
         />
+      )}
+      {/* Settings Modal */}
+      {showSettings && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full relative">
+            <button
+              className="absolute top-3 right-3 p-1 rounded hover:bg-gray-200"
+              onClick={() => setShowSettings(false)}
+              aria-label="Close"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <h3 className="text-xl font-bold mb-4">Calendar Settings</h3>
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-1">Timezone</label>
+              <select
+                className="w-full px-3 py-2 border rounded-lg"
+                value={userTimezone || detectedTimezone}
+                onChange={e => setUserTimezone(e.target.value)}
+              >
+                <option value="">(Auto-detect) {detectedTimezone}</option>
+                {timezones.map(tz => (
+                  <option key={tz} value={tz}>{tz}</option>
+                ))}
+              </select>
+              <div className="text-xs text-gray-500 mt-1">Auto-detected: {detectedTimezone}</div>
+            </div>
+            {timezoneError && <div className="text-red-600 mb-2">{timezoneError}</div>}
+            <div className="flex space-x-4 pt-2">
+              <button
+                onClick={() => setShowSettings(false)}
+                className="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50"
+                disabled={savingTimezone}
+              >Cancel</button>
+              <button
+                onClick={handleSaveTimezone}
+                className="flex-1 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800"
+                disabled={savingTimezone}
+              >Save</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

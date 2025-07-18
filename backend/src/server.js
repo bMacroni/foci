@@ -11,7 +11,7 @@ import authRouter from './routes/auth.js'
 import calendarRouter from './routes/calendar.js'
 import aiRouter from './routes/ai.js'
 import conversationsRouter from './routes/conversations.js'
-
+import userRouter from './routes/user.js'
 
 
 const app = express()
@@ -86,6 +86,8 @@ console.log('AI router registered');
 console.log('Registering conversations router...');
 app.use('/api/conversations', conversationsRouter);
 console.log('Conversations router registered');
+
+app.use('/api/user', userRouter);
 
 // Start server only if run directly
 if (process.env.NODE_ENV !== 'test') {

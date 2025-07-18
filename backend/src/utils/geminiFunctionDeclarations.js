@@ -84,14 +84,39 @@ export const lookupTaskbyTitleFunctionDeclaration = {
 // Goal Functions
 export const createGoalFunctionDeclaration = {
   name: 'create_goal',
-  description: 'Creates a new goal for the user. Use this when the user wants to set a new goal. If the user only provides partial data, ask follow-up questions to determine the remaining data points. One follow-up question to ask: "Would you like me to make suggestions to achieve this goal and add it to the description?" Before calling this function, call "lookup_goal" to check if the goal already exists. Example user prompts: "Set a goal to run a marathon", "Create a new goal for reading more books".',
+  description: 'Creates a new goal for the user with optional milestones and steps. Use this when the user wants to set a new goal. The AI should be conversational and help break down goals into milestones and steps. If the user only provides partial data, ask follow-up questions to determine the remaining data points. Before calling this function, call "lookup_goal" to check if the goal already exists. Example user prompts: "Set a goal to run a marathon", "Create a new goal for reading more books", "I want to learn React Native".',
   parameters: {
     type: Type.OBJECT,
     properties: {
       title: { type: Type.STRING, description: 'Goal title' },
       description: { type: Type.STRING, description: 'Goal details' },
       due_date: { type: Type.STRING, description: 'Due date (YYYY-MM-DD)' },
-      priority: { type: Type.STRING, enum: ['high', 'medium', 'low'], description: 'Goal priority' }
+      priority: { type: Type.STRING, enum: ['high', 'medium', 'low'], description: 'Goal priority' },
+      milestones: { 
+        type: Type.ARRAY, 
+        description: 'Array of milestones for the goal. Each milestone should have a title and optional steps.',
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.STRING, description: 'Milestone title' },
+            order: { type: Type.NUMBER, description: 'Milestone order (optional, defaults to array index + 1)' },
+            steps: {
+              type: Type.ARRAY,
+              description: 'Array of steps for this milestone',
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  text: { type: Type.STRING, description: 'Step description' },
+                  order: { type: Type.NUMBER, description: 'Step order (optional, defaults to array index + 1)' },
+                  completed: { type: Type.BOOLEAN, description: 'Step completion status (defaults to false)' }
+                },
+                required: ['text']
+              }
+            }
+          },
+          required: ['title']
+        }
+      }
     },
     required: ['title']
   }
@@ -159,7 +184,7 @@ Only include the goal title in the list unless the user specifically requests ot
 // Calendar Event Functions
 export const createCalendarEventFunctionDeclaration = {
   name: 'create_calendar_event',
-  description: 'Creates a new calendar event for the user. Use this when the user wants to schedule an event. You can parse natural language date/time expressions like "tomorrow at 10:00 AM", "next Friday at 2:30 PM", or use specific ISO timestamps. Example user prompts: "Schedule a meeting for tomorrow at 10am", "Add a calendar event for my doctor appointment next Friday at 2:30 PM", "Create an event called team meeting today at 3pm".',
+  description: 'Creates a new calendar event for the user. Use this when the user wants to schedule an event. The calendar is in Central Time Zone (CST). You can parse natural language date/time expressions like "tomorrow at 10:00 AM", "next Friday at 2:30 PM", or use specific ISO timestamps. Example user prompts: "Schedule a meeting for tomorrow at 10am", "Add a calendar event for my doctor appointment next Friday at 2:30 PM", "Create an event called team meeting today at 3pm".',
   parameters: {
     type: Type.OBJECT,
     properties: {

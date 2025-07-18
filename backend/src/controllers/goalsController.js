@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
 export async function createGoal(req, res) {
-  const { title, description, target_completion_date, category } = req.body;
+  const { title, description, target_completion_date, category, milestones } = req.body;
   const user_id = req.user.id;
   
   // Get the JWT from the request
@@ -19,18 +19,87 @@ export async function createGoal(req, res) {
   console.log('req.user:', req.user);
   console.log('user_id being inserted:', user_id);
   console.log('user_id type:', typeof user_id);
+  console.log('milestones data:', milestones);
   
-  const { data, error } = await supabase
-    .from('goals')
-    .insert([{ user_id, title, description, target_completion_date, category }])
-    .select()
-    .single();
-  
-  if (error) {
-    console.log('Supabase error:', error);
-    return res.status(400).json({ error: error.message });
+  try {
+    // Start a transaction by creating the goal first
+    const { data: goal, error: goalError } = await supabase
+      .from('goals')
+      .insert([{ user_id, title, description, target_completion_date, category }])
+      .select()
+      .single();
+    
+    if (goalError) {
+      console.log('Supabase goal creation error:', goalError);
+      return res.status(400).json({ error: goalError.message });
+    }
+
+    // If milestones are provided, create them along with their steps
+    if (milestones && Array.isArray(milestones) && milestones.length > 0) {
+      for (let i = 0; i < milestones.length; i++) {
+        const milestone = milestones[i];
+        const { title: milestoneTitle, steps: milestoneSteps, order: milestoneOrder = i + 1 } = milestone;
+        
+        // Create the milestone
+        const { data: createdMilestone, error: milestoneError } = await supabase
+          .from('milestones')
+          .insert([{ 
+            goal_id: goal.id, 
+            title: milestoneTitle, 
+            order: milestoneOrder 
+          }])
+          .select()
+          .single();
+        
+        if (milestoneError) {
+          console.log('Supabase milestone creation error:', milestoneError);
+          return res.status(400).json({ error: `Failed to create milestone: ${milestoneError.message}` });
+        }
+
+        // If steps are provided for this milestone, create them
+        if (milestoneSteps && Array.isArray(milestoneSteps) && milestoneSteps.length > 0) {
+          const stepsToInsert = milestoneSteps.map((step, stepIndex) => ({
+            milestone_id: createdMilestone.id,
+            text: step.text || step,
+            order: step.order || stepIndex + 1,
+            completed: step.completed || false
+          }));
+
+          const { error: stepsError } = await supabase
+            .from('steps')
+            .insert(stepsToInsert);
+
+          if (stepsError) {
+            console.log('Supabase steps creation error:', stepsError);
+            return res.status(400).json({ error: `Failed to create steps: ${stepsError.message}` });
+          }
+        }
+      }
+    }
+
+    // Fetch the complete goal with milestones and steps
+    const { data: completeGoal, error: fetchError } = await supabase
+      .from('goals')
+      .select(`
+        *,
+        milestones (
+          *,
+          steps (*)
+        )
+      `)
+      .eq('id', goal.id)
+      .single();
+
+    if (fetchError) {
+      console.log('Supabase fetch error:', fetchError);
+      return res.status(400).json({ error: fetchError.message });
+    }
+
+    res.status(201).json(completeGoal);
+  } catch (error) {
+    console.log('Unexpected error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
   }
-  res.status(201).json(data);
 }
 
 export async function getGoals(req, res) {
@@ -55,7 +124,13 @@ export async function getGoals(req, res) {
   
   const { data, error } = await supabase
     .from('goals')
-    .select('*')
+    .select(`
+      *,
+      milestones (
+        *,
+        steps (*)
+      )
+    `)
     .eq('user_id', user_id)
     .order('created_at', { ascending: false });
   
@@ -76,7 +151,13 @@ export async function getGoalById(req, res) {
   const { id } = req.params;
   const { data, error } = await supabase
     .from('goals')
-    .select('*')
+    .select(`
+      *,
+      milestones (
+        *,
+        steps (*)
+      )
+    `)
     .eq('id', id)
     .eq('user_id', user_id)
     .single();
@@ -175,7 +256,13 @@ export async function getGoalsForUser(userId, token) {
 
   const { data, error } = await supabase
     .from('goals')
-    .select('*')
+    .select(`
+      *,
+      milestones (
+        *,
+        steps (*)
+      )
+    `)
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
 
@@ -231,7 +318,7 @@ export async function lookupGoalbyTitle(userId, token) {
 }
 
 export async function createGoalFromAI(args, userId, userContext) {
-  const { title, description, due_date, priority } = args;
+  const { title, description, due_date, priority, milestones } = args;
   const token = userContext?.token;
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
     global: {
@@ -241,23 +328,86 @@ export async function createGoalFromAI(args, userId, userContext) {
     }
   });
 
-  // Map due_date to target_completion_date for database consistency
-  const { data, error } = await supabase
-    .from('goals')
-    .insert([{ 
-      user_id: userId, 
-      title, 
-      description, 
-      target_completion_date: due_date,
-      category: priority // Map priority to category field
-    }])
-    .select()
-    .single();
+  try {
+    // Create the goal first
+    const { data: goal, error: goalError } = await supabase
+      .from('goals')
+      .insert([{ 
+        user_id: userId, 
+        title, 
+        description, 
+        target_completion_date: due_date,
+        category: priority // Map priority to category field
+      }])
+      .select()
+      .single();
 
-  if (error) {
-    return { error: error.message };
+    if (goalError) {
+      return { error: goalError.message };
+    }
+
+    // If milestones are provided, create them along with their steps
+    if (milestones && Array.isArray(milestones) && milestones.length > 0) {
+      for (let i = 0; i < milestones.length; i++) {
+        const milestone = milestones[i];
+        const { title: milestoneTitle, steps: milestoneSteps, order: milestoneOrder = i + 1 } = milestone;
+        
+        // Create the milestone
+        const { data: createdMilestone, error: milestoneError } = await supabase
+          .from('milestones')
+          .insert([{ 
+            goal_id: goal.id, 
+            title: milestoneTitle, 
+            order: milestoneOrder 
+          }])
+          .select()
+          .single();
+        
+        if (milestoneError) {
+          return { error: `Failed to create milestone: ${milestoneError.message}` };
+        }
+
+        // If steps are provided for this milestone, create them
+        if (milestoneSteps && Array.isArray(milestoneSteps) && milestoneSteps.length > 0) {
+          const stepsToInsert = milestoneSteps.map((step, stepIndex) => ({
+            milestone_id: createdMilestone.id,
+            text: step.text || step,
+            order: step.order || stepIndex + 1,
+            completed: step.completed || false
+          }));
+
+          const { error: stepsError } = await supabase
+            .from('steps')
+            .insert(stepsToInsert);
+
+          if (stepsError) {
+            return { error: `Failed to create steps: ${stepsError.message}` };
+          }
+        }
+      }
+    }
+
+    // Fetch the complete goal with milestones and steps
+    const { data: completeGoal, error: fetchError } = await supabase
+      .from('goals')
+      .select(`
+        *,
+        milestones (
+          *,
+          steps (*)
+        )
+      `)
+      .eq('id', goal.id)
+      .single();
+
+    if (fetchError) {
+      return { error: fetchError.message };
+    }
+
+    return completeGoal;
+  } catch (error) {
+    return { error: 'Internal server error' };
   }
-  return data;
 }
 
 export async function updateGoalFromAI(args, userId, userContext) {
