@@ -3,9 +3,8 @@ import { calendarAPI } from '../services/api';
 import SuccessToast from './SuccessToast';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import * as dateFnsTz from 'date-fns-tz';
+import { toZonedTime } from 'date-fns-tz';
 import timezones from '../utils/timezones'; // We'll create this file for the timezone list
-console.log('dateFnsTz exports:', dateFnsTz);
 
 const CalendarEvents = () => {
   const [events, setEvents] = useState([]);
@@ -16,22 +15,30 @@ const CalendarEvents = () => {
   const [dragging, setDragging] = useState(false);
   const calendarRef = useRef(null);
   const [editingEvent, setEditingEvent] = useState(null);
-  const CST_TIMEZONE = 'America/Chicago';
+  // Initialize with detectedTimezone (or UTC if not available yet)
   const [currentTime, setCurrentTime] = useState(() => {
-    // Use date-fns-tz to get CST time, always pass UTC string
-    return dateFnsTz.toZonedTime(new Date().toISOString(), CST_TIMEZONE);
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    // Get the current time in the user's timezone
+    return toZonedTime(new Date(), tz);
   });
   const [showSettings, setShowSettings] = useState(false);
   const [userTimezone, setUserTimezone] = useState('');
   const [detectedTimezone, setDetectedTimezone] = useState('');
   const [savingTimezone, setSavingTimezone] = useState(false);
   const [timezoneError, setTimezoneError] = useState('');
+  const [syncing, setSyncing] = useState(false);
 
   // Fetch user timezone on mount
   useEffect(() => {
     const fetchTimezone = async () => {
       try {
-        const res = await fetch('/api/user/settings', { credentials: 'include' });
+        const token = localStorage.getItem('jwt_token');
+        const res = await fetch('/api/user/settings', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+          credentials: 'include', // optional, only needed if you use cookies too
+        });
         if (!res.ok) throw new Error('Failed to fetch user settings');
         const data = await res.json();
         setUserTimezone(data.timezone || '');
@@ -48,9 +55,13 @@ const CalendarEvents = () => {
     setSavingTimezone(true);
     setTimezoneError('');
     try {
+      const token = localStorage.getItem('jwt_token');
       const res = await fetch('/api/user/settings', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
         credentials: 'include',
         body: JSON.stringify({ timezone: userTimezone })
       });
@@ -68,21 +79,28 @@ const CalendarEvents = () => {
     loadEvents();
   }, []);
 
-  // Update current time every minute, always in CST
+  // Update current time every minute, using user-selected or detected timezone
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentTime(dateFnsTz.toZonedTime(new Date().toISOString(), CST_TIMEZONE));
-    }, 60000);
+    const tz = userTimezone || detectedTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    const updateTime = () => {
+      setCurrentTime(toZonedTime(new Date(), tz));
+    };
+    updateTime();
+    const interval = setInterval(updateTime, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [userTimezone, detectedTimezone]);
 
   const loadEvents = async () => {
     try {
       setLoading(true);
-      const response = await calendarAPI.getEvents(100);
-      setEvents(Array.isArray(response.data) ? response.data : []);
+      const response = await calendarAPI.getEvents(1000); // Increased from 100 to 1000
+      const eventsData = Array.isArray(response.data) ? response.data : [];
+      setEvents(eventsData);
       setError(null);
-      console.log('[CalendarEvents] Events loaded:', response.data);
+      console.log('[CalendarEvents] Events loaded:', eventsData.length, 'events');
+      if (eventsData.length > 0) {
+        console.log('[CalendarEvents] First event:', eventsData[0]);
+      }
     } catch (err) {
         setError('Failed to load calendar events');
       console.error('[CalendarEvents] Error loading events:', err);
@@ -95,6 +113,21 @@ const CalendarEvents = () => {
     setToast({ isVisible: true, message, type });
   };
   const handleCloseToast = () => setToast({ ...toast, isVisible: false });
+
+  const handleManualSync = async () => {
+    setSyncing(true);
+    try {
+      const response = await calendarAPI.syncEvents();
+      showToast(`Sync completed! ${response.data.message}`, 'success');
+      // Reload events after sync
+      await loadEvents();
+    } catch (error) {
+      console.error('Sync error:', error);
+      showToast('Sync failed. Please try again.', 'error');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   // --- Monthly Calendar Logic ---
   const today = new Date();
@@ -223,13 +256,13 @@ const CalendarEvents = () => {
   // --- Events for selected range, grouped by day and hour ---
   function getTimeSlots() {
     const slots = [];
-    for (let hour = 4; hour <= 22; hour++) { // Start at 4:00 AM
+    for (let hour = 0; hour < 24; hour++) { // 12:00 AM to 11:00 PM
       for (let min = 0; min < 60; min += 15) {
         slots.push({ hour, min });
       }
     }
     return slots;
-    }
+  }
   const TIME_SLOTS = getTimeSlots();
 
   function getRangeDays(start, end) {
@@ -255,12 +288,18 @@ const CalendarEvents = () => {
     return div.textContent || div.innerText || '';
   }
 
-  // Utility to get the number of 15-min slots an event spans
-  function getEventSlotSpan(event) {
+  // Calculate event card height in px based on 64px per hour
+  function getEventCardHeight(event) {
     const start = new Date(event.startTime || event.start?.dateTime || event.start);
     const end = new Date(event.endTime || event.end?.dateTime || event.end);
-    const duration = Math.max(15, (end - start) / (1000 * 60)); // at least 15 min
-    return Math.ceil(duration / 15);
+    const durationMinutes = Math.max(15, (end - start) / (1000 * 60)); // at least 15 min
+    return (durationMinutes / 60) * 64;
+  }
+
+  // Calculate top offset in px within the hour cell
+  function getEventCardOffset(event) {
+    const start = new Date(event.startTime || event.start?.dateTime || event.start);
+    return (start.getMinutes() / 60) * 64;
   }
 
   // Utility to check if two events overlap in time
@@ -281,7 +320,7 @@ const CalendarEvents = () => {
     });
     }
 
-  function DraggableEventCard({ event, onClick, slotHeight = 28, style = {} }) {
+  function DraggableEventCard({ event, onClick, slotHeight = 64, style = {} }) {
     const [{ isDragging }, drag] = useDrag({
       type: ItemTypes.EVENT,
       item: { id: event.id, event },
@@ -290,7 +329,6 @@ const CalendarEvents = () => {
       }),
       canDrag: () => !resizing, // Prevent drag when resizing
     });
-    const slotSpan = getEventSlotSpan(event);
     const [resizing, setResizing] = useState(false);
     const [resizeEnd, setResizeEnd] = useState(null);
     const [justResized, setJustResized] = useState(false); // Track if last action was resize
@@ -302,14 +340,26 @@ const CalendarEvents = () => {
     const cardRef = useRef();
     useEffect(() => {
       if (!resizing) return;
+      
       function onMouseMove(e) {
         const cardRect = cardRef.current.getBoundingClientRect();
         const y = e.clientY - cardRect.top;
-        let minutes = Math.round(y / slotHeight * 15);
-        minutes = Math.max(15, Math.round(minutes / 15) * 15); // snap to 15 min, min 15 min
-        const newEnd = new Date(startTime.getTime() + minutes * 60 * 1000);
-        if (newEnd > startTime) setResizeEnd(newEnd);
+        
+        // Calculate minutes based on mouse position relative to card
+        const minutesFromStart = Math.max(0, y);
+        const totalMinutes = Math.round(minutesFromStart / slotHeight * 60);
+        
+        // Snap to 15-minute intervals, minimum 15 minutes
+        const snappedMinutes = Math.max(15, Math.round(totalMinutes / 15) * 15);
+        
+        const newEnd = new Date(startTime.getTime() + snappedMinutes * 60 * 1000);
+        
+        // Only update if the new end time is valid and different
+        if (newEnd > startTime && (!resizeEnd || newEnd.getTime() !== resizeEnd.getTime())) {
+          setResizeEnd(newEnd);
+        }
       }
+      
       function onMouseUp() {
         setResizing(false);
         if (resizeEnd && resizeEnd > startTime) {
@@ -321,13 +371,15 @@ const CalendarEvents = () => {
         window.removeEventListener('mousemove', onMouseMove);
         window.removeEventListener('mouseup', onMouseUp);
       }
+      
       window.addEventListener('mousemove', onMouseMove);
       window.addEventListener('mouseup', onMouseUp);
+      
       return () => {
         window.removeEventListener('mousemove', onMouseMove);
         window.removeEventListener('mouseup', onMouseUp);
       };
-    }, [resizing, resizeEnd, startTime]);
+    }, [resizing, resizeEnd, startTime, slotHeight]);
 
     // Only attach drag ref if not resizing
     const setRefs = node => {
@@ -357,6 +409,12 @@ const CalendarEvents = () => {
       }
     }, [event.title, event.summary]);
 
+    // Use resizeEnd for real-time height calculation during resize
+    const effectiveEndTime = resizeEnd || new Date(event.endTime || event.end?.dateTime || event.end);
+    const cardHeight = resizing 
+      ? Math.max(16, ((effectiveEndTime - startTime) / (1000 * 60)) * (64 / 60)) - 4
+      : getEventCardHeight(event);
+    const cardOffset = getEventCardOffset(event);
     return (
       <div
         ref={setRefs}
@@ -364,64 +422,54 @@ const CalendarEvents = () => {
         className={`bg-white border border-gray-200 rounded-xl shadow-md p-2 mb-2 cursor-pointer transition-all absolute left-0 w-full
           ${isDragging ? 'opacity-40 scale-95' : ''}
           hover:shadow-xl hover:scale-[1.03] focus:shadow-xl focus:scale-[1.03] active:scale-100
-          flex flex-col justify-center items-center relative
+          flex flex-col justify-center items-center group
           ${resizing ? 'ring-2 ring-blue-400 z-30' : ''}
         `}
         style={{
-          minHeight: slotHeight,
-          height: ((resizeEnd ? (resizeEnd - startTime) / (1000 * 60) : slotSpan * 15) / 15) * slotHeight - 4,
+          minHeight: 16,
+          height: cardHeight - 4,
+          top: cardOffset,
           zIndex: resizing ? 30 : 2,
           ...style,
           transition: resizing ? 'none' : 'box-shadow 0.25s cubic-bezier(.4,0,.2,1), transform 0.25s cubic-bezier(.4,0,.2,1), height 0.3s cubic-bezier(.4,0,.2,1)',
         }}
         tabIndex={0}
       >
-        <span
-          className="inline-block bg-black/90 text-white text-xs font-semibold px-3 py-1 rounded-full shadow-sm absolute top-0 right-0 z-10"
-          style={{
-            marginTop: '-8px',
-            marginRight: '-8px',
-            boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10)',
-            transition: 'box-shadow 0.2s',
-          }}
-        >
-          {timeRange}
-        </span>
-        <div className="flex-1 w-full flex items-center justify-center">
+        <div className="flex-1 w-full flex items-center relative">
           <div
             ref={titleRef}
-            className="font-semibold text-black text-sm truncate text-center w-full px-2 relative"
+            className="font-semibold text-black text-sm truncate text-left w-full px-3 pr-8 relative"
             onMouseEnter={() => isTruncated && setShowTooltip(true)}
             onMouseLeave={() => setShowTooltip(false)}
             style={{ cursor: isTruncated ? 'pointer' : 'default' }}
           >
-            {event.title || event.summary}
+            {startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}: {event.title || event.summary}
             {showTooltip && isTruncated && (
-              <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-1 bg-black text-white text-xs rounded shadow-lg whitespace-nowrap z-50 pointer-events-none animate-fade-in">
-                {event.title || event.summary}
+              <div className="absolute left-0 bottom-full mb-2 px-3 py-1 bg-black text-white text-xs rounded shadow-lg whitespace-nowrap z-50 pointer-events-none animate-fade-in">
+                {startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}: {event.title || event.summary}
               </div>
             )}
           </div>
-        </div>
-        {/* Resize handle at bottom */}
-        <div
-          className="absolute left-1/2 -translate-x-1/2 bottom-0 w-8 h-3 flex items-center justify-center cursor-ns-resize z-20"
-          style={{
-            borderRadius: 4,
-            background: resizing ? '#3b82f6' : '#e5e7eb',
-            boxShadow: resizing ? '0 0 0 2px #3b82f6' : '0 1px 4px 0 rgba(0,0,0,0.07)',
-            transition: 'background 0.2s, box-shadow 0.2s',
-            marginBottom: -6,
-          }}
-          onMouseDown={e => {
-            e.stopPropagation();
-            e.preventDefault();
-            setResizing(true);
-          }}
-          draggable={false}
-          title="Resize event"
-        >
-          <div className="w-4 h-1 rounded-full bg-gray-400" />
+          {/* Resize handle in middle - drawer style */}
+          <div
+            className="absolute left-1/2 -translate-x-1/2 bottom-0 w-8 h-2 flex items-center justify-center cursor-ns-resize z-20 opacity-0 hover:opacity-100 group-hover:opacity-100"
+            style={{
+              borderRadius: '4px 4px 0 0',
+              background: resizing ? '#3b82f6' : 'rgba(75, 85, 99, 0.9)',
+              boxShadow: resizing ? '0 0 0 2px #3b82f6' : '0 2px 4px 0 rgba(0,0,0,0.2)',
+              transition: 'background 0.2s, box-shadow 0.2s, opacity 0.2s',
+              marginBottom: '-1px',
+            }}
+            onMouseDown={e => {
+              e.stopPropagation();
+              e.preventDefault();
+              setResizing(true);
+            }}
+            draggable={false}
+            title="Drag to resize event"
+          >
+            <div className="w-4 h-0.5 rounded-full bg-white/80"></div>
+          </div>
         </div>
       </div>
     );
@@ -567,7 +615,7 @@ const CalendarEvents = () => {
   );
 }
 
-  function TimeSlot({ day, hour, min, events, onDropEvent, slotHeight = 28, className = '' }) {
+  function TimeSlot({ day, hour, min, events, onDropEvent, slotHeight = 64, className = '' }) {
     const [{ isOver, canDrop }, drop] = useDrop({
       accept: ItemTypes.EVENT,
       drop: (item) => {
@@ -587,12 +635,14 @@ const CalendarEvents = () => {
     // Calculate slot time
     const slotTime = new Date(day);
     slotTime.setHours(hour, min, 0, 0);
-    // Get all events that overlap with this slot
-    const overlappingEvents = getOverlappingEvents(events, slotTime);
-    // Assign column index for each overlapping event
+    // Get all events that start in this slot
+    const eventsInSlot = events.filter(event => {
+      const start = new Date(event.startTime || event.start?.dateTime || event.start);
+      return start.getHours() === hour && start.getMinutes() === min;
+    });
+    // Assign column index for each overlapping event (for future: overlapping logic)
     let columns = [];
-    overlappingEvents.forEach(event => {
-      // Find the first available column for this event
+    eventsInSlot.forEach(event => {
       let col = 0;
       while (columns.some(e => e.col === col && eventsOverlap(e.event, event))) {
         col++;
@@ -608,24 +658,19 @@ const CalendarEvents = () => {
         `}
         style={{ position: 'relative', height: slotHeight }}
       >
-        {columns.map(({ event, col }) => (
-          // Only render the card if this is the first slot of the event
-          (() => {
-            const eventStart = new Date(event.startTime || event.start?.dateTime || event.start);
-            if (eventStart.getTime() !== slotTime.getTime()) return null;
-            const width = `${100 / totalCols}%`;
-            const left = `${(100 / totalCols) * col}%`;
-            return (
-              <DraggableEventCard
-                key={event.id}
-                event={event}
-                onClick={setEditingEvent}
-                slotHeight={slotHeight}
-                style={{ width, left }}
-              />
-            );
-          })()
-        ))}
+        {columns.map(({ event, col }) => {
+          const width = `${100 / totalCols}%`;
+          const left = `${(100 / totalCols) * col}%`;
+          return (
+            <DraggableEventCard
+              key={event.id}
+              event={event}
+              onClick={setEditingEvent}
+              slotHeight={slotHeight}
+              style={{ width, left }}
+            />
+          );
+        })}
       </div>
     );
   }
@@ -640,12 +685,60 @@ const CalendarEvents = () => {
       eventsByDayTime[key][`${hour}:${min}`] = [];
     });
   });
+  
+  // Debug logging for selected range
+  if (rangeDays.length > 0) {
+    console.log('[CalendarEvents] Selected date range:', {
+      start: selectedRange.start?.toDateString(),
+      end: selectedRange.end?.toDateString(),
+      rangeDays: rangeDays.map(d => d.toDateString()),
+      totalEvents: events.length
+    });
+    
+    // Show first few events to see what we're working with
+    if (events.length > 0) {
+      console.log('[CalendarEvents] First 3 events:', events.slice(0, 3).map(event => ({
+        title: event.summary,
+        dateTime: event.start.dateTime || event.start,
+        parsedDate: new Date(event.start.dateTime || event.start).toDateString()
+      })));
+      
+      // Also show the date range of all events
+      const eventDates = events.map(event => new Date(event.start.dateTime || event.start));
+      const earliestDate = new Date(Math.min(...eventDates));
+      const latestDate = new Date(Math.max(...eventDates));
+      console.log('[CalendarEvents] Event date range:', {
+        earliest: earliestDate.toDateString(),
+        latest: latestDate.toDateString(),
+        totalEvents: events.length
+      });
+    }
+  }
   events.forEach(event => {
     const eventDate = new Date(event.start.dateTime || event.start);
     eventDate.setSeconds(0, 0);
     const dayKey = eventDate.toDateString();
     const hour = eventDate.getHours();
     const min = eventDate.getMinutes() - (eventDate.getMinutes() % 15);
+    
+    // Debug logging for all events in the selected range
+    const isInSelectedRange = rangeDays.some(rangeDay => 
+      rangeDay.toDateString() === dayKey
+    );
+    
+    if (isInSelectedRange) {
+      console.log('[CalendarEvents] Processing event in selected range:', {
+        title: event.summary,
+        date: eventDate.toDateString(),
+        dayKey,
+        hour,
+        min,
+        slotKey: `${hour}:${min}`,
+        hasSlot: eventsByDayTime[dayKey] && eventsByDayTime[dayKey][`${hour}:${min}`],
+        originalDateTime: event.start.dateTime || event.start
+      });
+    }
+    
     if (eventsByDayTime[dayKey] && eventsByDayTime[dayKey][`${hour}:${min}`]) {
       eventsByDayTime[dayKey][`${hour}:${min}`].push(event);
     }
@@ -653,7 +746,7 @@ const CalendarEvents = () => {
 
   // --- Render ---
   return (
-    <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl border border-black/10 p-8">
+    <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl border border-black/10 p-8 scrollbar-hover">
       <SuccessToast
         message={toast.message}
         isVisible={toast.isVisible}
@@ -670,6 +763,22 @@ const CalendarEvents = () => {
           <h3 className="text-2xl font-bold text-black">Monthly Calendar</h3>
         </div>
         <div className="flex space-x-2 items-center">
+          <button
+            onClick={handleManualSync}
+            disabled={syncing}
+            className="p-2 rounded hover:bg-gray-100 border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Sync Google Calendar"
+          >
+            {syncing ? (
+              <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            )}
+          </button>
           <button
             onClick={() => setShowSettings(true)}
             className="p-2 rounded hover:bg-gray-100 border border-gray-200"
@@ -726,120 +835,61 @@ const CalendarEvents = () => {
       {/* --- Time Grid for Selected Range --- */}
       {rangeDays.length > 0 && (
         <DndProvider backend={HTML5Backend}>
-          <div className="overflow-x-auto">
-            <div className="min-w-[900px] relative">
-              {/* Current time line overlay */}
-              {(() => {
-                // Only show if today is in rangeDays (in CST)
-                const todayCST = dateFnsTz.toZonedTime(new Date().toISOString(), CST_TIMEZONE);
-                const todayIdx = rangeDays.findIndex(day =>
-                  day.getFullYear() === todayCST.getFullYear() &&
-                  day.getMonth() === todayCST.getMonth() &&
-                  day.getDate() === todayCST.getDate()
-                );
-                if (todayIdx === -1) return null;
-                // Calculate vertical position
-                const startHour = 4;
-                const endHour = 22;
-                const totalMinutes = (endHour - startHour) * 60;
-                const now = currentTime;
-                if (
-                  now.getFullYear() !== todayCST.getFullYear() ||
-                  now.getMonth() !== todayCST.getMonth() ||
-                  now.getDate() !== todayCST.getDate()
-                ) return null;
-                const minutesSinceStart = (now.getHours() - startHour) * 60 + now.getMinutes();
-                if (minutesSinceStart < 0 || minutesSinceStart > totalMinutes) return null;
-                // Height of one minute in px (based on slotHeight=22 for 15min slots)
-                const slotHeight = 22;
-                const pxPerMinute = slotHeight / 15;
-                const top = minutesSinceStart * pxPerMinute + 36; // +36 for header offset
-                // Calculate left/width for the current day column
-                const left = `calc(80px + ${todayIdx} * (100% - 80px) / ${rangeDays.length})`;
-                const width = `calc((100% - 80px) / ${rangeDays.length})`;
-                // Debug log
-                console.log('[CurrentTimeLine]', { top, left, width, todayIdx, now });
-                return (
-                  <div
-                    className="pointer-events-none absolute left-0 w-full z-50"
-                    style={{
-                      top,
-                      height: 0,
-                    }}
-                  >
-                    <div
-                      className="absolute"
-                      style={{
-                        left,
-                        width,
-                        borderTop: '3px solid #ef4444', // red-500
-                        boxShadow: '0 0 8px 0 #ef4444',
-                        zIndex: 50,
-                        borderRadius: 2,
-                        borderBottom: '1px dashed #ef4444', // debug border
-                      }}
-                    />
-                  </div>
-                );
-              })()}
-              <div className="grid gap-x-2" style={{ gridTemplateColumns: `80px repeat(${rangeDays.length}, 1fr)` }}>
-                {/* Header Row */}
-                <div></div>
-                {rangeDays.map((day, idx) => (
-                  <div
-                    key={day.toDateString()}
-                    className={`text-center font-bold text-black py-2 border-b border-black/10 ${isToday(day) ? 'bg-blue-50 border-blue-400' : (idx % 2 === 1 ? 'bg-gray-50' : 'bg-white')}`}
-                  >
-                    {day.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
-                  </div>
-                ))}
-                {/* Time Rows */}
-                {TIME_SLOTS.map(({ hour, min }, rowIdx) => (
-                  <React.Fragment key={hour + ':' + min}>
-                    <div
-                      className={
-                        min === 0
-                          ? `text-sm font-bold text-black py-2 pr-2 border-r border-black border-t-2 text-right align-top ${rowIdx % 8 < 4 ? 'bg-gray-50' : 'bg-white'}` // alternate hour shading
-                          : `text-xs text-gray-400 py-1 pr-2 border-r border-gray-100 border-t bg-white text-right align-top`
-                      }
-                      style={{ minHeight: min === 0 ? 36 : 22 }}
-                    >
-                      {min === 0
-                        ? (hour === 12 ? '12 PM' : hour > 12 ? `${hour - 12}:00 PM` : `${hour}:00 AM`)
-                        : `${min.toString().padStart(2, '0')}`}
+          <div className="w-full">
+            <div className="w-full relative">
+                              {/* Flex row: left = hour labels, right = event grid. Both scroll together. */}
+                <div style={{ display: 'flex', maxHeight: 12 * 64, overflowY: 'auto' }} className="scrollbar-hover bg-white rounded-lg border border-gray-200 shadow-sm">
+                  {/* Hour labels */}
+                  <div style={{ flex: '0 0 70px', background: '#fafafa', borderRight: '1px solid #e5e7eb' }}>
+                    {/* Empty space for header alignment */}
+                    <div className="h-10 bg-gray-50 border-b border-gray-200 flex items-center justify-center">
+                      <div className="text-xs font-medium text-gray-500">Time</div>
                     </div>
-                    {rangeDays.map((day, colIdx) => {
-                      // Alternate day column shading
-                      const isCurrentDay = isToday(day);
-                      const isCurrentRow = isToday(day) && hour === today.getHours() && min === today.getMinutes();
-                      let bg = '';
-                      if (isCurrentDay && isCurrentRow) {
-                        bg = 'bg-blue-100';
-                      } else if (isCurrentDay) {
-                        bg = 'bg-blue-50';
-                      } else if (isCurrentRow) {
-                        bg = 'bg-blue-50';
-                      } else if (colIdx % 2 === 1) {
-                        bg = rowIdx % 8 < 4 ? 'bg-gray-50' : 'bg-white';
-                      } else {
-                        bg = rowIdx % 8 < 4 ? 'bg-white' : 'bg-gray-50';
-                      }
-                      return (
-                        <TimeSlot
-                          key={day.toDateString() + hour + ':' + min}
-                          day={day}
-                          hour={hour}
-                          min={min}
-                          events={eventsByDayTime[day.toDateString()]?.[`${hour}:${min}`] || []}
-                          onDropEvent={handleMoveEvent}
-                          slotHeight={min === 0 ? 36 : 22}
-                          // Add extra padding and background for whitespace and shading
-                          className={`relative ${bg} rounded-md`}
-                        />
-                      );
-                    })}
-                  </React.Fragment>
-                ))}
+                    {Array.from({ length: 24 }).map((_, hour) => (
+                      <div
+                        key={hour}
+                        className="text-xs font-semibold text-gray-600 py-2 pr-2 border-b border-gray-100 text-right align-top"
+                        style={{ height: 64, lineHeight: '64px' }}
+                      >
+                        {hour === 0 ? '12A' : hour < 12 ? `${hour}A` : hour === 12 ? '12P' : `${hour - 12}P`}
+                      </div>
+                    ))}
+                  </div>
+                  {/* Event grid (days) */}
+                  <div style={{ flex: 1, display: 'grid', gridTemplateColumns: `repeat(${rangeDays.length}, 1fr)` }}>
+                    {/* Date headers */}
+                    {rangeDays.map((day, colIdx) => (
+                      <div key={`header-${day.toDateString()}`} className={`h-10 border-b border-gray-200 flex items-center justify-center ${rangeDays.length > 1 && colIdx % 2 === 1 ? 'bg-gray-100' : 'bg-gray-50'}`}>
+                        <div className="text-sm font-semibold text-gray-700">
+                          {day.toLocaleDateString('en-US', { 
+                            weekday: 'short', 
+                            month: 'short', 
+                            day: 'numeric' 
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                                      {rangeDays.map((day, colIdx) => (
+                      <div key={day.toDateString()} style={{ display: 'flex', flexDirection: 'column' }}>
+                        {Array.from({ length: 24 }).map((_, hour) => {
+                          // Only apply alternating background when multiple days are selected
+                          let bg = rangeDays.length > 1 && colIdx % 2 === 1 ? 'bg-gray-100' : 'bg-white';
+                          return (
+                            <TimeSlot
+                              key={day.toDateString() + hour}
+                              day={day}
+                              hour={hour}
+                              min={0}
+                              events={eventsByDayTime[day.toDateString()]?.[`${hour}:0`] || []}
+                              onDropEvent={handleMoveEvent}
+                              slotHeight={64}
+                              className={`relative ${bg} border-b border-gray-100 hover:bg-gray-50 transition-colors`}
+                            />
+                          );
+                        })}
+                      </div>
+                    ))}
+                </div>
               </div>
             </div>
           </div>

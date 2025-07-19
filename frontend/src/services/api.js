@@ -63,6 +63,7 @@ export const calendarAPI = {
   updateEvent: (eventId, eventData) => api.put(`/calendar/events/${eventId}`, eventData),
   deleteEvent: (eventId) => api.delete(`/calendar/events/${eventId}`),
   getCalendarList: () => api.get('/calendar/list'),
+  syncEvents: () => api.post('/calendar/sync'),
 };
 
 // AI API

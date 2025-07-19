@@ -8,6 +8,7 @@ import {
   getCalendarList,
   getEventsForDate
 } from '../utils/calendarService.js';
+import { getCalendarEventsFromDB, syncGoogleCalendarEvents } from '../utils/syncService.js';
 
 const router = express.Router();
 
@@ -22,20 +23,27 @@ router.get('/list', requireAuth, async (req, res) => {
   }
 });
 
-// Get upcoming calendar events
+// Get upcoming calendar events from local database
 router.get('/events', requireAuth, async (req, res) => {
   try {
-    const maxResults = parseInt(req.query.maxResults) || 10;
-    const events = await listCalendarEvents(req.user.id, maxResults);
+    const maxResults = parseInt(req.query.maxResults) || 100;
+    
+    console.log(`[Calendar API] Getting events for user ${req.user.id}, maxResults: ${maxResults}`);
+    
+    // Get events from local database instead of Google Calendar API
+    const events = await getCalendarEventsFromDB(req.user.id, maxResults);
+    
+    console.log(`[Calendar API] Returning ${events.length} events`);
+    
     // Always return 200 with an array (possibly empty)
     res.json(events);
   } catch (error) {
-    console.error('Error getting calendar events:', error);
+    console.error('Error getting calendar events from database:', error);
     res.status(500).json({ error: 'Failed to get calendar events' });
   }
 });
 
-// Get events for a specific date
+// Get events for a specific date from local database
 router.get('/events/date', requireAuth, async (req, res) => {
   const { date } = req.query;
   // Validate date (simple regex for YYYY-MM-DD)
@@ -43,14 +51,15 @@ router.get('/events/date', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Missing or invalid date parameter (expected YYYY-MM-DD)' });
   }
   try {
-    const events = await getEventsForDate(req.user.id, date);
+    // Calculate time range for the specific date
+    const timeMin = new Date(date + 'T00:00:00Z');
+    const timeMax = new Date(date + 'T23:59:59Z');
+    
+    const events = await getCalendarEventsFromDB(req.user.id, 100, timeMin, timeMax);
     res.json(events);
   } catch (error) {
-    if (error.message.includes('No Google tokens found')) {
-      res.status(401).json({ error: 'Google Calendar not connected. Please connect your Google account first.' });
-    } else {
-      res.status(500).json({ error: 'Failed to fetch events for date' });
-    }
+    console.error('Error getting events for date from database:', error);
+    res.status(500).json({ error: 'Failed to fetch events for date' });
   }
 });
 
@@ -179,6 +188,26 @@ router.get('/status', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Error checking calendar status:', error);
     res.status(500).json({ error: 'Failed to check calendar status' });
+  }
+});
+
+// Manual sync endpoint
+router.post('/sync', requireAuth, async (req, res) => {
+  try {
+    console.log(`Manual sync requested for user: ${req.user.id}`);
+    const result = await syncGoogleCalendarEvents(req.user.id);
+    res.json({ 
+      success: true, 
+      message: `Synced ${result.count} events`,
+      count: result.count 
+    });
+  } catch (error) {
+    console.error('Error during manual sync:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to sync calendar events',
+      details: error.message 
+    });
   }
 });
 

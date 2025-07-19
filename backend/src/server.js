@@ -12,6 +12,8 @@ import calendarRouter from './routes/calendar.js'
 import aiRouter from './routes/ai.js'
 import conversationsRouter from './routes/conversations.js'
 import userRouter from './routes/user.js'
+import cron from 'node-cron';
+import { syncGoogleCalendarEvents } from './utils/syncService.js';
 
 
 const app = express()
@@ -88,6 +90,37 @@ app.use('/api/conversations', conversationsRouter);
 console.log('Conversations router registered');
 
 app.use('/api/user', userRouter);
+
+async function getAllUserIds() {
+  // Query all user_ids from google_tokens table
+  const { data, error } = await supabase
+    .from('google_tokens')
+    .select('user_id');
+
+  if (error) {
+    console.error('Error fetching user IDs for Google Calendar sync:', error);
+    return [];
+  }
+
+  // Return unique user IDs as an array of strings
+  return data.map(row => row.user_id);
+}
+
+// Schedule sync every day at 4:00 AM CST (America/Chicago)
+cron.schedule('0 4 * * *', async () => {
+  console.log('[CRON] Starting Google Calendar sync for all users at 4:00 AM CST');
+  const userIds = await getAllUserIds();
+  for (const userId of userIds) {
+    try {
+      await syncGoogleCalendarEvents(userId);
+      console.log(`[CRON] Synced Google Calendar for user: ${userId}`);
+    } catch (err) {
+      console.error(`[CRON] Error syncing Google Calendar for user: ${userId}`, err);
+    }
+  }
+}, {
+  timezone: 'America/Chicago'
+});
 
 // Start server only if run directly
 if (process.env.NODE_ENV !== 'test') {

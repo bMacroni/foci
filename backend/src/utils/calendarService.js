@@ -35,17 +35,28 @@ export async function getCalendarClient(userId) {
   }
 }
 
-export async function listCalendarEvents(userId, maxResults = 10) {
+export async function listCalendarEvents(userId, maxResults = 10, timeMin = null, timeMax = null) {
   try {
     const calendar = await getCalendarClient(userId);
     
-    const response = await calendar.events.list({
+    // Default to current time if no timeMin provided
+    const startTime = timeMin ? timeMin.toISOString() : new Date().toISOString();
+    
+    // Build request parameters
+    const params = {
       calendarId: 'primary',
-      timeMin: new Date().toISOString(),
+      timeMin: startTime,
       maxResults: maxResults,
       singleEvents: true,
       orderBy: 'startTime',
-    });
+    };
+    
+    // Only add timeMax if it's provided
+    if (timeMax) {
+      params.timeMax = timeMax.toISOString();
+    }
+    
+    const response = await calendar.events.list(params);
 
     return response.data.items;
   } catch (error) {
