@@ -124,7 +124,7 @@ export const createGoalFunctionDeclaration = {
 
 export const updateGoalFunctionDeclaration = {
   name: 'update_goal',
-  description: `Updates an existing goal for the user. First call 'lookup_goal' to get all goals, then use the appropriate goal ID from the list. Use this when the user wants to change details of a goal. Example user prompts: "Change the due date for my marathon goal", "Update the description of my reading goal".`,
+  description: `Updates an existing goal for the user. First call 'lookup_goal' to get all goals, then use the appropriate goal ID from the list. Use this when the user wants to change details of a task. If you find duplicates of a task, you can delete one with the users permission. Example user prompts: "Change the due date for my marathon goal", "Update the description of my reading goal".`,
   parameters: {
     type: Type.OBJECT,
     properties: {
@@ -184,11 +184,11 @@ Only include the goal title in the list unless the user specifically requests ot
 // Calendar Event Functions
 export const createCalendarEventFunctionDeclaration = {
   name: 'create_calendar_event',
-  description: 'Creates a new calendar event for the user. Use this when the user wants to schedule an event. The calendar is in Central Time Zone (CST). You can parse natural language date/time expressions like "tomorrow at 10:00 AM", "next Friday at 2:30 PM", or use specific ISO timestamps. Example user prompts: "Schedule a meeting for tomorrow at 10am", "Add a calendar event for my doctor appointment next Friday at 2:30 PM", "Create an event called team meeting today at 3pm".',
+  description: 'Creates a new calendar event for the user. Use this when the user wants to schedule an event. The calendar is in Central Time Zone (CST). You can parse natural language date/time expressions like "tomorrow at 10:00 AM", "next Friday at 2:30 PM", or use specific ISO timestamps. IMPORTANT: Always ask the user for a specific event title if they only say "schedule a meeting" or similar generic terms. Do not use generic titles like "meeting" or "event" - ask for a descriptive title. Example user prompts: "Schedule a meeting for tomorrow at 10am", "Add a calendar event for my doctor appointment next Friday at 2:30 PM", "Create an event called team meeting today at 3pm".',
   parameters: {
     type: Type.OBJECT,
     properties: {
-      title: { type: Type.STRING, description: 'Event title' },
+      title: { type: Type.STRING, description: 'Event title - MUST be descriptive and specific. Do not use generic titles like "meeting" or "event". Ask the user for a specific title if needed.' },
       description: { type: Type.STRING, description: 'Event details' },
       start_time: { type: Type.STRING, description: 'Event start time (ISO 8601) - use this if you have exact timestamps' },
       end_time: { type: Type.STRING, description: 'Event end time (ISO 8601) - use this if you have exact timestamps' },

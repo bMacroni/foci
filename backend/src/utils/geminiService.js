@@ -35,12 +35,27 @@ export class GeminiService {
       // Update conversation history
       this._addToHistory(userId, { role: 'user', content: message });
       // Add a system prompt to instruct Gemini to use functions
-      const systemPrompt = `
+      // --- Add today's date to the prompt ---
+      const today = new Date();
+      const options = { year: 'numeric', month: 'long', day: 'numeric' };
+      const todayString = today.toLocaleDateString('en-US', options);
+      const systemPrompt = `Today's date is ${todayString}.
+
 You are an AI assistant for a productivity app named Foci. Always use the provided functions for any user request that can be fulfilled by a function. Aside from helping the user with goals, tasks, and calendar events, you can also provide advice and help the user plan goals. If there is any confusion about which function to run, for example, your conversation history consists of multiple requests, confirm with the user what their desired request is.
 When the user asks to review their progress, you can use read_goals and read_tasks to view their information and respond in the form of a progress report.
 
+CONTEXT CLARITY: When the user makes a request, focus ONLY on their current message. Do not let previous conversation context confuse you about what they want now. If they ask to "schedule a meeting", use calendar functions. If they ask to "add a task", use task functions. If they ask about goals, use goal functions. Always prioritize the current request over historical context.
+
 Guidelines:
 - When performing a create operation (for tasks, goals, or events), try to gather all pertinent information related to the operation; you can ask the user if they would like you to estimate the values for them.
+
+CALENDAR RESPONSES: When returning calendar events, be conversational and helpful. Instead of just listing events, provide context and insights:
+- For "this week" queries: "Here's what's on your calendar this week:" followed by the events
+- For "today" queries: "Here's your schedule for today:" followed by the events  
+- For "tomorrow" queries: "Here's what you have planned for tomorrow:" followed by the events
+- For specific dates: "Here's your schedule for [date]:" followed by the events
+- If no events found: "You don't have any events scheduled for [time period]. Would you like me to help you schedule something?"
+- Add helpful context like "You have a busy day ahead!" or "Looks like you have some free time" when appropriate
 
 GOAL Setting guidelines:
 - Goal: The long-term destination or outcome the user wants to achieve.
@@ -114,8 +129,7 @@ IMPORTANT:
 
 RESPONSE GUIDELINES: When responding after executing function calls, use present tense and direct language. Say "I've added..." or "I've created..." or "Task created successfully" rather than "I've already added..." or "I've already created...". Be clear and concise about what action was just performed.
 
-Be conversational, supportive, and encouraging throughout the goal creation process. Celebrate their commitment and show enthusiasm for their goals.
-`;
+Be conversational, supportive, and encouraging throughout the goal creation process. Celebrate their commitment and show enthusiasm for their goals.`;
       // Trim conversation history to the last MAX_HISTORY_MESSAGES
       const MAX_HISTORY_MESSAGES = 10;
       const fullHistory = this.conversationHistory.get(userId) || [];
@@ -128,6 +142,7 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
         })),
         { role: 'user', parts: [{ text: message }] }
       ];
+      
       // Send to Gemini
       const result = await this.model.generateContent({
         contents,
@@ -200,6 +215,9 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
           name: fr.name,
           response: fr.response
         }));
+        console.log('=== FINAL RESPONSE DEBUG ===');
+        console.log('Function responses being sent to Gemini:', JSON.stringify(functionResponses, null, 2));
+        
         const followupContents = [
           ...contents,
           ...functionResponses.map(fr => ({
@@ -212,6 +230,8 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
             }]
           }))
         ];
+        console.log('Followup contents being sent to Gemini:', JSON.stringify(followupContents, null, 2));
+        
         let message = '';
         if (actions.length > 1) {
           message = `created ${actions.length} actions`;
@@ -221,9 +241,13 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
             tools: [{ functionDeclarations: allGeminiFunctionDeclarations }]
           });
           const finalResponse = await finalResult.response;
+          console.log('Final Gemini response received');
+          console.log('Final response has text:', !!finalResponse.text);
+          console.log('Final response text length:', finalResponse.text ? finalResponse.text().length : 'undefined');
           
           // Check for additional function calls in the final response
           const finalFunctionCalls = finalResponse.functionCalls ? await finalResponse.functionCalls() : [];
+          console.log('Final function calls count:', finalFunctionCalls ? finalFunctionCalls.length : 0);
           
           if (finalFunctionCalls && finalFunctionCalls.length > 0) {
             // Process the additional function calls
@@ -256,12 +280,16 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
           }
           
           message = finalResponse.text ? await finalResponse.text() : '';
+          console.log('Final message extracted:', message);
+          console.log('Final message length:', message.length);
+          
           // Always inject code block for the first read_task action if present
           const firstReadTask = actions.find(a => a.action_type === 'read' && a.entity_type === 'task');
           if (firstReadTask) {
             message = `Here are your tasks:\n\n\`\`\`json\n${JSON.stringify(firstReadTask, null, 2)}\`\`\``;
           }
         }
+        console.log('=== END FINAL RESPONSE DEBUG ===');
         // Add to conversation history
         this._addToHistory(userId, { role: 'model', content: message });
         return {

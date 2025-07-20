@@ -101,25 +101,26 @@ html {
 
 /* Custom black scrollbar that only appears on hover */
 .scrollbar-hover::-webkit-scrollbar {
-  width: 0px;
-  background: transparent;
-  transition: width 0.2s;
-}
-.scrollbar-hover:hover::-webkit-scrollbar {
   width: 8px;
+  background: transparent;
 }
 .scrollbar-hover::-webkit-scrollbar-thumb {
-  background: #000;
+  background: rgba(0,0,0,0); /* fully transparent by default */
   border-radius: 8px;
+  transition: background 0.2s;
+}
+.scrollbar-hover:hover::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,1); /* fully opaque on hover */
 }
 .scrollbar-hover::-webkit-scrollbar-track {
   background: transparent;
 }
 /* Firefox */
 .scrollbar-hover {
-  scrollbar-width: none;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.2s;
 }
 .scrollbar-hover:hover {
-  scrollbar-width: thin;
   scrollbar-color: #000 transparent;
 } 

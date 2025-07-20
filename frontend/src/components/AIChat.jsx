@@ -68,6 +68,7 @@ const AIChat = ({ onNavigateToTab, initialMessages }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [pinnedThreads, setPinnedThreads] = useState(new Set());
   const [showThreadMenu, setShowThreadMenu] = useState(null);
+  const [pendingUserMessageId, setPendingUserMessageId] = useState(null);
 
   // Load user data and conversation threads
   useEffect(() => {
@@ -391,7 +392,7 @@ You’re making great strides!
         }
       ]);
 
-      // For each action, show a toast and add a natural language message
+      // For each action, show a toast notification only
       actions.forEach(action => {
         // Only handle create/update/delete actions
         if (["create", "update", "delete"].includes(action.action_type)) {
@@ -401,31 +402,12 @@ You’re making great strides!
           if (action.action_type === 'delete') actionVerb = 'deleted';
           const entity = action.entity_type.replace('_', ' ');
           const title = action.details?.title || action.details?.name || '';
-          // Toast
+          // Toast notification only
           showToast(`${entity.charAt(0).toUpperCase() + entity.slice(1)}${title ? ` "${title}"` : ''} ${actionVerb}.`, 'success');
-          // Chat message
-          setMessages(prev => [
-            ...prev,
-            {
-              id: generateUniqueId(),
-              type: 'ai',
-              content: `I've ${actionVerb} ${entity}${title ? ` "${title}"` : ''}.`,
-              timestamp: new Date()
-            }
-          ]);
         }
         // If error
         if (action.details && action.details.error) {
           showToast(`Failed to ${action.action_type} ${action.entity_type}: ${action.details.error}`, 'error');
-          setMessages(prev => [
-            ...prev,
-            {
-              id: generateUniqueId(),
-              type: 'ai',
-              content: `❌ Failed to ${action.action_type} ${action.entity_type}: ${action.details.error}`,
-              timestamp: new Date()
-            }
-          ]);
         }
       });
     } catch (error) {
@@ -441,33 +423,32 @@ You’re making great strides!
   };
 
   // Modified: handleSubmit uses handleGeminiResponse
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!inputMessage.trim() || isLoading) return;
-
+  const handleSubmit = async (e, retryMessage = null) => {
+    e.preventDefault && e.preventDefault();
+    if ((!inputMessage.trim() && !retryMessage) || isLoading) return;
+    const messageContent = retryMessage || inputMessage;
     const userMessage = {
       id: generateUniqueId(),
       type: 'user',
-      content: inputMessage,
+      content: messageContent,
       timestamp: new Date()
     };
-
     setMessages(prev => [...prev, userMessage]);
     setInputMessage('');
     setIsLoading(true);
-
+    setPendingUserMessageId(userMessage.id);
     try {
       let threadId = currentThreadId;
       if (!threadId) {
         // Send the first user message to backend for title generation
-        const response = await conversationsAPI.createThread({ title: '', summary: '', messages: [{ role: 'user', content: inputMessage }] });
+        const response = await conversationsAPI.createThread({ title: '', summary: '', messages: [{ role: 'user', content: messageContent }] });
         threadId = response.data.id;
         setCurrentThreadId(threadId);
         setConversationThreads(prev => [response.data, ...prev]);
       }
       
       console.log('🚀 Sending message to AI API...');
-      const response = await aiAPI.sendMessage(inputMessage, threadId);
+      const response = await aiAPI.sendMessage(messageContent, threadId);
       console.log('✅ Received response from AI API');
       handleGeminiResponse(response);
       
@@ -483,6 +464,7 @@ You’re making great strides!
       showToast('Failed to send message. Please try again.', 'error');
     } finally {
       setIsLoading(false);
+      setPendingUserMessageId(null);
     }
   };
 
@@ -726,6 +708,14 @@ You’re making great strides!
     }
     return () => clearTimeout(timer);
   }, [hasLoadedData]);
+
+  const examplePrompts = [
+    "Add a new goal",
+    "Show my tasks for today",
+    "Schedule a meeting for tomorrow at 2pm",
+    "What’s on my calendar this week?",
+    "Mark my ‘Buy groceries’ task as done"
+  ];
 
   return (
     <div className="bg-white h-full flex overflow-hidden relative">
@@ -998,44 +988,23 @@ You’re making great strides!
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
-        {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4 mt-20 scrollbar-hover">
-          {messages.map((message) => {
-            switch (message.type) {
-              case 'user':
-                return <MessageBubble key={message.id} message={message} />;
-              case 'ai':
-                return <MessageBubble key={message.id} message={message} />;
-              case 'calendar_events':
-                // Handle Google Calendar disconnect error
-                if (message.content && message.content.error === 'google_calendar_disconnected') {
-                  return (
-                    <div key={message.id} className="p-4 bg-red-100 rounded-lg">
-                      <p className="font-semibold text-red-700">Your Google Calendar connection has expired or been revoked.</p>
-                      <p className="text-red-700">Please reconnect your Google account in settings to restore calendar features.</p>
-                    </div>
-                  );
-                }
-                return (
-                  <div key={message.id} className="p-4 bg-blue-100 rounded-lg">
-                    <p className="font-semibold">Here are your upcoming events:</p>
-                    <ul className="list-disc pl-5 mt-2">
-                      {Array.isArray(message.content) && message.content.length > 0 ? (
-                        message.content.map(event => (
-                          <li key={event.id}>
-                            <strong>{event.summary}</strong> on {new Date(event.start.dateTime || event.start.date).toLocaleDateString()}
-                          </li>
-                        ))
-                      ) : (
-                        <li>No upcoming events found.</li>
-                      )}
-                    </ul>
+      {/* Wrap the main return JSX in a full-height flex column container */}
+      {/* This wrapper ensures sticky input works by making the chat fill the viewport */}
+      <div className="h-screen flex flex-col w-full">
+        {/* Messages Area (scrollable) */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-hover w-full" style={{ minHeight: 0 }}>
+          {messages.map((message, idx) => {
+            const isPending = message.type === 'user' && message.id === pendingUserMessageId;
+            return (
+              <React.Fragment key={message.id}>
+                <MessageBubble message={message} />
+                {isPending && (
+                  <div className="flex justify-end mt-1" key={message.id + '-pending'}>
+                    
                   </div>
-                );
-              default:
-                return null;
-            }
+                )}
+              </React.Fragment>
+            );
           })}
           {pendingApproval && (
             <BulkApprovalPanel
@@ -1056,44 +1025,59 @@ You’re making great strides!
           )}
           <div ref={messagesEndRef} />
         </div>
-
-        {/* Input Area */}
-        <div className="border-t border-black/10 p-4">
-          <form onSubmit={handleSubmit} className="flex space-x-4">
-            <div className="flex-1 relative">
-              <textarea
-                value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Tell me what you'd like to work on today..."
-                className="w-full px-4 py-3 border border-black/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 focus:border-transparent resize-none"
-                rows="1"
-                style={{ minHeight: '48px', maxHeight: '120px' }}
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={!inputMessage.trim() || isLoading}
-              className="px-6 py-3 bg-black text-white rounded-xl hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
-              <span>Send</span>
-            </button>
-            {/* New button for low energy task recommendation */}
-            <button
-              type="button"
-              onClick={handleRecommendLowEnergyTask}
-              disabled={isLoading}
-              className="px-6 py-3 bg-gray-200 text-gray-800 rounded-xl hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-              <span>Suggest Low Energy Task</span>
-            </button>
-          </form>
+        {/* Sticky Example Prompts and Input Area */}
+        <div className="sticky bottom-0 bg-white border-t border-black/10 z-10 w-full">
+          <div className="flex flex-wrap gap-2 p-4 bg-gray-50 border-b border-black/10 w-full">
+            <span className="font-semibold text-gray-700 mr-2">Try asking:</span>
+            {examplePrompts.map((prompt, idx) => (
+              <button
+                key={idx}
+                type="button"
+                className="px-3 py-1 bg-black text-white rounded-full text-sm hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-black/30 transition-colors"
+                onClick={() => setInputMessage(prompt)}
+                aria-label={`Use example prompt: ${prompt}`}
+              >
+                {prompt}
+              </button>
+            ))}
+          </div>
+          <div className="border-t border-black/10 p-4 w-full">
+            <form onSubmit={handleSubmit} className="flex space-x-4 w-full">
+              <div className="flex-1 relative w-full">
+                <textarea
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Tell me what you'd like to work on today..."
+                  className="w-full px-4 py-3 border border-black/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 focus:border-transparent resize-none"
+                  rows="1"
+                  style={{ minHeight: '48px', maxHeight: '120px' }}
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={!inputMessage.trim() || isLoading}
+                className="px-6 py-3 bg-black text-white rounded-xl hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+                <span>Send</span>
+              </button>
+              {/* New button for low energy task recommendation */}
+              <button
+                type="button"
+                onClick={handleRecommendLowEnergyTask}
+                disabled={isLoading}
+                className="px-6 py-3 bg-gray-200 text-gray-800 rounded-xl hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                <span>Suggest Low Energy Task</span>
+              </button>
+            </form>
+          </div>
         </div>
       </div>
       {/* Render CalendarEvents if calendarEvents is not null */}
@@ -1339,20 +1323,159 @@ const MessageBubble = ({ message }) => {
   };
 
   if (message.type === 'calendar_events') {
+    // Group events by day
+    const eventsByDay = {};
+    if (Array.isArray(message.content) && message.content.length > 0) {
+      message.content.forEach(event => {
+        const startDate = new Date(event.start.dateTime || event.start.date);
+        const dayKey = startDate.toDateString();
+        if (!eventsByDay[dayKey]) {
+          eventsByDay[dayKey] = [];
+        }
+        eventsByDay[dayKey].push(event);
+      });
+    }
+
+    // Sort days and events within each day
+    const sortedDays = Object.keys(eventsByDay).sort();
+    sortedDays.forEach(day => {
+      eventsByDay[day].sort((a, b) => {
+        const timeA = new Date(a.start.dateTime || a.start.date);
+        const timeB = new Date(b.start.dateTime || b.start.date);
+        return timeA - timeB;
+      });
+    });
+
+    const formatTime = (dateTime) => {
+      const date = new Date(dateTime);
+      return date.toLocaleTimeString('en-US', { 
+        hour: 'numeric', 
+        minute: '2-digit',
+        hour12: true 
+      });
+    };
+
+    const formatDate = (dateString) => {
+      const date = new Date(dateString);
+      const today = new Date();
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      if (date.toDateString() === today.toDateString()) {
+        return 'Today';
+      } else if (date.toDateString() === tomorrow.toDateString()) {
+        return 'Tomorrow';
+      } else {
+        return date.toLocaleDateString('en-US', { 
+          weekday: 'long', 
+          month: 'long', 
+          day: 'numeric' 
+        });
+      }
+    };
+
     return (
-      <div className="p-4 bg-blue-100 rounded-lg">
-        <p className="font-semibold">Here are your upcoming events:</p>
-        <ul className="list-disc pl-5 mt-2">
-          {Array.isArray(message.content) && message.content.length > 0 ? (
-            message.content.map(event => (
-              <li key={event.id}>
-                <strong>{event.summary}</strong> on {new Date(event.start.dateTime || event.start.date).toLocaleDateString()}
-              </li>
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-gray-200">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Your Schedule</h3>
+              <p className="text-sm text-gray-600">
+                {sortedDays.length > 0 ? `${message.content.length} events across ${sortedDays.length} day${sortedDays.length > 1 ? 's' : ''}` : 'No events found'}
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="divide-y divide-gray-100">
+          {sortedDays.length > 0 ? (
+            sortedDays.map(day => (
+              <div key={day} className="p-6">
+                <div className="mb-4">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-1">
+                    {formatDate(day)}
+                  </h4>
+                  <div className="text-sm text-gray-500">
+                    {new Date(day).toLocaleDateString('en-US', { 
+                      weekday: 'long', 
+                      month: 'long', 
+                      day: 'numeric',
+                      year: 'numeric'
+                    })}
+                  </div>
+                </div>
+                
+                <div className="space-y-3">
+                  {eventsByDay[day].map(event => {
+                    const startTime = new Date(event.start.dateTime || event.start.date);
+                    const endTime = new Date(event.end.dateTime || event.end.date);
+                    const duration = Math.round((endTime - startTime) / (1000 * 60)); // duration in minutes
+                    
+                    return (
+                      <div key={event.id} className="flex items-start space-x-4 p-4 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition-colors">
+                        <div className="flex-shrink-0 w-16 text-center">
+                          <div className="text-sm font-semibold text-gray-900">
+                            {formatTime(event.start.dateTime || event.start.date)}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {duration > 0 ? `${duration}m` : 'All day'}
+                          </div>
+                        </div>
+                        
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <h5 className="text-base font-medium text-gray-900 truncate">
+                                {event.title || 'Untitled Event'}
+                              </h5>
+                              {event.description && (
+                                <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                                  {event.description}
+                                </p>
+                              )}
+                              {event.location && (
+                                <div className="flex items-center mt-2 text-sm text-gray-500">
+                                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  </svg>
+                                  {event.location}
+                                </div>
+                              )}
+                            </div>
+                            
+                            <div className="flex-shrink-0 ml-4">
+                              <div className="text-xs text-gray-400 bg-gray-200 px-2 py-1 rounded-full">
+                                {event.timeZone === 'America/Chicago' ? 'CST' : 
+                                 event.timeZone === 'America/New_York' ? 'EST' : 
+                                 event.timeZone === 'UTC' ? 'UTC' : event.timeZone}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             ))
           ) : (
-            <li>No upcoming events found.</li>
+            <div className="p-8 text-center">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No events found</h3>
+              <p className="text-gray-500">You don't have any events scheduled for this time period.</p>
+            </div>
           )}
-        </ul>
+        </div>
       </div>
     );
   }

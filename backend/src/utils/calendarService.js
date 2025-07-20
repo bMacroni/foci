@@ -290,10 +290,17 @@ function parseDateRange(dateInput) {
  */
 export async function readCalendarEventFromAI(args, userId, userContext) {
   try {
+    console.log('=== READ CALENDAR EVENT DEBUG ===');
+    console.log('User ID:', userId);
+    console.log('Arguments:', JSON.stringify(args, null, 2));
+    console.log('User Context:', JSON.stringify(userContext, null, 2));
+    
     const calendar = await getCalendarClient(userId);
+    console.log('Calendar client obtained successfully');
     
     // Parse the date input (could be natural language like "tomorrow", "next week")
     const dateRange = parseDateRange(args.date);
+    console.log('Parsed date range:', JSON.stringify(dateRange, null, 2));
     
     // Build query parameters
     const queryParams = {
@@ -309,12 +316,17 @@ export async function readCalendarEventFromAI(args, userId, userContext) {
       const timeMax = new Date(dateRange.endDate + 'T23:59:59Z').toISOString();
       queryParams.timeMin = timeMin;
       queryParams.timeMax = timeMax;
+      console.log('Using date range:', { timeMin, timeMax });
     } else {
       // If no date specified, get events from now onwards
       queryParams.timeMin = new Date().toISOString();
+      console.log('Using current time onwards:', queryParams.timeMin);
     }
 
+    console.log('Query parameters:', JSON.stringify(queryParams, null, 2));
     const response = await calendar.events.list(queryParams);
+    console.log('Google Calendar API response received');
+    console.log('Response data items count:', response.data.items ? response.data.items.length : 'undefined');
     
     // Format events for AI consumption
     const events = response.data.items.map(event => ({
@@ -327,9 +339,18 @@ export async function readCalendarEventFromAI(args, userId, userContext) {
       timeZone: event.start?.timeZone || 'UTC'
     }));
 
+    console.log('Formatted events:', JSON.stringify(events, null, 2));
+    console.log('Returning', events.length, 'events');
+    console.log('=== END READ CALENDAR EVENT DEBUG ===');
+    
     return events;
   } catch (error) {
+    console.error('=== READ CALENDAR EVENT ERROR ===');
     console.error('Error in readCalendarEventFromAI:', error);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('=== END READ CALENDAR EVENT ERROR ===');
+    
     // Handle Google token errors gracefully
     if (
       (error.response && error.response.data && error.response.data.error === 'invalid_grant') ||
@@ -462,6 +483,11 @@ function combineDateAndTime(dateStr, timeStr, timeZone = 'UTC') {
  */
 export async function createCalendarEventFromAI(args, userId, userContext) {
   try {
+    console.log('=== CALENDAR EVENT CREATION DEBUG ===');
+    console.log('User ID:', userId);
+    console.log('Arguments:', JSON.stringify(args, null, 2));
+    console.log('User Context:', JSON.stringify(userContext, null, 2));
+    
     // Parse natural language date/time expressions
     let startDateTime = null;
     let endDateTime = null;
@@ -471,10 +497,13 @@ export async function createCalendarEventFromAI(args, userId, userContext) {
       // Direct ISO timestamps provided
       startDateTime = args.start_time;
       endDateTime = args.end_time;
+      console.log('Using direct timestamps:', { startDateTime, endDateTime });
     } else if (args.date || args.time) {
       // Natural language date/time provided
       const dateStr = args.date ? dateParser.parse(args.date) : dateParser.parse('today');
       const timeStr = args.time ? parseTimeExpression(args.time) : '09:00'; // Default to 9 AM
+      
+      console.log('Parsed date/time:', { dateStr, timeStr });
       
       if (!dateStr) {
         throw new Error('Could not parse the date expression');
@@ -487,6 +516,8 @@ export async function createCalendarEventFromAI(args, userId, userContext) {
       const endTime = new Date(startDateTime);
       endTime.setMinutes(endTime.getMinutes() + duration);
       endDateTime = endTime.toISOString();
+      
+      console.log('Calculated times:', { startDateTime, endDateTime, duration });
     } else {
       throw new Error('Either start_time/end_time or date/time must be provided');
     }
@@ -501,10 +532,14 @@ export async function createCalendarEventFromAI(args, userId, userContext) {
       location: args.location // Always include location, even if undefined
     };
     
-    // Create the calendar event
-    const createdEvent = await createCalendarEvent(userId, eventData);
+    console.log('Event data to create:', JSON.stringify(eventData, null, 2));
     
-    return {
+    // Create the calendar event
+    console.log('Attempting to create calendar event...');
+    const createdEvent = await createCalendarEvent(userId, eventData);
+    console.log('Calendar event created successfully:', JSON.stringify(createdEvent, null, 2));
+    
+    const result = {
       success: true,
       event: {
         id: createdEvent.id,
@@ -516,8 +551,17 @@ export async function createCalendarEventFromAI(args, userId, userContext) {
         timeZone: createdEvent.start?.timeZone
       }
     };
+    
+    console.log('Returning result:', JSON.stringify(result, null, 2));
+    console.log('=== END CALENDAR EVENT CREATION DEBUG ===');
+    
+    return result;
   } catch (error) {
+    console.error('=== CALENDAR EVENT CREATION ERROR ===');
     console.error('Error in createCalendarEventFromAI:', error);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('=== END CALENDAR EVENT CREATION ERROR ===');
     throw error;
   }
 } 

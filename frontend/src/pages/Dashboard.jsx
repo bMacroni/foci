@@ -68,13 +68,16 @@ function Dashboard({ showSuccess }) {
     <div className="min-h-screen bg-white flex">
       {/* Top-Center Horizontal Nav Pill */}
       <div
-        className="z-50 shadow-2xl bg-white/95 flex flex-row items-center fixed left-1/2 top-6 transform -translate-x-1/2 rounded-full px-8 py-3"
+        className="z-50 shadow-2xl flex flex-row items-center fixed left-1/2 top-6 transform -translate-x-1/2 rounded-full px-8 py-3 transition-all duration-200"
         style={{
-          background: 'rgba(255,255,255,0.97)',
+          background: 'rgba(255,255,255,0.7)', // More transparent by default
           boxShadow: '0 8px 32px 0 rgba(0,0,0,0.18)',
           minWidth: 0,
           minHeight: 0,
+          opacity: 0.7, // More transparent by default
         }}
+        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.97)'; e.currentTarget.style.opacity = 1; }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.7)'; e.currentTarget.style.opacity = 0.7; }}
       >
         {/* Nav Buttons */}
         {[
@@ -147,10 +150,6 @@ function Dashboard({ showSuccess }) {
           </svg>
           <span>Logout</span>
         </button>
-      </div>
-      {/* Foci app name badge */}
-      <div className="fixed top-6 left-1/2 -translate-x-1/2 z-40">
-        <span className="inline-flex items-center px-4 py-1.5 rounded-full bg-black/90 text-white text-base font-bold shadow-md tracking-wide opacity-90" style={{letterSpacing: '0.08em'}}>Foci.ai</span>
       </div>
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col relative">

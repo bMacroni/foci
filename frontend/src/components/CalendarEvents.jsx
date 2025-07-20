@@ -27,6 +27,10 @@ const CalendarEvents = () => {
   const [savingTimezone, setSavingTimezone] = useState(false);
   const [timezoneError, setTimezoneError] = useState('');
   const [syncing, setSyncing] = useState(false);
+  
+  // Add caching state
+  const [lastFetchTime, setLastFetchTime] = useState(null);
+  const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
 
   // Fetch user timezone on mount
   useEffect(() => {
@@ -90,12 +94,22 @@ const CalendarEvents = () => {
     return () => clearInterval(interval);
   }, [userTimezone, detectedTimezone]);
 
-  const loadEvents = async () => {
+  const loadEvents = async (forceRefresh = false) => {
     try {
+      // Check if we have cached data and it's still valid
+      const now = Date.now();
+      if (!forceRefresh && lastFetchTime && (now - lastFetchTime) < CACHE_DURATION && events.length > 0) {
+        console.log('[CalendarEvents] Using cached events, last fetch was', Math.round((now - lastFetchTime) / 1000), 'seconds ago');
+        setLoading(false);
+        return;
+      }
+      
       setLoading(true);
+      console.log('[CalendarEvents] Fetching fresh events from API...');
       const response = await calendarAPI.getEvents(1000); // Increased from 100 to 1000
       const eventsData = Array.isArray(response.data) ? response.data : [];
       setEvents(eventsData);
+      setLastFetchTime(now);
       setError(null);
       console.log('[CalendarEvents] Events loaded:', eventsData.length, 'events');
       if (eventsData.length > 0) {
@@ -119,8 +133,8 @@ const CalendarEvents = () => {
     try {
       const response = await calendarAPI.syncEvents();
       showToast(`Sync completed! ${response.data.message}`, 'success');
-      // Reload events after sync
-      await loadEvents();
+      // Force refresh events after sync
+      await loadEvents(true);
     } catch (error) {
       console.error('Sync error:', error);
       showToast('Sync failed. Please try again.', 'error');
@@ -208,6 +222,12 @@ const CalendarEvents = () => {
   // --- Calendar Navigation ---
   const prevMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
   const nextMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
+  
+  // Add refresh function
+  const handleRefresh = async () => {
+    await loadEvents(true);
+    showToast('Calendar refreshed!', 'success');
+  };
 
   // --- Drag-and-drop event move handler ---
   const handleMoveEvent = async (event, newDay, newHour, newMin) => {
@@ -771,6 +791,22 @@ const CalendarEvents = () => {
           >
             {syncing ? (
               <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            )}
+          </button>
+          <button
+            onClick={handleRefresh}
+            disabled={loading}
+            className="p-2 rounded hover:bg-gray-100 border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Refresh Calendar"
+          >
+            {loading ? (
+              <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
             ) : (
@@ -785,8 +821,8 @@ const CalendarEvents = () => {
             title="Calendar Settings"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6l4 2" />
-              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
           </button>
           <button onClick={prevMonth} className="p-2 rounded hover:bg-gray-100">

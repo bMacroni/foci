@@ -6,16 +6,30 @@ const CalendarStatus = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  
+  // Add caching state
+  const [lastStatusCheck, setLastStatusCheck] = useState(null);
+  const STATUS_CACHE_DURATION = 2 * 60 * 1000; // 2 minutes in milliseconds
 
   useEffect(() => {
     checkCalendarStatus();
   }, []);
 
-  const checkCalendarStatus = async () => {
+  const checkCalendarStatus = async (forceRefresh = false) => {
     try {
+      // Check if we have cached status and it's still valid
+      const now = Date.now();
+      if (!forceRefresh && lastStatusCheck && (now - lastStatusCheck) < STATUS_CACHE_DURATION && status) {
+        console.log('[CalendarStatus] Using cached status, last check was', Math.round((now - lastStatusCheck) / 1000), 'seconds ago');
+        setLoading(false);
+        return;
+      }
+      
       setLoading(true);
+      console.log('[CalendarStatus] Checking calendar status...');
       const response = await calendarAPI.getStatus();
       setStatus(response.data);
+      setLastStatusCheck(now);
       setError(null);
     } catch (err) {
       setError('Failed to check calendar status');
@@ -116,7 +130,7 @@ const CalendarStatus = () => {
                 </div>
                 <div className="flex space-x-2">
                   <button
-                    onClick={checkCalendarStatus}
+                    onClick={() => checkCalendarStatus(true)}
                     className="px-4 py-2 bg-black text-white rounded-xl hover:bg-gray-900 font-medium"
                   >Refresh</button>
                   <button
