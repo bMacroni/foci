@@ -1,3 +1,6 @@
+// DEPRECATED: All step logic has been moved to goalsController.js. This file is no longer used and will be removed in a future release.
+// Please update all imports to use goalsController.js instead.
+/*
 import { createClient } from '@supabase/supabase-js';
 
 export async function createStep(req, res) {
@@ -119,3 +122,4 @@ export async function lookupStep(req, res) {
 
   res.json(step);
 } 
+*/ 

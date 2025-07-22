@@ -14,7 +14,10 @@ export const createTaskFunctionDeclaration = {
       related_goal: { type: Type.STRING, description: 'Associated goal title' },
       preferred_time_of_day: { type: Type.STRING, description: 'Preferred time of day for the task (morning, afternoon, evening, any)' },
       deadline_type: { type: Type.STRING, description: 'Deadline type: hard (must be done by due date) or soft (flexible)' },
-      travel_time_minutes: { type: Type.NUMBER, description: 'Estimated travel time in minutes to the task location' }
+      travel_time_minutes: { type: Type.NUMBER, description: 'Estimated travel time in minutes to the task location' },
+      category: { type: Type.STRING, description: 'Task category (e.g., work, personal, health, etc.)' },
+      status: { type: Type.STRING, description: 'Task status (e.g., not_started, in_progress, completed)' },
+      recurrence: { type: Type.STRING, description: 'Recurrence rule for repeating tasks (e.g., daily, weekly, custom RRULE)' }
     },
     required: ['title']
   }
@@ -35,7 +38,10 @@ export const updateTaskFunctionDeclaration = {
       completed: { type: Type.BOOLEAN, description: 'Task completion status' },
       preferred_time_of_day: { type: Type.STRING, description: 'Preferred time of day for the task (morning, afternoon, evening, any)' },
       deadline_type: { type: Type.STRING, description: 'Deadline type: hard (must be done by due date) or soft (flexible)' },
-      travel_time_minutes: { type: Type.NUMBER, description: 'Estimated travel time in minutes to the task location' }
+      travel_time_minutes: { type: Type.NUMBER, description: 'Estimated travel time in minutes to the task location' },
+      category: { type: Type.STRING, description: 'Task category (e.g., work, personal, health, etc.)' },
+      status: { type: Type.STRING, description: 'Task status (e.g., not_started, in_progress, completed)' },
+      recurrence: { type: Type.STRING, description: 'Recurrence rule for repeating tasks (e.g., daily, weekly, custom RRULE)' }
     },
     required: [] // id is required if known, but not always present
   }
@@ -56,16 +62,20 @@ export const deleteTaskFunctionDeclaration = {
 
 export const readTaskFunctionDeclaration = {
   name: 'read_task',
-  description: 'Reads or lists tasks for the user. Use this for any request where the user wants to see, list, or review their tasks. Example user prompts: "Show me my tasks", "List my tasks for today", "What are my tasks?", "What tasks are related to my fitness goal?", "Show me all my high priority tasks", "List my completed tasks in the work category". Do NOT use this for requests to add or create new tasks.',
+  description: 'Reads or lists tasks for the user. You can also use the search parameter to filter tasks by keyword in the title or description (case-insensitive, partial match allowed). When returning a JSON code block for a filtered task query, only include the tasks that match the filter. Use this for any request where the user wants to see, list, or review their tasks. Example user prompts: "Show me my tasks", "List my tasks for today", "What are my tasks?", "What tasks are related to my fitness goal?", "Show me all my high priority tasks", "List my completed tasks in the work category", "Do I have any cleaning tasks?". Do NOT use this for requests to add or create new tasks.',
   parameters: {
     type: Type.OBJECT,
     properties: {
+      search: { type: Type.STRING, description: 'Keyword to search for in task title or description (case-insensitive, partial match allowed)' },
       due_date: { type: Type.STRING, description: 'Due date (YYYY-MM-DD)' },
       related_goal: { type: Type.STRING, description: 'Associated goal title' },
       priority: { type: Type.STRING, enum: ['high', 'medium', 'low'], description: 'Task priority' },
       status: { type: Type.STRING, description: 'Task status (e.g., not_started, in_progress, completed)' },
       completed: { type: Type.BOOLEAN, description: 'Task completion status' },
-      category: { type: Type.STRING, description: 'Task category (e.g., work, personal, health, etc.)' }
+      category: { type: Type.STRING, description: 'Task category (e.g., work, personal, health, etc.)' },
+      preferred_time_of_day: { type: Type.STRING, description: 'Preferred time of day for the task (morning, afternoon, evening, any)' },
+      deadline_type: { type: Type.STRING, description: 'Deadline type: hard (must be done by due date) or soft (flexible)' },
+      recurrence: { type: Type.STRING, description: 'Recurrence rule for repeating tasks (e.g., daily, weekly, custom RRULE)' }
     },
     required: []
   }
@@ -73,7 +83,7 @@ export const readTaskFunctionDeclaration = {
 
 export const lookupTaskbyTitleFunctionDeclaration = {
   name: 'lookup_task',
-  description: 'This function is used as a precursor call to delete_task and update_task function calls. Returns all tasks for the user with their IDs and titles. The purpose of this function is to retrieve a list of current tasks that you must use to identify the requested task and obtain the ID. After getting the task list, use the ID from the most likely task to call update_task or delete_task.',
+  description: 'This function is used as a precursor call to delete_task, update_task and read_task function calls. Returns all tasks for the user with their IDs and titles. The purpose of this function is to retrieve a list of current tasks that you must use to identify the requested task and obtain the ID. After getting the task list, use the ID from the most likely task to call update_task or delete_task.',
   parameters: {
     type: Type.OBJECT,
     properties: {},
@@ -92,6 +102,8 @@ export const createGoalFunctionDeclaration = {
       description: { type: Type.STRING, description: 'Goal details' },
       due_date: { type: Type.STRING, description: 'Due date (YYYY-MM-DD)' },
       priority: { type: Type.STRING, enum: ['high', 'medium', 'low'], description: 'Goal priority' },
+      category: { type: Type.STRING, description: 'Goal category (e.g., health, career, personal, etc.)' },
+      status: { type: Type.STRING, description: 'Goal status (e.g., not_started, in_progress, completed)' },
       milestones: { 
         type: Type.ARRAY, 
         description: 'Array of milestones for the goal. Each milestone should have a title and optional steps.',
@@ -124,14 +136,42 @@ export const createGoalFunctionDeclaration = {
 
 export const updateGoalFunctionDeclaration = {
   name: 'update_goal',
-  description: `Updates an existing goal for the user. First call 'lookup_goal' to get all goals, then use the appropriate goal ID from the list. Use this when the user wants to change details of a task. If you find duplicates of a task, you can delete one with the users permission. Example user prompts: "Change the due date for my marathon goal", "Update the description of my reading goal".`,
+  description: `Updates an existing goal for the user. First call 'lookup_goal' to get all goals, then use the appropriate goal ID from the list. Use this when the user wants to change details of a goal. If you find duplicates of a goal, you can delete one with the user's permission. Example user prompts: "Change the due date for my marathon goal", "Update the description of my reading goal".`,
   parameters: {
     type: Type.OBJECT,
     properties: {
       id: { type: Type.STRING, description: 'The unique ID of the goal to update (required)' },
+      title: { type: Type.STRING, description: 'Goal title (optional, for renaming)' },
       description: { type: Type.STRING, description: 'Goal details' },
       due_date: { type: Type.STRING, description: 'Due date (YYYY-MM-DD)' },
-      priority: { type: Type.STRING, enum: ['high', 'medium', 'low'], description: 'Goal priority' }
+      priority: { type: Type.STRING, enum: ['high', 'medium', 'low'], description: 'Goal priority' },
+      category: { type: Type.STRING, description: 'Goal category (e.g., health, career, personal, etc.)' },
+      status: { type: Type.STRING, description: 'Goal status (e.g., not_started, in_progress, completed)' },
+      milestones: { 
+        type: Type.ARRAY, 
+        description: 'Array of milestones for the goal. Each milestone should have a title and optional steps.',
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.STRING, description: 'Milestone title' },
+            order: { type: Type.NUMBER, description: 'Milestone order (optional, defaults to array index + 1)' },
+            steps: {
+              type: Type.ARRAY,
+              description: 'Array of steps for this milestone',
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  text: { type: Type.STRING, description: 'Step description' },
+                  order: { type: Type.NUMBER, description: 'Step order (optional, defaults to array index + 1)' },
+                  completed: { type: Type.BOOLEAN, description: 'Step completion status (defaults to false)' }
+                },
+                required: ['text']
+              }
+            }
+          },
+          required: ['title']
+        }
+      }
     },
     required: ['id'] // id is now required since we get it from lookup_goal
   }
@@ -196,7 +236,10 @@ export const createCalendarEventFunctionDeclaration = {
       time: { type: Type.STRING, description: 'Natural language time (e.g., "10:00 AM", "2:30 PM", "15:30") - use this with date parameter' },
       duration: { type: Type.NUMBER, description: 'Event duration in minutes (default: 60) - use this with date/time parameters' },
       location: { type: Type.STRING, description: 'Event location' },
-      time_zone: { type: Type.STRING, description: 'Time zone (e.g., UTC, America/New_York)' }
+      time_zone: { type: Type.STRING, description: 'Time zone (e.g., UTC, America/New_York)' },
+      recurrence: { type: Type.STRING, description: 'Recurrence rule for repeating events (e.g., daily, weekly, custom RRULE)' },
+      attendees: { type: Type.ARRAY, description: 'List of attendees (emails or names)', items: { type: Type.STRING } },
+      reminder_minutes_before: { type: Type.NUMBER, description: 'Number of minutes before event to send a reminder' }
     },
     required: ['title']
   }
@@ -204,11 +247,14 @@ export const createCalendarEventFunctionDeclaration = {
 
 export const lookupCalendarEventbyTitleFunctionDeclaration = {
   name: 'lookup_calendar_event',
-  description: 'This function is used as a precursor call to delete_calendar_event and update_calendar_event function calls. If the user uses terms like, "tomorrow" "today" "next week", convert the term into a proper date or date range. Returns all calendar events for the user with their IDs and titles. The purpose of this function is to retrieve a list of current calendar events that you must use to identify the requested calendar event and obtain the ID. After getting the calendar events list, use the ID from the most likely calendar event to call update_calendar_event or delete_calendar_event.',
+  description: 'This function is used as a precursor call to delete_calendar_event and update_calendar_event function calls. If the user users the term meeting or event in their request, do not include it in the search; example: "update my eggs meeting", search for "eggs" not "eggs meeting". If the user uses terms like, "tomorrow" "today" "next week", convert the term into a proper date or date range. Returns all calendar events for the user with their IDs and titles. The purpose of this function is to retrieve a list of current calendar events that you must use to identify the requested calendar event and obtain the ID. After getting the calendar events list, use the ID from the most likely calendar event to call update_calendar_event or delete_calendar_event.',
   parameters: {
     type: Type.OBJECT,
-    properties: {},
-    required: []
+    properties: {
+      search: { type: Type.STRING, description: 'Search string for event title (e.g., "eggs" for "eggs meeting")' },
+      date: { type: Type.STRING, description: 'Date to filter events (natural language like "today", "tomorrow", or specific date like "2025-07-21")' }
+    },
+    required: ['search']
   }
 };
 
@@ -224,7 +270,10 @@ export const updateCalendarEventFunctionDeclaration = {
       start_time: { type: Type.STRING, description: 'Event start time (ISO 8601)' },
       end_time: { type: Type.STRING, description: 'Event end time (ISO 8601)' },
       location: { type: Type.STRING, description: 'Event location' },
-      time_zone: { type: Type.STRING, description: 'Time zone (e.g., UTC, America/New_York)' }
+      time_zone: { type: Type.STRING, description: 'Time zone (e.g., UTC, America/New_York)' },
+      recurrence: { type: Type.STRING, description: 'Recurrence rule for repeating events (e.g., daily, weekly, custom RRULE)' },
+      attendees: { type: Type.ARRAY, description: 'List of attendees (emails or names)', items: { type: Type.STRING } },
+      reminder_minutes_before: { type: Type.NUMBER, description: 'Number of minutes before event to send a reminder' }
     },
     required: ['id']
   }
@@ -248,7 +297,11 @@ export const readCalendarEventFunctionDeclaration = {
   parameters: {
     type: Type.OBJECT,
     properties: {
-      date: { type: Type.STRING, description: 'Date to filter events (natural language like "tomorrow", "next week", or specific date like "2024-01-15")' }
+      date: { type: Type.STRING, description: 'Date to filter events (natural language like "tomorrow", "next week", or specific date like "2024-01-15")' },
+      time_range: { type: Type.OBJECT, description: 'Time range filter for events', properties: { start: { type: Type.STRING, description: 'Start time (ISO 8601 or natural language)' }, end: { type: Type.STRING, description: 'End time (ISO 8601 or natural language)' } } },
+      location: { type: Type.STRING, description: 'Event location to filter' },
+      attendee: { type: Type.STRING, description: 'Attendee to filter events by (email or name)' },
+      recurrence: { type: Type.STRING, description: 'Recurrence rule to filter events' }
     },
     required: []
   }

@@ -34,7 +34,22 @@ export class DateParser {
     }
 
     const normalizedExpression = expression.toLowerCase().trim();
-    
+
+    // Explicit handling for 'today', 'tomorrow', 'yesterday'
+    if (normalizedExpression === 'today') {
+      return this.formatDate(new Date());
+    }
+    if (normalizedExpression === 'tomorrow') {
+      const d = new Date();
+      d.setDate(d.getDate() + 1);
+      return this.formatDate(d);
+    }
+    if (normalizedExpression === 'yesterday') {
+      const d = new Date();
+      d.setDate(d.getDate() - 1);
+      return this.formatDate(d);
+    }
+
     // Try contextual mappings first
     const contextualResult = this.parseContextualDate(normalizedExpression);
     if (contextualResult) return contextualResult;

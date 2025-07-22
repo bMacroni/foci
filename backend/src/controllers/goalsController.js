@@ -104,10 +104,8 @@ export async function createGoal(req, res) {
 
 export async function getGoals(req, res) {
   const user_id = req.user.id;
-  
   // Get the JWT from the request
   const token = req.headers.authorization?.split(' ')[1];
-  
   // Create Supabase client with the JWT
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
     global: {
@@ -116,12 +114,12 @@ export async function getGoals(req, res) {
       }
     }
   });
-  
   console.log('=== GET GOALS DEBUG ===');
   console.log('User ID:', user_id);
   console.log('JWT Token (first 50 chars):', token ? token.substring(0, 50) + '...' : 'No token');
   console.log('Request headers:', req.headers.authorization ? 'Authorization header present' : 'No Authorization header');
-  
+
+  // Fetch all goals with nested milestones and steps in a single query
   const { data, error } = await supabase
     .from('goals')
     .select(`
@@ -133,11 +131,11 @@ export async function getGoals(req, res) {
     `)
     .eq('user_id', user_id)
     .order('created_at', { ascending: false });
-  
+
   console.log('Supabase response data:', data);
   console.log('Supabase response error:', error);
   console.log('=== END GET GOALS DEBUG ===');
-  
+
   if (error) {
     console.log('Supabase error:', error);
     return res.status(400).json({ error: error.message });
@@ -245,7 +243,7 @@ export async function deleteGoalFromAI(args, userId, userContext) {
   return { success: true };
 }
 
-export async function getGoalsForUser(userId, token) {
+export async function getGoalsForUser(userId, token, args = {}) {
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
     global: {
       headers: {
@@ -254,7 +252,7 @@ export async function getGoalsForUser(userId, token) {
     }
   });
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('goals')
     .select(`
       *,
@@ -263,8 +261,31 @@ export async function getGoalsForUser(userId, token) {
         steps (*)
       )
     `)
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
+    .eq('user_id', userId);
+
+  if (args.title) {
+    query = query.ilike('title', `%${args.title}%`);
+  }
+  if (args.description) {
+    query = query.ilike('description', `%${args.description}%`);
+  }
+  if (args.due_date) {
+    query = query.eq('target_completion_date', args.due_date);
+  }
+  if (args.priority) {
+    query = query.eq('category', args.priority); // Assuming priority maps to category
+  }
+  if (args.category) {
+    query = query.eq('category', args.category);
+  }
+  if (args.status) {
+    query = query.eq('status', args.status);
+  }
+  if (args.recurrence) {
+    query = query.eq('recurrence', args.recurrence);
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: false });
 
   if (error) {
     return { error: error.message };
@@ -455,4 +476,252 @@ export async function updateGoalFromAI(args, userId, userContext) {
     return { error: error.message };
   }
   return data;
+} 
+
+// === Milestone Logic (migrated from milestonesController.js) ===
+
+export async function createMilestone(req, res) {
+  const { goalId } = req.params;
+  const { title, order } = req.body;
+  const token = req.headers.authorization?.split(' ')[1];
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: `Bearer ${token}` } }
+  });
+
+  const { data, error } = await supabase
+    .from('milestones')
+    .insert([{ goal_id: goalId, title, order }])
+    .select()
+    .single();
+
+  if (error) return res.status(400).json({ error: error.message });
+  res.status(201).json(data);
+}
+
+export async function updateMilestone(req, res) {
+  const { milestoneId } = req.params;
+  const { title, order } = req.body;
+  const token = req.headers.authorization?.split(' ')[1];
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: `Bearer ${token}` } }
+  });
+
+  const { data, error } = await supabase
+    .from('milestones')
+    .update({ title, order, updated_at: new Date().toISOString() })
+    .eq('id', milestoneId)
+    .select()
+    .single();
+
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(data);
+}
+
+export async function deleteMilestone(req, res) {
+  const { milestoneId } = req.params;
+  const token = req.headers.authorization?.split(' ')[1];
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: `Bearer ${token}` } }
+  });
+
+  const { error } = await supabase
+    .from('milestones')
+    .delete()
+    .eq('id', milestoneId);
+
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ success: true });
+}
+
+// Read all milestones for a goal (with steps)
+export async function readMilestones(req, res) {
+  const { goalId } = req.params;
+  const token = req.headers.authorization?.split(' ')[1];
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: `Bearer ${token}` } }
+  });
+
+  // Get all milestones for the goal
+  const { data: milestones, error } = await supabase
+    .from('milestones')
+    .select('*')
+    .eq('goal_id', goalId)
+    .order('order', { ascending: true });
+  if (error) return res.status(400).json({ error: error.message });
+
+  // For each milestone, get its steps
+  const milestonesWithSteps = await Promise.all(milestones.map(async (milestone) => {
+    const { data: steps } = await supabase
+      .from('steps')
+      .select('*')
+      .eq('milestone_id', milestone.id)
+      .order('order', { ascending: true });
+    return { ...milestone, steps };
+  }));
+
+  res.json(milestonesWithSteps);
+}
+
+// Lookup a milestone by id or title (with steps)
+export async function lookupMilestone(req, res) {
+  const { milestoneId, goalId } = req.params;
+  const { title } = req.query;
+  const token = req.headers.authorization?.split(' ')[1];
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: `Bearer ${token}` } }
+  });
+
+  let milestone;
+  let error;
+  if (milestoneId) {
+    // Lookup by id
+    ({ data: milestone, error } = await supabase
+      .from('milestones')
+      .select('*')
+      .eq('id', milestoneId)
+      .single());
+  } else if (goalId && title) {
+    // Lookup by title within a goal
+    ({ data: milestone, error } = await supabase
+      .from('milestones')
+      .select('*')
+      .eq('goal_id', goalId)
+      .ilike('title', title)
+      .single());
+  } else {
+    return res.status(400).json({ error: 'Must provide milestoneId or goalId and title' });
+  }
+  if (error) return res.status(404).json({ error: error.message });
+
+  // Get steps for this milestone
+  const { data: steps, error: stepsError } = await supabase
+    .from('steps')
+    .select('*')
+    .eq('milestone_id', milestone.id)
+    .order('order', { ascending: true });
+  if (stepsError) return res.status(400).json({ error: stepsError.message });
+
+  res.json({ ...milestone, steps });
+} 
+
+// === Step Logic (migrated from stepsController.js) ===
+
+export async function createStep(req, res) {
+  const { milestoneId } = req.params;
+  const { text, order, completed = false } = req.body;
+  const token = req.headers.authorization?.split(' ')[1];
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: `Bearer ${token}` } }
+  });
+
+  const { data, error } = await supabase
+    .from('steps')
+    .insert([{ milestone_id: milestoneId, text, order, completed }])
+    .select()
+    .single();
+
+  if (error) return res.status(400).json({ error: error.message });
+  res.status(201).json(data);
+}
+
+export async function updateStep(req, res) {
+  const { stepId } = req.params;
+  const { text, order, completed } = req.body;
+  const token = req.headers.authorization?.split(' ')[1];
+  
+  console.log('updateStep: Received request for stepId:', stepId);
+  console.log('updateStep: Request body:', req.body);
+  console.log('updateStep: Token present:', !!token);
+  
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: `Bearer ${token}` } }
+  });
+
+  const updateFields = { text, order, updated_at: new Date().toISOString() };
+  if (typeof completed === 'boolean') updateFields.completed = completed;
+  
+  console.log('updateStep: Update fields:', updateFields);
+  
+  const { data, error } = await supabase
+    .from('steps')
+    .update(updateFields)
+    .eq('id', stepId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('updateStep: Supabase error:', error);
+    return res.status(400).json({ error: error.message });
+  }
+  
+  console.log('updateStep: Successfully updated step:', data);
+  res.json(data);
+}
+
+export async function deleteStep(req, res) {
+  const { stepId } = req.params;
+  const token = req.headers.authorization?.split(' ')[1];
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: `Bearer ${token}` } }
+  });
+
+  const { error } = await supabase
+    .from('steps')
+    .delete()
+    .eq('id', stepId);
+
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ success: true });
+}
+
+// Read all steps for a milestone
+export async function readSteps(req, res) {
+  const { milestoneId } = req.params;
+  const token = req.headers.authorization?.split(' ')[1];
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: `Bearer ${token}` } }
+  });
+
+  const { data, error } = await supabase
+    .from('steps')
+    .select('*')
+    .eq('milestone_id', milestoneId)
+    .order('order', { ascending: true });
+
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(data);
+}
+
+// Lookup a step by id or text
+export async function lookupStep(req, res) {
+  const { stepId, milestoneId } = req.params;
+  const { text } = req.query;
+  const token = req.headers.authorization?.split(' ')[1];
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: `Bearer ${token}` } }
+  });
+
+  let step;
+  let error;
+  if (stepId) {
+    // Lookup by id
+    ({ data: step, error } = await supabase
+      .from('steps')
+      .select('*')
+      .eq('id', stepId)
+      .single());
+  } else if (milestoneId && text) {
+    // Lookup by text within a milestone
+    ({ data: step, error } = await supabase
+      .from('steps')
+      .select('*')
+      .eq('milestone_id', milestoneId)
+      .ilike('text', text)
+      .single());
+  } else {
+    return res.status(400).json({ error: 'Must provide stepId or milestoneId and text' });
+  }
+  if (error) return res.status(404).json({ error: error.message });
+
+  res.json(step);
 } 

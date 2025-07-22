@@ -470,6 +470,21 @@ const CalendarEvents = () => {
               </div>
             )}
           </div>
+          {/* Delete button */}
+          <button
+            className="absolute top-1 right-1 p-1 rounded hover:bg-red-100 focus:bg-red-200"
+            title="Delete event"
+            onClick={e => {
+              e.stopPropagation();
+              setDeletingEvent(event);
+              setShowDeleteConfirm(true);
+            }}
+            style={{ zIndex: 10 }}
+          >
+            <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
           {/* Resize handle in middle - drawer style */}
           <div
             className="absolute left-1/2 -translate-x-1/2 bottom-0 w-8 h-2 flex items-center justify-center cursor-ns-resize z-20 opacity-0 hover:opacity-100 group-hover:opacity-100"
@@ -764,6 +779,25 @@ const CalendarEvents = () => {
     }
   });
 
+  // --- Delete Event Logic ---
+  const [deletingEvent, setDeletingEvent] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const handleDeleteEvent = async (eventId) => {
+    try {
+      await calendarAPI.deleteEvent(eventId);
+      showToast('Event deleted!', 'success');
+      setDeletingEvent(null);
+      setShowDeleteConfirm(false);
+      loadEvents();
+    } catch (err) {
+      showToast('Failed to delete event', 'error');
+      setDeletingEvent(null);
+      setShowDeleteConfirm(false);
+      console.error('Failed to delete event', err);
+    }
+  };
+
   // --- Render ---
   return (
     <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl border border-black/10 p-8 scrollbar-hover">
@@ -773,6 +807,34 @@ const CalendarEvents = () => {
         onClose={handleCloseToast}
         type={toast.type}
       />
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && deletingEvent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl p-8 max-w-sm w-full relative">
+            <button
+              className="absolute top-3 right-3 p-1 rounded hover:bg-gray-200"
+              onClick={() => { setShowDeleteConfirm(false); setDeletingEvent(null); }}
+              aria-label="Close"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <h3 className="text-xl font-bold mb-4 text-red-600">Delete Event</h3>
+            <p className="mb-6">Are you sure you want to delete <span className="font-semibold">{deletingEvent.title || deletingEvent.summary}</span>? This action cannot be undone.</p>
+            <div className="flex space-x-4 pt-2">
+              <button
+                onClick={() => { setShowDeleteConfirm(false); setDeletingEvent(null); }}
+                className="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50"
+              >Cancel</button>
+              <button
+                onClick={() => handleDeleteEvent(deletingEvent.id)}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 bg-black rounded-2xl flex items-center justify-center">
@@ -940,9 +1002,11 @@ const CalendarEvents = () => {
           onClose={() => setEditingEvent(null)}
           onSave={async (updatedEvent) => {
             await calendarAPI.updateEvent(updatedEvent.id, {
-              ...updatedEvent,
-              start: updatedEvent.start,
-              end: updatedEvent.end,
+              summary: updatedEvent.summary || updatedEvent.title || '',
+              description: updatedEvent.description || '',
+              startTime: updatedEvent.start?.dateTime || updatedEvent.start || '',
+              endTime: updatedEvent.end?.dateTime || updatedEvent.end || '',
+              timeZone: updatedEvent.timeZone || 'UTC',
             });
             showToast('Event updated!', 'success');
             loadEvents();

@@ -1,3 +1,6 @@
+// DEPRECATED: All milestone logic has been moved to goalsController.js. This file is no longer used and will be removed in a future release.
+// Please update all imports to use goalsController.js instead.
+/*
 import { createClient } from '@supabase/supabase-js';
 
 export async function createMilestone(req, res) {
@@ -122,4 +125,5 @@ export async function lookupMilestone(req, res) {
   if (stepsError) return res.status(400).json({ error: stepsError.message });
 
   res.json({ ...milestone, steps });
-} 
+}
+*/ 

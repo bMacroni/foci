@@ -436,6 +436,8 @@ export async function lookupTaskbyTitle(userId, token) {
 
 
 export async function readTaskFromAI(args, userId, userContext) {
+  console.log('=== READ TASK FROM AI DEBUG ===');
+  console.log('Incoming args:', JSON.stringify(args, null, 2));
   const { due_date, related_goal } = args;
   const token = userContext?.token;
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
@@ -477,6 +479,19 @@ export async function readTaskFromAI(args, userId, userContext) {
   }
   if (args.category) {
     query = query.eq('category', args.category);
+  }
+  if (args.search) {
+    // Case-insensitive partial match for title or description
+    query = query.or(`title.ilike.%${args.search}%,description.ilike.%${args.search}%`);
+  }
+  if (args.preferred_time_of_day) {
+    query = query.eq('preferred_time_of_day', args.preferred_time_of_day);
+  }
+  if (args.deadline_type) {
+    query = query.eq('deadline_type', args.deadline_type);
+  }
+  if (args.recurrence) {
+    query = query.eq('recurrence', args.recurrence);
   }
 
   const { data, error } = await query.order('created_at', { ascending: false });

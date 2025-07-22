@@ -368,3 +368,9 @@ This project is licensed under the ISC License.
 ---
 
 **Built with ❤️ for productivity enthusiasts who want to focus on what matters most.** 
+
+## API Structure Update
+
+- All milestone and step logic is now handled exclusively through the `/api/goals` endpoints.
+- The old `milestonesController.js` and `stepsController.js` are deprecated and will be removed in a future release.
+- Please use the nested `/api/goals/:goalId/milestones` and `/api/goals/milestones/:milestoneId/steps` endpoints for all milestone and step operations. 

@@ -14,6 +14,10 @@ const GoalList = ({ showSuccess }) => {
   const [showForm, setShowForm] = useState(false);
   const [editingGoal, setEditingGoal] = useState(null);
   const [progressByGoal, setProgressByGoal] = useState({});
+  const [expandedGoalId, setExpandedGoalId] = useState(null);
+  const [milestonesByGoal, setMilestonesByGoal] = useState({});
+  const [stepsByMilestone, setStepsByMilestone] = useState({});
+  const [loadingMilestones, setLoadingMilestones] = useState(false);
 
   // Category configuration with icons and colors
   const categoryConfig = {
@@ -167,11 +171,40 @@ const GoalList = ({ showSuccess }) => {
     }
   };
 
+  // Fetch milestones and steps for a goal
+  const fetchMilestonesAndSteps = async (goalId) => {
+    setLoadingMilestones(true);
+    try {
+      const token = localStorage.getItem('jwt_token') || '';
+      const milestones = await milestonesAPI.readAll(goalId, token);
+      setMilestonesByGoal(prev => ({ ...prev, [goalId]: milestones }));
+      // Fetch steps for each milestone
+      const stepsMap = {};
+      for (const milestone of milestones) {
+        const steps = await stepsAPI.readAll(milestone.id, token);
+        stepsMap[milestone.id] = steps;
+      }
+      setStepsByMilestone(prev => ({ ...prev, ...stepsMap }));
+    } catch (err) {
+      // Optionally handle error
+    } finally {
+      setLoadingMilestones(false);
+    }
+  };
+
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this goal?')) {
       try {
+        console.log('Attempting to delete goal with id:', id);
+        // Try using goalsAPI.delete first
         await goalsAPI.delete(id);
-        setGoals(prev => Array.isArray(prev) ? prev.filter(goal => goal.id !== id) : []);
+        // Fallback: direct fetch if axios is not working
+        // const token = localStorage.getItem('jwt_token');
+        // await fetch(`http://localhost:5000/api/goals/${id}`, {
+        //   method: 'DELETE',
+        //   headers: { 'Authorization': `Bearer ${token}` },
+        // });
+        await fetchGoals(); // Refresh from backend after deletion
         showSuccess('Goal deleted successfully!');
       } catch (err) {
         setError('Failed to delete goal');
@@ -226,12 +259,12 @@ const GoalList = ({ showSuccess }) => {
 
   return (
     <div className="space-y-8">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-            Your Goals
-          </h2>
-          <p className="text-gray-600 mt-1">Track your progress and stay motivated</p>
+      {/* Filter Bar */}
+      <div className="flex flex-wrap gap-2 justify-between items-center mb-4 p-4 bg-gray-50 border border-gray-200 rounded-md shadow-sm">
+        <div className="flex gap-2">
+          <button className="px-4 py-2 bg-black text-white rounded-xl font-medium cursor-default">All</button>
+          <button className="px-4 py-2 bg-white text-black border border-gray-300 rounded-xl font-medium cursor-not-allowed opacity-60">Filter by Category</button>
+          <button className="px-4 py-2 bg-white text-black border border-gray-300 rounded-xl font-medium cursor-not-allowed opacity-60">Sort by Due Date</button>
         </div>
         <button
           onClick={() => setShowForm(true)}
@@ -247,7 +280,7 @@ const GoalList = ({ showSuccess }) => {
       </div>
 
       {error && (
-        <div className="bg-red-50/80 backdrop-blur-sm border border-red-200 text-red-700 px-6 py-4 rounded-2xl shadow-sm">
+        <div className="bg-red-50/80 backdrop-blur-sm border border-red-200 text-red-700 px-6 py-4 rounded-md shadow-sm">
           <div className="flex items-center space-x-2">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -276,28 +309,82 @@ const GoalList = ({ showSuccess }) => {
           <p className="text-gray-600">Create your first goal to start your journey!</p>
         </div>
       ) : (
-        <div className="space-y-8">
+        <div className="space-y-12">
           {categoryOrder.map(category => {
             const categoryGoals = groupedGoals[category];
             if (!categoryGoals || categoryGoals.length === 0) return null;
-            
             const config = categoryConfig[category];
-            
             return (
-              <div key={category} className="space-y-4">
-                <div className="flex items-center space-x-3">
+              <div key={category}>
+                {/* Category Header */}
+                <div className="flex items-center gap-3 mb-2">
                   <div className="text-gray-700">{config.icon}</div>
-                  <h3 className="text-xl font-bold text-gray-900">{config.label}</h3>
-                  <span className="text-sm text-gray-500">({categoryGoals.length} goal{categoryGoals.length !== 1 ? 's' : ''})</span>
+                  <h3 className="text-lg font-bold text-gray-900">{config.label}</h3>
+                  <span className="text-xs text-gray-500">({categoryGoals.length} goal{categoryGoals.length !== 1 ? 's' : ''})</span>
                 </div>
-                
-                {/* Change from grid to vertical stack for full-width cards */}
-                <div className="flex flex-col gap-6">
-                  {categoryGoals.map((goal) => (
-                    <div key={goal.id} className="w-full bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl border border-black/10 p-6 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 mx-auto">
-                      <div className="flex justify-between items-start mb-4">
-                        <h3 className="text-xl font-bold text-black leading-tight">{goal.title}</h3>
-                        <div className="flex space-x-1">
+                {/* Table-like List */}
+                <div className="w-full bg-white/90 rounded-md border border-gray-200 shadow divide-y divide-gray-100">
+                  <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold text-gray-500">
+                    <div className="col-span-1"> </div>
+                    <div className="col-span-3">Title</div>
+                    <div className="col-span-3">Description</div>
+                    <div className="col-span-2">Due Date</div>
+                    <div className="col-span-2">Progress</div>
+                    <div className="col-span-1 text-right">Actions</div>
+                  </div>
+                  {categoryGoals.map(goal => (
+                    <React.Fragment key={goal.id}>
+                      <div
+                        className={`grid grid-cols-12 gap-2 items-center px-4 py-3 hover:bg-gray-50 transition cursor-pointer ${expandedGoalId === goal.id ? 'bg-gray-100' : ''}`}
+                        onClick={() => {
+                          if (expandedGoalId === goal.id) {
+                            setExpandedGoalId(null);
+                          } else {
+                            setExpandedGoalId(goal.id);
+                            if (!milestonesByGoal[goal.id]) fetchMilestonesAndSteps(goal.id);
+                          }
+                        }}
+                      >
+                        {/* Icon */}
+                        <div className="col-span-1 flex justify-center items-center">{config.icon}</div>
+                        {/* Title */}
+                        <div className="col-span-3 font-medium text-black truncate">{goal.title}</div>
+                        {/* Description */}
+                        <div className="col-span-3 text-gray-600 truncate">
+                          {goal.description ? (
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              components={{ p: ({ children }) => <span>{children}</span> }}
+                            >
+                              {goal.description.length > 120 ? goal.description.slice(0, 120) + '...' : goal.description}
+                            </ReactMarkdown>
+                          ) : <span className="italic text-gray-400">No description</span>}
+                        </div>
+                        {/* Due Date */}
+                        <div className="col-span-2 flex items-center gap-2 text-gray-700">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          <span>{formatDate(goal.target_completion_date)}</span>
+                        </div>
+                        {/* Progress */}
+                        <div className="col-span-2 flex flex-col gap-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-500">{progressByGoal[goal.id]?.percent ?? 0}%</span>
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ml-2 ${goal.completed ? 'bg-green-100 text-green-800 border-green-200' : 'bg-gray-100 text-gray-800 border-gray-200'}`}>
+                              <span className={`w-2 h-2 rounded-full mr-1 ${goal.completed ? 'bg-green-500' : 'bg-gray-400'}`}></span>
+                              {goal.completed ? 'Completed' : 'In Progress'}
+                            </span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div
+                              className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                              style={{ width: `${progressByGoal[goal.id]?.percent ?? 0}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                        {/* Actions */}
+                        <div className="col-span-1 flex justify-end gap-2" onClick={e => e.stopPropagation()}>
                           <button
                             onClick={() => handleEdit(goal)}
                             className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-xl transition-colors duration-200"
@@ -318,82 +405,48 @@ const GoalList = ({ showSuccess }) => {
                           </button>
                         </div>
                       </div>
-                      
-                      {goal.description && (
-                        <div className="mb-4 prose prose-sm max-w-none">
-                          <div className="text-gray-600 leading-relaxed">
-                            <ReactMarkdown 
-                              remarkPlugins={[remarkGfm]}
-                              components={{
-                                // Custom styling for markdown elements
-                                p: ({ children }) => <p className="mb-2">{children}</p>,
-                                strong: ({ children }) => <strong className="font-bold text-gray-800">{children}</strong>,
-                                em: ({ children }) => <em className="italic text-gray-700">{children}</em>,
-                                ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
-                                ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
-                                li: ({ children }) => <li className="text-gray-600">{children}</li>,
-                                a: ({ href, children }) => (
-                                  <a href={href} className="text-blue-600 hover:text-blue-800 underline" target="_blank" rel="noopener noreferrer">
-                                    {children}
-                                  </a>
-                                ),
-                                h1: ({ children }) => <h1 className="text-lg font-bold text-gray-900 mb-2">{children}</h1>,
-                                h2: ({ children }) => <h2 className="text-base font-bold text-gray-900 mb-2">{children}</h2>,
-                                h3: ({ children }) => <h3 className="text-sm font-bold text-gray-900 mb-1">{children}</h3>,
-                                blockquote: ({ children }) => (
-                                  <blockquote className="border-l-4 border-blue-200 pl-4 italic text-gray-600 mb-2">
-                                    {children}
-                                  </blockquote>
-                                ),
-                                code: ({ children }) => (
-                                  <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono text-gray-800">
-                                    {children}
-                                  </code>
-                                ),
-                              }}
-                            >
-                              {goal.description}
-                            </ReactMarkdown>
-                          </div>
+                      {/* Expanded Milestones/Steps Row */}
+                      {expandedGoalId === goal.id && (
+                        <div className="col-span-12 bg-gray-50 border-t border-gray-200 px-8 py-4 rounded-md" style={{ gridColumn: '1 / span 12' }}>
+                          {loadingMilestones ? (
+                            <div className="text-gray-400 text-sm">Loading milestones...</div>
+                          ) : (
+                            <>
+                              {(milestonesByGoal[goal.id] && milestonesByGoal[goal.id].length > 0) ? (
+                                <div className="space-y-4">
+                                  {milestonesByGoal[goal.id].map(milestone => (
+                                    <div key={milestone.id} className="">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <span className="font-semibold text-gray-800">{milestone.title}</span>
+                                        <span className="text-xs text-gray-500">Milestone</span>
+                                      </div>
+                                      {/* Steps title left-justified under milestone title */}
+                                      <div className="text-xs text-gray-500 mb-1 font-semibold text-left" style={{paddingLeft: 0}}>Steps:</div>
+                                      <div>
+                                        <div className="space-y-1">
+                                          {(stepsByMilestone[milestone.id] && stepsByMilestone[milestone.id].length > 0) ? (
+                                            stepsByMilestone[milestone.id].map(step => (
+                                              <div key={step.id} className="flex items-center gap-2 text-sm">
+                                                <span className={`inline-block w-3 h-3 rounded-full ${step.completed ? 'bg-green-500' : 'bg-gray-300'} border border-gray-300`}></span>
+                                                <span className={step.completed ? 'line-through text-gray-400' : 'text-gray-700'}>{step.text}</span>
+                                              </div>
+                                            ))
+                                          ) : (
+                                            <div className="text-xs text-gray-400 italic">No steps defined</div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="text-gray-400 text-sm italic">No milestones defined for this goal.</div>
+                              )}
+                            </>
+                          )}
                         </div>
                       )}
-                      
-                      <GoalBreakdownAssistant goal={goal} subTasks={goal.subTasks || []} onSave={() => {}} refreshProgress={refreshProgressForGoal} />
-
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center space-x-2 text-sm text-gray-500">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                          <span>{formatDate(goal.target_completion_date)}</span>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center justify-between">
-                        <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium border ${config.color}`}>
-                          <div className={`w-2 h-2 rounded-full mr-2 ${
-                            goal.completed ? 'bg-green-500' : 'bg-gray-400'
-                          }`}></div>
-                          {goal.completed ? 'Completed' : 'In Progress'}
-                        </span>
-                      </div>
-
-                      {/* Progress Bar */}
-                      <div className="mb-4">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs font-semibold text-gray-700">Progress</span>
-                          <span className="text-xs font-semibold text-gray-700">
-                            {progressByGoal[goal.id]?.percent ?? 0}%
-                          </span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2.5">
-                          <div
-                            className="bg-green-500 h-2.5 rounded-full transition-all duration-300"
-                            style={{ width: `${progressByGoal[goal.id]?.percent ?? 0}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    </div>
+                    </React.Fragment>
                   ))}
                 </div>
               </div>

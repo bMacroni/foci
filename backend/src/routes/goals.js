@@ -13,14 +13,14 @@ import {
   deleteMilestone,
   readMilestones,
   lookupMilestone
-} from '../controllers/milestonesController.js';
+} from '../controllers/goalsController.js';
 import {
   createStep,
   updateStep,
   deleteStep,
   readSteps,
   lookupStep
-} from '../controllers/stepsController.js';
+} from '../controllers/goalsController.js';
 
 const router = express.Router();
 
