@@ -196,15 +196,39 @@ export async function updateGoal(req, res) {
 }
 
 export async function deleteGoal(req, res) {
-  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+  console.log('deleteGoal: Request received');
+  console.log('deleteGoal: User ID:', req.user.id);
+  console.log('deleteGoal: Goal ID to delete:', req.params.id);
+  
+  // Get the JWT from the request
+  const token = req.headers.authorization?.split(' ')[1];
+  
+  // Create Supabase client with the JWT
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  });
+  
   const user_id = req.user.id;
   const { id } = req.params;
+  
+  console.log('deleteGoal: Attempting to delete goal with ID:', id, 'for user:', user_id);
+  
   const { error } = await supabase
     .from('goals')
     .delete()
     .eq('id', id)
     .eq('user_id', user_id);
-  if (error) return res.status(400).json({ error: error.message });
+    
+  if (error) {
+    console.error('deleteGoal: Supabase error:', error);
+    return res.status(400).json({ error: error.message });
+  }
+  
+  console.log('deleteGoal: Goal deleted successfully');
   res.status(204).send();
 } 
 

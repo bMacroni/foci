@@ -1327,6 +1327,8 @@ const MessageBubble = ({ message }) => {
     const eventsByDay = {};
     if (Array.isArray(message.content) && message.content.length > 0) {
       message.content.forEach(event => {
+        // Use browser's timezone for display
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
         const startDate = new Date(event.start.dateTime || event.start.date);
         const dayKey = startDate.toDateString();
         if (!eventsByDay[dayKey]) {
@@ -1351,7 +1353,8 @@ const MessageBubble = ({ message }) => {
       return date.toLocaleTimeString('en-US', { 
         hour: 'numeric', 
         minute: '2-digit',
-        hour12: true 
+        hour12: true,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
       });
     };
 

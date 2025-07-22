@@ -18,6 +18,8 @@ const GoalList = ({ showSuccess }) => {
   const [milestonesByGoal, setMilestonesByGoal] = useState({});
   const [stepsByMilestone, setStepsByMilestone] = useState({});
   const [loadingMilestones, setLoadingMilestones] = useState(false);
+  const [updatingStep, setUpdatingStep] = useState(null);
+  const [inlineEditingGoalId, setInlineEditingGoalId] = useState(null);
 
   // Category configuration with icons and colors
   const categoryConfig = {
@@ -93,7 +95,14 @@ const GoalList = ({ showSuccess }) => {
       const response = await goalsAPI.getAll();
       console.log('Goals response:', response);
       console.log('Goals data:', response.data);
-      setGoals(Array.isArray(response.data) ? response.data : []);
+      console.log('Goals data length:', response.data?.length);
+      console.log('Goals data is array:', Array.isArray(response.data));
+      
+      const goalsArray = Array.isArray(response.data) ? response.data : [];
+      console.log('Setting goals state with:', goalsArray);
+      console.log('Goals array length:', goalsArray.length);
+      
+      setGoals(goalsArray);
     } catch (err) {
       console.error('Error fetching goals:', err);
       setError('Failed to load goals');
@@ -196,31 +205,44 @@ const GoalList = ({ showSuccess }) => {
     if (window.confirm('Are you sure you want to delete this goal?')) {
       try {
         console.log('Attempting to delete goal with id:', id);
+        console.log('Using goalsAPI.delete with id:', id);
+        
+        // Add more detailed logging
+        const token = localStorage.getItem('jwt_token');
+        console.log('JWT token available:', !!token);
+        console.log('API base URL:', import.meta.env.VITE_API_URL || 'http://localhost:5000/api');
+        
         // Try using goalsAPI.delete first
-        await goalsAPI.delete(id);
-        // Fallback: direct fetch if axios is not working
-        // const token = localStorage.getItem('jwt_token');
-        // await fetch(`http://localhost:5000/api/goals/${id}`, {
-        //   method: 'DELETE',
-        //   headers: { 'Authorization': `Bearer ${token}` },
-        // });
+        const response = await goalsAPI.delete(id);
+        console.log('Delete response:', response);
+        
+        console.log('About to call fetchGoals() to refresh the list...');
         await fetchGoals(); // Refresh from backend after deletion
+        console.log('fetchGoals() completed');
+        
         showSuccess('Goal deleted successfully!');
       } catch (err) {
-        setError('Failed to delete goal');
         console.error('Error deleting goal:', err);
+        console.error('Error details:', {
+          message: err.message,
+          response: err.response,
+          status: err.response?.status,
+          data: err.response?.data
+        });
+        setError('Failed to delete goal');
       }
     }
   };
 
   const handleEdit = (goal) => {
+    setInlineEditingGoalId(goal.id);
     setEditingGoal(goal);
-    setShowForm(true);
   };
 
   const handleFormSuccess = () => {
     setShowForm(false);
     setEditingGoal(null);
+    setInlineEditingGoalId(null);
     fetchGoals();
     showSuccess(editingGoal ? 'Goal updated successfully!' : 'Goal created successfully!');
   };
@@ -228,6 +250,56 @@ const GoalList = ({ showSuccess }) => {
   const handleFormCancel = () => {
     setShowForm(false);
     setEditingGoal(null);
+    setInlineEditingGoalId(null);
+  };
+
+  // Handle step completion toggle
+  const handleStepToggle = async (stepId, currentCompleted, milestoneId, goalId) => {
+    try {
+      setUpdatingStep(stepId);
+      const token = localStorage.getItem('jwt_token') || '';
+      
+      console.log('Toggling step:', stepId, 'from completed:', currentCompleted, 'to:', !currentCompleted);
+      
+      const updatedStep = await stepsAPI.update(stepId, { completed: !currentCompleted }, token);
+      console.log('Step updated successfully:', updatedStep);
+      
+      // Update the local state
+      setStepsByMilestone(prev => ({
+        ...prev,
+        [milestoneId]: prev[milestoneId].map(step => 
+          step.id === stepId ? { ...step, completed: !currentCompleted } : step
+        )
+      }));
+      
+      // Refresh progress for the goal
+      await refreshProgressForGoal(goalId);
+      
+      showSuccess(`Step ${!currentCompleted ? 'completed' : 'marked as incomplete'}!`);
+    } catch (err) {
+      console.error('Error updating step:', err);
+      setError('Failed to update step');
+    } finally {
+      setUpdatingStep(null);
+    }
+  };
+
+  // Check if a milestone should be unlocked (all previous milestones are complete)
+  const isMilestoneUnlocked = (milestones, currentMilestoneIndex) => {
+    if (currentMilestoneIndex === 0) return true; // First milestone is always unlocked
+    
+    // Check if all previous milestones have all their steps completed
+    for (let i = 0; i < currentMilestoneIndex; i++) {
+      const previousMilestone = milestones[i];
+      const previousSteps = stepsByMilestone[previousMilestone.id] || [];
+      const allStepsCompleted = previousSteps.length > 0 && previousSteps.every(step => step.completed);
+      
+      if (!allStepsCompleted) {
+        return false;
+      }
+    }
+    
+    return true;
   };
 
   const formatDate = (dateString) => {
@@ -334,110 +406,200 @@ const GoalList = ({ showSuccess }) => {
                   </div>
                   {categoryGoals.map(goal => (
                     <React.Fragment key={goal.id}>
-                      <div
-                        className={`grid grid-cols-12 gap-2 items-center px-4 py-3 hover:bg-gray-50 transition cursor-pointer ${expandedGoalId === goal.id ? 'bg-gray-100' : ''}`}
-                        onClick={() => {
-                          if (expandedGoalId === goal.id) {
-                            setExpandedGoalId(null);
-                          } else {
-                            setExpandedGoalId(goal.id);
-                            if (!milestonesByGoal[goal.id]) fetchMilestonesAndSteps(goal.id);
-                          }
-                        }}
-                      >
-                        {/* Icon */}
-                        <div className="col-span-1 flex justify-center items-center">{config.icon}</div>
-                        {/* Title */}
-                        <div className="col-span-3 font-medium text-black truncate">{goal.title}</div>
-                        {/* Description */}
-                        <div className="col-span-3 text-gray-600 truncate">
-                          {goal.description ? (
-                            <ReactMarkdown
-                              remarkPlugins={[remarkGfm]}
-                              components={{ p: ({ children }) => <span>{children}</span> }}
+                      {inlineEditingGoalId === goal.id ? (
+                        // Inline Edit Form
+                        <div className="col-span-12 bg-blue-50 border border-blue-200 px-4 py-4 rounded-md" style={{ gridColumn: '1 / span 12' }}>
+                          <GoalForm
+                            goal={editingGoal}
+                            onSuccess={handleFormSuccess}
+                            onCancel={handleFormCancel}
+                            isInline={true}
+                          />
+                        </div>
+                      ) : (
+                        // Normal Goal Row
+                        <div
+                          className={`grid grid-cols-12 gap-2 items-center px-4 py-3 hover:bg-gray-50 transition cursor-pointer ${expandedGoalId === goal.id ? 'bg-gray-100' : ''}`}
+                          onClick={() => {
+                            if (expandedGoalId === goal.id) {
+                              setExpandedGoalId(null);
+                            } else {
+                              setExpandedGoalId(goal.id);
+                              if (!milestonesByGoal[goal.id]) fetchMilestonesAndSteps(goal.id);
+                            }
+                          }}
+                        >
+                          {/* Icon */}
+                          <div className="col-span-1 flex justify-center items-center">{config.icon}</div>
+                          {/* Title */}
+                          <div className="col-span-3 font-medium text-black truncate">{goal.title}</div>
+                          {/* Description */}
+                          <div className="col-span-3 text-gray-600 truncate">
+                            {goal.description ? (
+                              <ReactMarkdown
+                                remarkPlugins={[remarkGfm]}
+                                components={{ p: ({ children }) => <span>{children}</span> }}
+                              >
+                                {goal.description.length > 120 ? goal.description.slice(0, 120) + '...' : goal.description}
+                              </ReactMarkdown>
+                            ) : <span className="italic text-gray-400">No description</span>}
+                          </div>
+                          {/* Due Date */}
+                          <div className="col-span-2 flex items-center gap-2 text-gray-700">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <span>{formatDate(goal.target_completion_date)}</span>
+                          </div>
+                          {/* Progress */}
+                          <div className="col-span-2 flex flex-col gap-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-gray-500">{progressByGoal[goal.id]?.percent ?? 0}%</span>
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ml-2 ${goal.completed ? 'bg-green-100 text-green-800 border-green-200' : 'bg-gray-100 text-gray-800 border-gray-200'}`}>
+                                <span className={`w-2 h-2 rounded-full mr-1 ${goal.completed ? 'bg-green-500' : 'bg-gray-400'}`}></span>
+                                {goal.completed ? 'Completed' : 'In Progress'}
+                              </span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div
+                                className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                                style={{ width: `${progressByGoal[goal.id]?.percent ?? 0}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                          {/* Actions */}
+                          <div className="col-span-1 flex justify-end gap-2" onClick={e => e.stopPropagation()}>
+                            <button
+                              onClick={() => handleEdit(goal)}
+                              className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-xl transition-colors duration-200"
+                              title="Edit goal"
                             >
-                              {goal.description.length > 120 ? goal.description.slice(0, 120) + '...' : goal.description}
-                            </ReactMarkdown>
-                          ) : <span className="italic text-gray-400">No description</span>}
-                        </div>
-                        {/* Due Date */}
-                        <div className="col-span-2 flex items-center gap-2 text-gray-700">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                          <span>{formatDate(goal.target_completion_date)}</span>
-                        </div>
-                        {/* Progress */}
-                        <div className="col-span-2 flex flex-col gap-1">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-gray-500">{progressByGoal[goal.id]?.percent ?? 0}%</span>
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ml-2 ${goal.completed ? 'bg-green-100 text-green-800 border-green-200' : 'bg-gray-100 text-gray-800 border-gray-200'}`}>
-                              <span className={`w-2 h-2 rounded-full mr-1 ${goal.completed ? 'bg-green-500' : 'bg-gray-400'}`}></span>
-                              {goal.completed ? 'Completed' : 'In Progress'}
-                            </span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div
-                              className="bg-green-500 h-2 rounded-full transition-all duration-300"
-                              style={{ width: `${progressByGoal[goal.id]?.percent ?? 0}%` }}
-                            ></div>
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => handleDelete(goal.id)}
+                              className="p-2 text-gray-600 hover:text-black hover:bg-gray-50 rounded-xl transition-colors duration-200"
+                              title="Delete goal"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
                           </div>
                         </div>
-                        {/* Actions */}
-                        <div className="col-span-1 flex justify-end gap-2" onClick={e => e.stopPropagation()}>
-                          <button
-                            onClick={() => handleEdit(goal)}
-                            className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-xl transition-colors duration-200"
-                            title="Edit goal"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => handleDelete(goal.id)}
-                            className="p-2 text-gray-600 hover:text-black hover:bg-gray-50 rounded-xl transition-colors duration-200"
-                            title="Delete goal"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
+                      )}
                       {/* Expanded Milestones/Steps Row */}
-                      {expandedGoalId === goal.id && (
+                      {expandedGoalId === goal.id && inlineEditingGoalId !== goal.id && (
                         <div className="col-span-12 bg-gray-50 border-t border-gray-200 px-8 py-4 rounded-md" style={{ gridColumn: '1 / span 12' }}>
                           {loadingMilestones ? (
                             <div className="text-gray-400 text-sm">Loading milestones...</div>
                           ) : (
                             <>
                               {(milestonesByGoal[goal.id] && milestonesByGoal[goal.id].length > 0) ? (
-                                <div className="space-y-4">
-                                  {milestonesByGoal[goal.id].map(milestone => (
-                                    <div key={milestone.id} className="">
-                                      <div className="flex items-center gap-2 mb-1">
-                                        <span className="font-semibold text-gray-800">{milestone.title}</span>
-                                        <span className="text-xs text-gray-500">Milestone</span>
-                                      </div>
-                                      {/* Steps title left-justified under milestone title */}
-                                      <div className="text-xs text-gray-500 mb-1 font-semibold text-left" style={{paddingLeft: 0}}>Steps:</div>
-                                      <div>
-                                        <div className="space-y-1">
-                                          {(stepsByMilestone[milestone.id] && stepsByMilestone[milestone.id].length > 0) ? (
-                                            stepsByMilestone[milestone.id].map(step => (
-                                              <div key={step.id} className="flex items-center gap-2 text-sm">
-                                                <span className={`inline-block w-3 h-3 rounded-full ${step.completed ? 'bg-green-500' : 'bg-gray-300'} border border-gray-300`}></span>
-                                                <span className={step.completed ? 'line-through text-gray-400' : 'text-gray-700'}>{step.text}</span>
+                                <div className="space-y-6">
+                                  {milestonesByGoal[goal.id].map((milestone, milestoneIndex) => {
+                                    const isUnlocked = isMilestoneUnlocked(milestonesByGoal[goal.id], milestoneIndex);
+                                    const steps = stepsByMilestone[milestone.id] || [];
+                                    const completedSteps = steps.filter(step => step.completed).length;
+                                    const totalSteps = steps.length;
+                                    
+                                    return (
+                                      <div key={milestone.id} className={`transition-all duration-300 ${isUnlocked ? 'opacity-100' : 'opacity-40'}`}>
+                                        <div className="flex items-center gap-3 mb-3">
+                                          {/* Milestone status indicator */}
+                                          <div className={`flex items-center justify-center w-8 h-8 rounded-full border-2 ${
+                                            isUnlocked 
+                                              ? completedSteps === totalSteps && totalSteps > 0
+                                                ? 'bg-green-500 border-green-500 text-white'
+                                                : 'bg-blue-500 border-blue-500 text-white'
+                                              : 'bg-gray-300 border-gray-300 text-gray-500'
+                                          }`}>
+                                            {isUnlocked && completedSteps === totalSteps && totalSteps > 0 ? (
+                                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                              </svg>
+                                            ) : (
+                                              <span className="text-xs font-bold">{milestoneIndex + 1}</span>
+                                            )}
+                                          </div>
+                                          
+                                          <div className="flex-1">
+                                            <div className="flex items-center gap-2">
+                                              <span className={`font-semibold ${isUnlocked ? 'text-gray-800' : 'text-gray-500'}`}>
+                                                {milestone.title}
+                                              </span>
+                                              <span className="text-xs text-gray-500">Milestone {milestoneIndex + 1}</span>
+                                            </div>
+                                            
+                                            {/* Progress indicator */}
+                                            {isUnlocked && totalSteps > 0 && (
+                                              <div className="flex items-center gap-2 mt-1">
+                                                <div className="flex-1 bg-gray-200 rounded-full h-2">
+                                                  <div 
+                                                    className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                                                    style={{ width: `${(completedSteps / totalSteps) * 100}%` }}
+                                                  ></div>
+                                                </div>
+                                                <span className="text-xs text-gray-500">
+                                                  {completedSteps}/{totalSteps} steps
+                                                </span>
                                               </div>
-                                            ))
-                                          ) : (
-                                            <div className="text-xs text-gray-400 italic">No steps defined</div>
+                                            )}
+                                          </div>
+                                          
+                                          {/* Lock/unlock indicator */}
+                                          {!isUnlocked && (
+                                            <div className="flex items-center gap-1 text-xs text-gray-500">
+                                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                              </svg>
+                                              <span>Complete previous milestone to unlock</span>
+                                            </div>
                                           )}
                                         </div>
+                                        
+                                        {/* Steps */}
+                                        {isUnlocked && (
+                                          <div className="ml-11">
+                                            <div className="text-xs text-gray-500 mb-2 font-semibold text-left">Steps:</div>
+                                            <div className="space-y-2">
+                                              {totalSteps > 0 ? (
+                                                steps.map(step => (
+                                                  <div key={step.id} className="flex items-center gap-3 text-sm text-left">
+                                                    <button
+                                                      onClick={() => handleStepToggle(step.id, step.completed, milestone.id, goal.id)}
+                                                      disabled={updatingStep === step.id}
+                                                      className={`flex items-center justify-center w-5 h-5 rounded-full border-2 transition-all duration-200 flex-shrink-0 ${
+                                                        step.completed
+                                                          ? 'bg-green-500 border-green-500 text-white hover:bg-green-600'
+                                                          : 'bg-white border-gray-300 hover:border-green-400 hover:bg-green-50'
+                                                      } ${updatingStep === step.id ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                                                    >
+                                                      {step.completed && (
+                                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                        </svg>
+                                                      )}
+                                                    </button>
+                                                    <span className={`flex-1 text-left ${step.completed ? 'line-through text-gray-400' : 'text-gray-700'}`}>
+                                                      {step.text}
+                                                    </span>
+                                                    {updatingStep === step.id && (
+                                                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 flex-shrink-0"></div>
+                                                    )}
+                                                  </div>
+                                                ))
+                                              ) : (
+                                                <div className="text-xs text-gray-400 italic text-left">No steps defined</div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        )}
                                       </div>
-                                    </div>
-                                  ))}
+                                    );
+                                  })}
                                 </div>
                               ) : (
                                 <div className="text-gray-400 text-sm italic">No milestones defined for this goal.</div>

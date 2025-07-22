@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { goalsAPI, aiAPI } from '../services/api';
 
-const GoalForm = ({ goal = null, onSuccess, onCancel }) => {
+const GoalForm = ({ goal = null, onSuccess, onCancel, isInline = false }) => {
   const [formData, setFormData] = useState({
     title: goal?.title || '',
     description: goal?.description || '',
@@ -171,19 +171,29 @@ const GoalForm = ({ goal = null, onSuccess, onCancel }) => {
   };
 
   return (
-    <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 p-8">
-      <div className="flex items-center space-x-3 mb-6">
-        <div className="w-10 h-10 bg-black rounded-2xl flex items-center justify-center">
-          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
+    <div className={`bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 ${isInline ? 'p-4' : 'p-8'}`}>
+      {!isInline && (
+        <div className="flex items-center space-x-3 mb-6">
+          <div className="w-10 h-10 bg-black rounded-2xl flex items-center justify-center">
+            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h3 className="text-2xl font-bold text-gray-900">
+            {goal ? 'Edit Goal' : 'Create New Goal'}
+          </h3>
         </div>
-        <h3 className="text-2xl font-bold text-gray-900">
-          {goal ? 'Edit Goal' : 'Create New Goal'}
-        </h3>
-      </div>
+      )}
       
-      <form onSubmit={handleSubmit} className="space-y-4">
+      {isInline && (
+        <div className="flex items-center space-x-3 mb-4">
+          <h3 className="text-lg font-bold text-gray-900">
+            {goal ? 'Edit Goal' : 'Create New Goal'}
+          </h3>
+        </div>
+      )}
+      
+              <form onSubmit={handleSubmit} className={`${isInline ? 'space-y-3' : 'space-y-4'}`}>
         {error && (
           <div className="bg-red-50/80 backdrop-blur-sm border border-red-200 text-red-700 px-6 py-4 rounded-2xl shadow-sm">
             <div className="flex items-center space-x-2">
@@ -217,7 +227,7 @@ const GoalForm = ({ goal = null, onSuccess, onCancel }) => {
             value={formData.title}
             onChange={handleChange}
             required
-            className="w-full px-4 py-3 border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/80 backdrop-blur-sm shadow-sm transition-all duration-200"
+            className={`w-full border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/80 backdrop-blur-sm shadow-sm transition-all duration-200 ${isInline ? 'px-3 py-2' : 'px-4 py-3'}`}
             placeholder="Enter your goal title"
           />
           <p className="text-xs text-gray-500 mt-1 flex items-center space-x-1">
@@ -237,7 +247,7 @@ const GoalForm = ({ goal = null, onSuccess, onCancel }) => {
             name="category"
             value={formData.category}
             onChange={handleChange}
-            className="w-full px-4 py-3 border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/80 backdrop-blur-sm shadow-sm transition-all duration-200"
+            className={`w-full border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/80 backdrop-blur-sm shadow-sm transition-all duration-200 ${isInline ? 'px-3 py-2' : 'px-4 py-3'}`}
           >
             {categoryOptions.map((option) => (
               <option key={option.value} value={option.value}>
@@ -335,8 +345,8 @@ const GoalForm = ({ goal = null, onSuccess, onCancel }) => {
                 name="description"
                 value={formData.description}
                 onChange={handleChange}
-                rows="6"
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/80 backdrop-blur-sm shadow-sm transition-all duration-200 resize-none font-mono text-sm"
+                rows={isInline ? "4" : "6"}
+                className={`w-full border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/80 backdrop-blur-sm shadow-sm transition-all duration-200 resize-none font-mono text-sm ${isInline ? 'px-3 py-2' : 'px-4 py-3'}`}
                 placeholder="Describe your goal in detail. Use markdown formatting for better structure:
                 
 **Bold text** for emphasis
@@ -366,22 +376,22 @@ const GoalForm = ({ goal = null, onSuccess, onCancel }) => {
             name="target_completion_date"
             value={formData.target_completion_date}
             onChange={handleChange}
-            className="w-full px-4 py-3 border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/80 backdrop-blur-sm shadow-sm transition-all duration-200"
+            className={`w-full border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/80 backdrop-blur-sm shadow-sm transition-all duration-200 ${isInline ? 'px-3 py-2' : 'px-4 py-3'}`}
           />
         </div>
 
-        <div className="flex justify-end space-x-4 pt-6">
+        <div className={`flex justify-end space-x-4 ${isInline ? 'pt-4' : 'pt-6'}`}>
           <button
             type="button"
             onClick={onCancel}
-            className="px-6 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-gray-500/20 transition-all duration-200 font-medium"
+            className={`text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-gray-500/20 transition-all duration-200 font-medium ${isInline ? 'px-4 py-2' : 'px-6 py-3'}`}
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={loading}
-            className="px-8 py-3 bg-black text-white rounded-2xl hover:bg-gray-800 focus:outline-none focus:ring-4 focus:ring-black/20 disabled:opacity-50 shadow-lg transition-all duration-200 transform hover:scale-105 font-medium"
+            className={`bg-black text-white rounded-2xl hover:bg-gray-800 focus:outline-none focus:ring-4 focus:ring-black/20 disabled:opacity-50 shadow-lg transition-all duration-200 transform hover:scale-105 font-medium ${isInline ? 'px-6 py-2' : 'px-8 py-3'}`}
           >
             {loading ? (
               <span className="flex items-center space-x-2">

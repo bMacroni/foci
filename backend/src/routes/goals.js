@@ -37,7 +37,10 @@ router.get('/:id', requireAuth, (req, res, next) => {
   getGoalById(req, res, next);
 });
 router.put('/:id', requireAuth, updateGoal);
-router.delete('/:id', requireAuth, deleteGoal);
+router.delete('/:id', requireAuth, (req, res, next) => {
+  console.log('DELETE /goals/:id route hit with id:', req.params.id);
+  deleteGoal(req, res, next);
+});
 
 // Milestone endpoints
 router.post('/:goalId/milestones', requireAuth, createMilestone);

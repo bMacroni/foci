@@ -32,6 +32,19 @@ const CalendarEvents = () => {
   const [lastFetchTime, setLastFetchTime] = useState(null);
   const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
 
+  // --- Delete Event Logic ---
+  const [deletingEvent, setDeletingEvent] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  
+  // Events organized by day and time slot
+  const [eventsByDayTime, setEventsByDayTime] = useState({});
+  
+  // Use ref to track if we need to update eventsByDayTime
+  const eventsByDayTimeRef = useRef({});
+
+  // Calculate rangeDays for the selected range
+  const rangeDays = getRangeDays(selectedRange.start, selectedRange.end);
+
   // Fetch user timezone on mount
   useEffect(() => {
     const fetchTimezone = async () => {
@@ -83,6 +96,136 @@ const CalendarEvents = () => {
     loadEvents();
   }, []);
 
+  // Process events for display
+  useEffect(() => {
+    console.log('[CalendarEvents] useEffect triggered with:', {
+      eventsLength: events.length,
+      rangeDaysLength: rangeDays.length,
+      userTimezone,
+      detectedTimezone
+    });
+    
+    if (events.length === 0 || rangeDays.length === 0) {
+      console.log('[CalendarEvents] Skipping processing - no events or range days');
+      return;
+    }
+
+
+
+    // Simple cache check to prevent unnecessary processing
+    const cacheKey = `${rangeDays.map(d => d.toDateString()).join(',')}-${events.length}`;
+    if (eventsByDayTimeRef.current.cacheKey === cacheKey) {
+      console.log('[CalendarEvents] Using cached data, skipping processing');
+      return;
+    }
+    
+    console.log('[CalendarEvents] Processing events for range:', rangeDays.map(d => d.toDateString()));
+
+    // Initialize time slots for each day in the range
+    const newEventsByDayTime = {};
+    rangeDays.forEach(day => {
+      const key = day.toDateString();
+      newEventsByDayTime[key] = {};
+      TIME_SLOTS.forEach(({ hour, min }) => {
+        newEventsByDayTime[key][`${hour}:${min}`] = [];
+      });
+      console.log(`[CalendarEvents] Initialized time slots for ${key}:`, Object.keys(newEventsByDayTime[key]).slice(0, 5), '...');
+    });
+
+    // Debug logging for selected range
+    console.log('[CalendarEvents] Selected date range:', {
+      start: selectedRange.start?.toDateString(),
+      end: selectedRange.end?.toDateString(),
+      rangeDays: rangeDays.map(d => d.toDateString()),
+      totalEvents: events.length
+    });
+    
+    // Check if July 22, 2025 is in the selected range
+    // Create July 22, 2025 in the user's timezone to avoid timezone conversion issues
+    const tz = userTimezone || detectedTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    const july22 = toZonedTime(new Date('2025-07-22T00:00:00Z'), tz);
+    const isJuly22InRange = rangeDays.some(day => day.toDateString() === july22.toDateString());
+    console.log('[CalendarEvents] July 22, 2025 in range:', isJuly22InRange);
+    console.log('[CalendarEvents] July 22, 2025 date string:', july22.toDateString());
+    console.log('[CalendarEvents] Range days:', rangeDays.map(d => d.toDateString()));
+    
+    // Show first few events to see what we're working with
+    if (events.length > 0) {
+      const tz = userTimezone || detectedTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+      console.log('[CalendarEvents] First 3 events:', events.slice(0, 3).map(event => ({
+        title: event.summary,
+        dateTime: event.start.dateTime || event.start,
+        parsedDate: toZonedTime(new Date(event.start.dateTime || event.start), tz).toDateString()
+      })));
+      
+      // Also show the date range of all events
+      const eventDates = events.map(event => toZonedTime(new Date(event.start.dateTime || event.start), tz));
+      const earliestDate = new Date(Math.min(...eventDates));
+      const latestDate = new Date(Math.max(...eventDates));
+      console.log('[CalendarEvents] Event date range:', {
+        earliest: earliestDate.toDateString(),
+        latest: latestDate.toDateString(),
+        totalEvents: events.length
+      });
+    }
+
+    // Process each event
+    console.log(`[CalendarEvents] Processing ${events.length} events...`);
+    events.forEach((event, index) => {
+      // Get the user's timezone (preferred or detected)
+      const tz = userTimezone || detectedTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+      
+      // Convert UTC time to user's timezone
+      const utcDate = new Date(event.start.dateTime || event.start);
+      console.log(`[CalendarEvents] Processing event "${event.summary}":`, {
+        originalDateTime: event.start.dateTime || event.start,
+        utcDate: utcDate.toISOString(),
+        timezone: tz
+      });
+      const eventDate = toZonedTime(utcDate, tz);
+      eventDate.setSeconds(0, 0);
+      const dayKey = eventDate.toDateString();
+      const hour = eventDate.getHours();
+      const min = eventDate.getMinutes() - (eventDate.getMinutes() % 15);
+      
+      // Debug logging for all events in the selected range
+      const isInSelectedRange = rangeDays.some(rangeDay => 
+        rangeDay.toDateString() === dayKey
+      );
+      
+      console.log(`[CalendarEvents] Event ${index + 1}/${events.length}: "${event.summary}" - dayKey: ${dayKey}, isInSelectedRange: ${isInSelectedRange}`);
+      
+      if (isInSelectedRange) {
+        console.log('[CalendarEvents] Processing event in selected range:', {
+          title: event.summary,
+          date: eventDate.toDateString(),
+          dayKey,
+          hour,
+          min,
+          slotKey: `${hour}:${min}`,
+          hasSlot: eventsByDayTime[dayKey] && eventsByDayTime[dayKey][`${hour}:${min}`],
+          originalDateTime: event.start.dateTime || event.start,
+          timezone: tz,
+          utcTime: utcDate.toISOString(),
+          localTime: eventDate.toISOString()
+        });
+      }
+      
+      if (newEventsByDayTime[dayKey] && newEventsByDayTime[dayKey][`${hour}:${min}`]) {
+        newEventsByDayTime[dayKey][`${hour}:${min}`].push(event);
+        console.log(`[CalendarEvents] Added event "${event.summary}" to slot ${hour}:${min} on ${dayKey}`);
+      } else {
+        console.log(`[CalendarEvents] No slot found for event "${event.summary}" at ${hour}:${min} on ${dayKey}`);
+        console.log(`[CalendarEvents] Available slots for ${dayKey}:`, Object.keys(newEventsByDayTime[dayKey] || {}));
+      }
+    });
+    
+    // Update the state with the processed events
+    setEventsByDayTime(newEventsByDayTime);
+    eventsByDayTimeRef.current = { cacheKey };
+    console.log('[CalendarEvents] Updated eventsByDayTime with:', Object.keys(newEventsByDayTime));
+  }, [events, rangeDays, userTimezone, detectedTimezone]);
+
   // Update current time every minute, using user-selected or detected timezone
   useEffect(() => {
     const tz = userTimezone || detectedTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -95,6 +238,7 @@ const CalendarEvents = () => {
   }, [userTimezone, detectedTimezone]);
 
   const loadEvents = async (forceRefresh = false) => {
+    console.log('[CalendarEvents] loadEvents called with forceRefresh:', forceRefresh);
     try {
       // Check if we have cached data and it's still valid
       const now = Date.now();
@@ -114,6 +258,11 @@ const CalendarEvents = () => {
       console.log('[CalendarEvents] Events loaded:', eventsData.length, 'events');
       if (eventsData.length > 0) {
         console.log('[CalendarEvents] First event:', eventsData[0]);
+        console.log('[CalendarEvents] All events:', eventsData.map(e => ({
+          title: e.summary,
+          start: e.start?.dateTime || e.start,
+          end: e.end?.dateTime || e.end
+        })));
       }
     } catch (err) {
         setError('Failed to load calendar events');
@@ -172,6 +321,12 @@ const CalendarEvents = () => {
 
   // --- Click and Drag Selection ---
   const handleDayMouseDown = (date) => {
+    console.log('[CalendarEvents] handleDayMouseDown called with date:', {
+      originalDate: date,
+      dateString: date.toDateString(),
+      isoString: date.toISOString(),
+      localString: date.toLocaleDateString()
+    });
     setSelectedRange({ start: date, end: date });
     setDragging(true);
   };
@@ -212,8 +367,9 @@ const CalendarEvents = () => {
     if (!selectedRange.start || !selectedRange.end) return [];
     const start = selectedRange.start < selectedRange.end ? selectedRange.start : selectedRange.end;
     const end = selectedRange.start > selectedRange.end ? selectedRange.start : selectedRange.end;
+    const tz = userTimezone || detectedTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
     return events.filter(event => {
-      const eventDate = new Date(event.start.dateTime || event.start);
+      const eventDate = toZonedTime(new Date(event.start.dateTime || event.start), tz);
       eventDate.setHours(0, 0, 0, 0);
       return eventDate >= start && eventDate <= end;
     });
@@ -231,11 +387,12 @@ const CalendarEvents = () => {
 
   // --- Drag-and-drop event move handler ---
   const handleMoveEvent = async (event, newDay, newHour, newMin) => {
+    const tz = userTimezone || detectedTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
     const start = new Date(newDay);
     start.setHours(newHour, newMin, 0, 0);
     let end = null;
     if (event.end) {
-      const duration = new Date(event.end.dateTime || event.end) - new Date(event.start.dateTime || event.start);
+      const duration = toZonedTime(new Date(event.end.dateTime || event.end), tz) - toZonedTime(new Date(event.start.dateTime || event.start), tz);
       end = new Date(start.getTime() + (duration > 0 ? duration : 60 * 60 * 1000));
     } else {
       // Default to 1 hour if no end
@@ -287,6 +444,12 @@ const CalendarEvents = () => {
 
   function getRangeDays(start, end) {
     if (!start || !end) return [];
+    console.log('[CalendarEvents] getRangeDays called with:', {
+      start: start?.toDateString(),
+      end: end?.toDateString(),
+      startISO: start?.toISOString(),
+      endISO: end?.toISOString()
+    });
     const days = [];
     let d = new Date(start < end ? start : end);
     const last = new Date(start > end ? start : end);
@@ -296,6 +459,7 @@ const CalendarEvents = () => {
       days.push(new Date(d));
       d.setDate(d.getDate() + 1);
     }
+    console.log('[CalendarEvents] getRangeDays returning days:', days.map(day => day.toDateString()));
     return days;
     }
 
@@ -310,32 +474,36 @@ const CalendarEvents = () => {
 
   // Calculate event card height in px based on 64px per hour
   function getEventCardHeight(event) {
-    const start = new Date(event.startTime || event.start?.dateTime || event.start);
-    const end = new Date(event.endTime || event.end?.dateTime || event.end);
+    const tz = userTimezone || detectedTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    const start = toZonedTime(new Date(event.startTime || event.start?.dateTime || event.start), tz);
+    const end = toZonedTime(new Date(event.endTime || event.end?.dateTime || event.end), tz);
     const durationMinutes = Math.max(15, (end - start) / (1000 * 60)); // at least 15 min
     return (durationMinutes / 60) * 64;
   }
 
   // Calculate top offset in px within the hour cell
   function getEventCardOffset(event) {
-    const start = new Date(event.startTime || event.start?.dateTime || event.start);
+    const tz = userTimezone || detectedTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    const start = toZonedTime(new Date(event.startTime || event.start?.dateTime || event.start), tz);
     return (start.getMinutes() / 60) * 64;
   }
 
   // Utility to check if two events overlap in time
   function eventsOverlap(eventA, eventB) {
-    const startA = new Date(eventA.startTime || eventA.start?.dateTime || eventA.start);
-    const endA = new Date(eventA.endTime || eventA.end?.dateTime || eventA.end);
-    const startB = new Date(eventB.startTime || eventB.start?.dateTime || eventB.start);
-    const endB = new Date(eventB.endTime || eventB.end?.dateTime || eventB.end);
+    const tz = userTimezone || detectedTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    const startA = toZonedTime(new Date(eventA.startTime || eventA.start?.dateTime || eventA.start), tz);
+    const endA = toZonedTime(new Date(eventA.endTime || eventA.end?.dateTime || eventA.end), tz);
+    const startB = toZonedTime(new Date(eventB.startTime || eventB.start?.dateTime || eventB.start), tz);
+    const endB = toZonedTime(new Date(eventB.endTime || eventB.end?.dateTime || eventB.end), tz);
     return startA < endB && startB < endA;
   }
 
   // Utility to get all events that overlap with a given slot time
   function getOverlappingEvents(events, slotTime) {
+    const tz = userTimezone || detectedTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
     return events.filter(event => {
-      const start = new Date(event.startTime || event.start?.dateTime || event.start);
-      const end = new Date(event.endTime || event.end?.dateTime || event.end);
+      const start = toZonedTime(new Date(event.startTime || event.start?.dateTime || event.start), tz);
+      const end = toZonedTime(new Date(event.endTime || event.end?.dateTime || event.end), tz);
       return start <= slotTime && end > slotTime;
     });
     }
@@ -352,8 +520,11 @@ const CalendarEvents = () => {
     const [resizing, setResizing] = useState(false);
     const [resizeEnd, setResizeEnd] = useState(null);
     const [justResized, setJustResized] = useState(false); // Track if last action was resize
-    const startTime = new Date(event.startTime || event.start?.dateTime || event.start);
-    const endTime = resizeEnd || new Date(event.endTime || event.end?.dateTime || event.end);
+    
+    // Get timezone and convert times
+    const tz = userTimezone || detectedTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    const startTime = toZonedTime(new Date(event.startTime || event.start?.dateTime || event.start), tz);
+    const endTime = resizeEnd || toZonedTime(new Date(event.endTime || event.end?.dateTime || event.end), tz);
     const timeRange = `${startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} — ${endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 
     // Handle resizing logic
@@ -430,7 +601,7 @@ const CalendarEvents = () => {
     }, [event.title, event.summary]);
 
     // Use resizeEnd for real-time height calculation during resize
-    const effectiveEndTime = resizeEnd || new Date(event.endTime || event.end?.dateTime || event.end);
+    const effectiveEndTime = resizeEnd || toZonedTime(new Date(event.endTime || event.end?.dateTime || event.end), tz);
     const cardHeight = resizing 
       ? Math.max(16, ((effectiveEndTime - startTime) / (1000 * 60)) * (64 / 60)) - 4
       : getEventCardHeight(event);
@@ -512,7 +683,8 @@ const CalendarEvents = () => {
 
   // Update handleResizeEnd to reload events after resize
   async function handleResizeEnd(event, newEnd) {
-    const start = new Date(event.startTime || event.start?.dateTime || event.start);
+    const tz = userTimezone || detectedTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    const start = toZonedTime(new Date(event.startTime || event.start?.dateTime || event.start), tz);
     if (newEnd <= start) return;
     // Optimistically update local state
     const prevEvents = [...events];
@@ -670,10 +842,11 @@ const CalendarEvents = () => {
     // Calculate slot time
     const slotTime = new Date(day);
     slotTime.setHours(hour, min, 0, 0);
-    // Get all events that start in this slot
+    // Get all events that start in this hour (regardless of minutes)
+    const tz = userTimezone || detectedTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
     const eventsInSlot = events.filter(event => {
-      const start = new Date(event.startTime || event.start?.dateTime || event.start);
-      return start.getHours() === hour && start.getMinutes() === min;
+      const start = toZonedTime(new Date(event.startTime || event.start?.dateTime || event.start), tz);
+      return start.getHours() === hour; // Show all events in this hour, regardless of minutes
     });
     // Assign column index for each overlapping event (for future: overlapping logic)
     let columns = [];
@@ -710,78 +883,7 @@ const CalendarEvents = () => {
     );
   }
 
-  // --- Calculate rangeDays and eventsByDayHour for rendering ---
-  const rangeDays = getRangeDays(selectedRange.start, selectedRange.end);
-  const eventsByDayTime = {};
-  rangeDays.forEach(day => {
-    const key = day.toDateString();
-    eventsByDayTime[key] = {};
-    TIME_SLOTS.forEach(({ hour, min }) => {
-      eventsByDayTime[key][`${hour}:${min}`] = [];
-    });
-  });
-  
-  // Debug logging for selected range
-  if (rangeDays.length > 0) {
-    console.log('[CalendarEvents] Selected date range:', {
-      start: selectedRange.start?.toDateString(),
-      end: selectedRange.end?.toDateString(),
-      rangeDays: rangeDays.map(d => d.toDateString()),
-      totalEvents: events.length
-    });
-    
-    // Show first few events to see what we're working with
-    if (events.length > 0) {
-      console.log('[CalendarEvents] First 3 events:', events.slice(0, 3).map(event => ({
-        title: event.summary,
-        dateTime: event.start.dateTime || event.start,
-        parsedDate: new Date(event.start.dateTime || event.start).toDateString()
-      })));
-      
-      // Also show the date range of all events
-      const eventDates = events.map(event => new Date(event.start.dateTime || event.start));
-      const earliestDate = new Date(Math.min(...eventDates));
-      const latestDate = new Date(Math.max(...eventDates));
-      console.log('[CalendarEvents] Event date range:', {
-        earliest: earliestDate.toDateString(),
-        latest: latestDate.toDateString(),
-        totalEvents: events.length
-      });
-    }
-  }
-  events.forEach(event => {
-    const eventDate = new Date(event.start.dateTime || event.start);
-    eventDate.setSeconds(0, 0);
-    const dayKey = eventDate.toDateString();
-    const hour = eventDate.getHours();
-    const min = eventDate.getMinutes() - (eventDate.getMinutes() % 15);
-    
-    // Debug logging for all events in the selected range
-    const isInSelectedRange = rangeDays.some(rangeDay => 
-      rangeDay.toDateString() === dayKey
-    );
-    
-    if (isInSelectedRange) {
-      console.log('[CalendarEvents] Processing event in selected range:', {
-        title: event.summary,
-        date: eventDate.toDateString(),
-        dayKey,
-        hour,
-        min,
-        slotKey: `${hour}:${min}`,
-        hasSlot: eventsByDayTime[dayKey] && eventsByDayTime[dayKey][`${hour}:${min}`],
-        originalDateTime: event.start.dateTime || event.start
-      });
-    }
-    
-    if (eventsByDayTime[dayKey] && eventsByDayTime[dayKey][`${hour}:${min}`]) {
-      eventsByDayTime[dayKey][`${hour}:${min}`].push(event);
-    }
-  });
 
-  // --- Delete Event Logic ---
-  const [deletingEvent, setDeletingEvent] = useState(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleDeleteEvent = async (eventId) => {
     try {
@@ -907,14 +1009,14 @@ const CalendarEvents = () => {
           <span className="font-medium">{error}</span>
         </div>
       )}
-      <div ref={calendarRef} className="grid grid-cols-7 gap-2 mb-8 select-none">
+      <div ref={calendarRef} className="grid grid-cols-7 gap-1 mb-6 select-none max-w-2xl">
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-          <div key={d} className="text-center font-semibold text-gray-500 mb-2">{d}</div>
+          <div key={d} className="text-center font-semibold text-gray-500 mb-1 text-sm">{d}</div>
         ))}
         {monthDays.map((date, idx) => (
           <div
             key={idx}
-            className={`h-16 flex items-center justify-center rounded-xl cursor-pointer border transition-all
+            className={`h-12 flex items-center justify-center rounded-md cursor-pointer border transition-all
               ${date ?
                 isSelected(date)
                   ? 'bg-black text-white border-black scale-105 shadow-lg'
@@ -930,19 +1032,40 @@ const CalendarEvents = () => {
           </div>
         ))}
       </div>
-      {/* --- Time Grid for Selected Range --- */}
+            {/* --- Time Grid for Selected Range --- */}
       {rangeDays.length > 0 && (
         <DndProvider backend={HTML5Backend}>
           <div className="w-full">
             <div className="w-full relative">
-                              {/* Flex row: left = hour labels, right = event grid. Both scroll together. */}
-                <div style={{ display: 'flex', maxHeight: 12 * 64, overflowY: 'auto' }} className="scrollbar-hover bg-white rounded-lg border border-gray-200 shadow-sm">
-                  {/* Hour labels */}
+              {/* Flex row: left = hour labels, right = event grid. Both scroll together. */}
+              <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+                {/* Fixed header row */}
+                <div style={{ display: 'flex' }}>
+                  {/* Time header */}
                   <div style={{ flex: '0 0 70px', background: '#fafafa', borderRight: '1px solid #e5e7eb' }}>
-                    {/* Empty space for header alignment */}
                     <div className="h-10 bg-gray-50 border-b border-gray-200 flex items-center justify-center">
                       <div className="text-xs font-medium text-gray-500">Time</div>
                     </div>
+                  </div>
+                  {/* Date headers */}
+                  <div style={{ flex: 1, display: 'grid', gridTemplateColumns: `repeat(${rangeDays.length}, 1fr)` }}>
+                    {rangeDays.map((day, colIdx) => (
+                      <div key={`header-${day.toDateString()}`} className={`h-10 border-b border-gray-200 flex items-center justify-center ${rangeDays.length > 1 && colIdx % 2 === 1 ? 'bg-gray-100' : 'bg-gray-50'}`}>
+                        <div className="text-sm font-semibold text-gray-700">
+                          {day.toLocaleDateString('en-US', { 
+                            weekday: 'short', 
+                            month: 'short', 
+                            day: 'numeric' 
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {/* Scrollable content */}
+                <div style={{ display: 'flex', maxHeight: 12 * 64, overflowY: 'auto' }} className="scrollbar-hover">
+                  {/* Hour labels */}
+                  <div style={{ flex: '0 0 70px', background: '#fafafa', borderRight: '1px solid #e5e7eb' }}>
                     {Array.from({ length: 24 }).map((_, hour) => (
                       <div
                         key={hour}
@@ -955,19 +1078,7 @@ const CalendarEvents = () => {
                   </div>
                   {/* Event grid (days) */}
                   <div style={{ flex: 1, display: 'grid', gridTemplateColumns: `repeat(${rangeDays.length}, 1fr)` }}>
-                    {/* Date headers */}
                     {rangeDays.map((day, colIdx) => (
-                      <div key={`header-${day.toDateString()}`} className={`h-10 border-b border-gray-200 flex items-center justify-center ${rangeDays.length > 1 && colIdx % 2 === 1 ? 'bg-gray-100' : 'bg-gray-50'}`}>
-                        <div className="text-sm font-semibold text-gray-700">
-                          {day.toLocaleDateString('en-US', { 
-                            weekday: 'short', 
-                            month: 'short', 
-                            day: 'numeric' 
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                                      {rangeDays.map((day, colIdx) => (
                       <div key={day.toDateString()} style={{ display: 'flex', flexDirection: 'column' }}>
                         {Array.from({ length: 24 }).map((_, hour) => {
                           // Only apply alternating background when multiple days are selected
@@ -978,7 +1089,15 @@ const CalendarEvents = () => {
                               day={day}
                               hour={hour}
                               min={0}
-                              events={eventsByDayTime[day.toDateString()]?.[`${hour}:0`] || []}
+                              events={(() => {
+                                const dayEvents = eventsByDayTime[day.toDateString()] || {};
+                                const allDayEvents = [];
+                                // Collect all events for this day
+                                Object.values(dayEvents).forEach(slotEvents => {
+                                  allDayEvents.push(...slotEvents);
+                                });
+                                return allDayEvents;
+                              })()}
                               onDropEvent={handleMoveEvent}
                               slotHeight={64}
                               className={`relative ${bg} border-b border-gray-100 hover:bg-gray-50 transition-colors`}
@@ -987,6 +1106,7 @@ const CalendarEvents = () => {
                         })}
                       </div>
                     ))}
+                  </div>
                 </div>
               </div>
             </div>
