@@ -1,8 +1,29 @@
 import { createClient } from '@supabase/supabase-js';
 import { dateParser } from '../utils/dateParser.js';
+import { autoScheduleTasks, processRecurringTask } from './autoSchedulingController.js';
 
 export async function createTask(req, res) {
-  const { title, description, due_date, priority, goal_id, completed, preferred_time_of_day, deadline_type, travel_time_minutes } = req.body;
+  const { 
+    title, 
+    description, 
+    due_date, 
+    priority, 
+    goal_id, 
+    completed, 
+    preferred_time_of_day, 
+    deadline_type, 
+    travel_time_minutes,
+    // Auto-scheduling fields
+    auto_schedule_enabled,
+    recurrence_pattern,
+    scheduling_preferences,
+    weather_dependent,
+    location,
+    preferred_time_windows,
+    max_daily_tasks,
+    buffer_time_minutes,
+    task_type
+  } = req.body;
   const user_id = req.user.id;
   
   // Get the JWT from the request
@@ -27,7 +48,28 @@ export async function createTask(req, res) {
   
   const { data, error } = await supabase
     .from('tasks')
-    .insert([{ user_id, title, description, due_date: sanitizedDueDate, priority, goal_id: sanitizedGoalId, completed, preferred_time_of_day, deadline_type, travel_time_minutes }])
+    .insert([{ 
+      user_id, 
+      title, 
+      description, 
+      due_date: sanitizedDueDate, 
+      priority, 
+      goal_id: sanitizedGoalId, 
+      completed, 
+      preferred_time_of_day, 
+      deadline_type, 
+      travel_time_minutes,
+      // Auto-scheduling fields
+      auto_schedule_enabled,
+      recurrence_pattern,
+      scheduling_preferences,
+      weather_dependent,
+      location,
+      preferred_time_windows,
+      max_daily_tasks,
+      buffer_time_minutes,
+      task_type
+    }])
     .select()
     .single();
   
@@ -77,6 +119,22 @@ export async function getTasks(req, res) {
     console.log('Supabase error:', error);
     return res.status(400).json({ error: error.message });
   }
+
+  // Handle recurring task completion
+  if (isRecurringTaskCompletion && data.recurrence_pattern) {
+    try {
+      const updatedTask = await processRecurringTask(data, token);
+      if (updatedTask) {
+        // Return the updated task with new due date
+        res.json(updatedTask);
+        return;
+      }
+    } catch (recurringError) {
+      console.log('Error processing recurring task:', recurringError);
+      // Continue with normal response even if recurring processing fails
+    }
+  }
+
   res.json(data);
 }
 
@@ -113,7 +171,28 @@ export async function getTaskById(req, res) {
 export async function updateTask(req, res) {
   const user_id = req.user.id;
   const { id } = req.params;
-  const { title, description, due_date, priority, goal_id, completed, preferred_time_of_day, deadline_type, travel_time_minutes, status } = req.body;
+  const { 
+    title, 
+    description, 
+    due_date, 
+    priority, 
+    goal_id, 
+    completed, 
+    preferred_time_of_day, 
+    deadline_type, 
+    travel_time_minutes, 
+    status,
+    // Auto-scheduling fields
+    auto_schedule_enabled,
+    recurrence_pattern,
+    scheduling_preferences,
+    weather_dependent,
+    location,
+    preferred_time_windows,
+    max_daily_tasks,
+    buffer_time_minutes,
+    task_type
+  } = req.body;
   
   // Get the JWT from the request
   const token = req.headers.authorization?.split(' ')[1];
@@ -143,8 +222,21 @@ export async function updateTask(req, res) {
     ...(preferred_time_of_day !== undefined && { preferred_time_of_day }),
     ...(deadline_type !== undefined && { deadline_type }),
     ...(travel_time_minutes !== undefined && { travel_time_minutes }),
-    ...(status !== undefined && { status })
+    ...(status !== undefined && { status }),
+    // Auto-scheduling fields
+    ...(auto_schedule_enabled !== undefined && { auto_schedule_enabled }),
+    ...(recurrence_pattern !== undefined && { recurrence_pattern }),
+    ...(scheduling_preferences !== undefined && { scheduling_preferences }),
+    ...(weather_dependent !== undefined && { weather_dependent }),
+    ...(location !== undefined && { location }),
+    ...(preferred_time_windows !== undefined && { preferred_time_windows }),
+    ...(max_daily_tasks !== undefined && { max_daily_tasks }),
+    ...(buffer_time_minutes !== undefined && { buffer_time_minutes }),
+    ...(task_type !== undefined && { task_type })
   };
+
+  // Check if this is a recurring task being completed
+  const isRecurringTaskCompletion = status === 'completed' && recurrence_pattern;
   
   const { data, error } = await supabase
     .from('tasks')
@@ -500,4 +592,181 @@ export async function readTaskFromAI(args, userId, userContext) {
     return { error: error.message };
   }
   return data;
+}
+
+// Auto-scheduling API endpoints
+
+export async function toggleAutoSchedule(req, res) {
+  const user_id = req.user.id;
+  const { id } = req.params;
+  const { auto_schedule_enabled } = req.body;
+  
+  const token = req.headers.authorization?.split(' ')[1];
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  });
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .update({ auto_schedule_enabled })
+    .eq('id', id)
+    .eq('user_id', user_id)
+    .select()
+    .single();
+
+  if (error) {
+    console.log('Supabase error:', error);
+    return res.status(400).json({ error: error.message });
+  }
+  res.json(data);
+}
+
+export async function getAutoSchedulingDashboard(req, res) {
+  const user_id = req.user.id;
+  
+  const token = req.headers.authorization?.split(' ')[1];
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  });
+
+  const { data, error } = await supabase
+    .from('auto_scheduling_dashboard')
+    .select('*')
+    .eq('user_id', user_id)
+    .single();
+
+  if (error) {
+    console.log('Supabase error:', error);
+    return res.status(400).json({ error: error.message });
+  }
+  res.json(data);
+}
+
+export async function getUserSchedulingPreferences(req, res) {
+  const user_id = req.user.id;
+  
+  const token = req.headers.authorization?.split(' ')[1];
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  });
+
+  const { data, error } = await supabase
+    .from('user_scheduling_preferences')
+    .select('*')
+    .eq('user_id', user_id)
+    .single();
+
+  if (error) {
+    console.log('Supabase error:', error);
+    return res.status(400).json({ error: error.message });
+  }
+  res.json(data);
+}
+
+export async function updateUserSchedulingPreferences(req, res) {
+  const user_id = req.user.id;
+  const {
+    preferred_start_time,
+    preferred_end_time,
+    work_days,
+    max_tasks_per_day,
+    buffer_time_minutes,
+    weather_check_enabled,
+    travel_time_enabled,
+    auto_scheduling_enabled
+  } = req.body;
+  
+  const token = req.headers.authorization?.split(' ')[1];
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  });
+
+  const updateFields = {
+    ...(preferred_start_time !== undefined && { preferred_start_time }),
+    ...(preferred_end_time !== undefined && { preferred_end_time }),
+    ...(work_days !== undefined && { work_days }),
+    ...(max_tasks_per_day !== undefined && { max_tasks_per_day }),
+    ...(buffer_time_minutes !== undefined && { buffer_time_minutes }),
+    ...(weather_check_enabled !== undefined && { weather_check_enabled }),
+    ...(travel_time_enabled !== undefined && { travel_time_enabled }),
+    ...(auto_scheduling_enabled !== undefined && { auto_scheduling_enabled })
+  };
+
+  const { data, error } = await supabase
+    .from('user_scheduling_preferences')
+    .update(updateFields)
+    .eq('user_id', user_id)
+    .select()
+    .single();
+
+  if (error) {
+    console.log('Supabase error:', error);
+    return res.status(400).json({ error: error.message });
+  }
+  res.json(data);
+}
+
+export async function getTaskSchedulingHistory(req, res) {
+  const user_id = req.user.id;
+  const { task_id } = req.params;
+  
+  const token = req.headers.authorization?.split(' ')[1];
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  });
+
+  let query = supabase
+    .from('task_scheduling_history')
+    .select('*')
+    .eq('user_id', user_id);
+
+  if (task_id) {
+    query = query.eq('task_id', task_id);
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: false });
+
+  if (error) {
+    console.log('Supabase error:', error);
+    return res.status(400).json({ error: error.message });
+  }
+  res.json(data);
+}
+
+export async function triggerAutoScheduling(req, res) {
+  const user_id = req.user.id;
+  const token = req.headers.authorization?.split(' ')[1];
+
+  try {
+    const result = await autoScheduleTasks(user_id, token);
+    
+    if (result.error) {
+      return res.status(400).json({ error: result.error });
+    }
+    
+    res.json(result);
+  } catch (error) {
+    console.log('Error in triggerAutoScheduling:', error);
+    res.status(500).json({ error: 'Internal server error during auto-scheduling' });
+  }
 } 
