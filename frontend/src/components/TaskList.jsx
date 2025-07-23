@@ -219,7 +219,7 @@ const TaskList = ({ showSuccess }) => {
                   <div
                     ref={provided.innerRef}
                     {...provided.droppableProps}
-                    className={`rounded-2xl min-h-[200px] p-3 transition-all duration-200 ${snapshot.isDraggingOver ? 'bg-blue-100/60' : 'bg-blue-50/40'}`}
+                    className={`rounded-md min-h-[200px] p-3 transition-all duration-200 ${snapshot.isDraggingOver ? 'bg-blue-100/60' : 'bg-blue-50/40'}`}
                   >
                     <div className="text-lg font-bold text-blue-900 mb-3 flex items-center space-x-2">
                       {col.label === 'To Do' && <span>📝</span>}
@@ -234,7 +234,7 @@ const TaskList = ({ showSuccess }) => {
                             ref={provided.innerRef}
                             {...provided.draggableProps}
                             {...provided.dragHandleProps}
-                            className={`bg-white border ${getPriorityBorder(task.priority)} rounded-3xl shadow-xl p-6 mb-4 transition-all duration-200 transform ${snapshot.isDragging ? 'scale-105 shadow-2xl' : 'hover:scale-[1.02] hover:shadow-2xl'} group`}
+                            className={`bg-white border ${getPriorityBorder(task.priority)} rounded-md shadow p-4 mb-3 transition-all duration-200 transform ${snapshot.isDragging ? 'scale-105 shadow-lg' : 'hover:shadow-md'} group`}
                           >
                             <div className="flex justify-between items-start mb-4">
                               <div className="flex-1">
@@ -242,13 +242,13 @@ const TaskList = ({ showSuccess }) => {
                                   <h3 className={`text-xl font-bold leading-tight ${task.completed ? 'line-through text-gray-500' : 'text-black'}`}>
                                     {task.title}
                                   </h3>
-                                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getPriorityColor(task.priority)}`}>
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${getPriorityColor(task.priority)}`}>
                                     {getPriorityLabel(task.priority)}
                                   </span>
-                                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
                                     task.completed 
-                                      ? 'bg-gray-100 text-gray-800 border border-gray-200' 
-                                      : 'bg-gray-100 text-gray-800 border border-gray-200'
+                                      ? 'bg-green-100 text-green-800 border-green-200' 
+                                      : 'bg-gray-100 text-gray-800 border-gray-200'
                                   }`}>
                                     <div className={`w-2 h-2 rounded-full mr-2 ${
                                       task.completed ? 'bg-gray-500' : 'bg-gray-400'
@@ -267,7 +267,7 @@ const TaskList = ({ showSuccess }) => {
                               <div className="flex space-x-1">
                                 <button
                                   onClick={() => handleEdit(task)}
-                                  className="p-2 text-gray-600 hover:text-black hover:bg-gray-100 rounded-xl transition-colors duration-200 focus:ring-2 focus:ring-blue-400"
+                                  className="p-2 text-gray-600 hover:text-black hover:bg-gray-50 rounded-md transition-colors duration-200"
                                   title="Edit task"
                                 >
                                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -276,7 +276,7 @@ const TaskList = ({ showSuccess }) => {
                                 </button>
                                 <button
                                   onClick={() => handleDelete(task.id)}
-                                  className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-100 rounded-xl transition-colors duration-200 focus:ring-2 focus:ring-red-400"
+                                  className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors duration-200"
                                   title="Delete task"
                                 >
                                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
