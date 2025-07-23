@@ -88,6 +88,8 @@ export async function createCalendarEvent(userId, task, scheduledTime, token) {
   const endTime = new Date(scheduledTime);
   endTime.setMinutes(endTime.getMinutes() + (task.estimated_duration_minutes || 60));
 
+  console.log('Creating calendar event for task:', task.title, 'at:', scheduledTime.toISOString());
+  
   const { data, error } = await supabase
     .from('calendar_events')
     .insert([{
@@ -107,6 +109,7 @@ export async function createCalendarEvent(userId, task, scheduledTime, token) {
     return null;
   }
 
+  console.log('Successfully created calendar event:', data);
   return data;
 }
 
@@ -258,7 +261,10 @@ export async function autoScheduleTasks(userId, token) {
 
   const results = [];
 
+  console.log(`Processing ${tasks.length} tasks for auto-scheduling`);
+  
   for (const task of tasks) {
+    console.log(`Processing task: ${task.title} (ID: ${task.id})`);
     try {
       // Check if task is weather dependent
       let weatherData = null;
@@ -310,6 +316,9 @@ export async function autoScheduleTasks(userId, token) {
       let calendarEvent = null;
       try {
         calendarEvent = await createCalendarEvent(userId, task, scheduledTime, token);
+        if (!calendarEvent) {
+          console.log('Failed to create calendar event for task:', task.title);
+        }
       } catch (calendarError) {
         console.log('Failed to create calendar event (table might not exist):', calendarError);
         // Continue without calendar event
@@ -348,7 +357,7 @@ export async function autoScheduleTasks(userId, token) {
         task_title: task.title,
         status: 'scheduled',
         scheduled_time: scheduledTime,
-        calendar_event_id: calendarEvent.id
+        calendar_event_id: calendarEvent?.id || null
       });
 
     } catch (error) {
