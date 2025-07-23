@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react'
 import GoalList from '../components/GoalList'
 import TaskList from '../components/TaskList'
+import TasksPage from '../components/TasksPage'
 import CalendarStatus from '../components/CalendarStatus'
 import CalendarEvents from '../components/CalendarEvents'
 import AIChat from '../components/AIChat'
-import AutoSchedulingDashboard from '../components/AutoSchedulingDashboard'
 import FeedbackModal from '../components/FeedbackModal';
 
 function Dashboard({ showSuccess }) {
@@ -118,15 +118,7 @@ function Dashboard({ showSuccess }) {
               </svg>
             )
           },
-          {
-            id: 'auto-scheduling',
-            label: 'Auto-Schedule',
-            icon: (
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            )
-          }
+
         ].map(tab => (
           <button
             key={tab.id}
@@ -189,22 +181,20 @@ function Dashboard({ showSuccess }) {
                 <h2 className="text-xl lg:text-2xl font-bold text-black capitalize">
                   {activeTab === 'goals' ? 'Goals' : 
                    activeTab === 'tasks' ? 'Tasks' : 
-                   activeTab === 'calendar' ? 'Calendar' : 
-                   activeTab === 'auto-scheduling' ? 'Auto-Scheduling' : activeTab}
+                   activeTab === 'calendar' ? 'Calendar' : activeTab}
                 </h2>
                 {/* Removed Back to AI button */}
               </div>
               {/* Tab Content */}
               <div className="flex-1 overflow-y-auto">
                 {activeTab === 'goals' && <GoalList showSuccess={showSuccess} />}
-                {activeTab === 'tasks' && <TaskList showSuccess={showSuccess} />}
+                {activeTab === 'tasks' && <TasksPage showSuccess={showSuccess} />}
                 {activeTab === 'calendar' && (
                   <div className="space-y-6">
                     <CalendarStatus />
                     <CalendarEvents />
                   </div>
                 )}
-                {activeTab === 'auto-scheduling' && <AutoSchedulingDashboard showSuccess={showSuccess} />}
               </div>
             </div>
           )}
@@ -232,8 +222,7 @@ function Dashboard({ showSuccess }) {
                   { id: 'ai', label: 'AI Chat' },
                   { id: 'goals', label: 'Goals' },
                   { id: 'tasks', label: 'Tasks' },
-                  { id: 'calendar', label: 'Calendar' },
-                  { id: 'auto-scheduling', label: 'Auto-Schedule' }
+                  { id: 'calendar', label: 'Calendar' }
                 ].map((tab) => (
                   <button
                     key={tab.id}
