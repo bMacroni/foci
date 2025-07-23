@@ -43,17 +43,24 @@ export async function findAvailableTimeSlots(userId, taskDuration, preferredWind
   const endDate = new Date();
   endDate.setDate(endDate.getDate() + 7);
 
-  const { data: calendarEvents, error } = await supabase
-    .from('calendar_events')
-    .select('start_time, end_time')
-    .eq('user_id', userId)
-    .gte('start_time', startDate.toISOString())
-    .lte('start_time', endDate.toISOString())
-    .order('start_time');
+  let calendarEvents = [];
+  try {
+    const { data: events, error } = await supabase
+      .from('calendar_events')
+      .select('start_time, end_time')
+      .eq('user_id', userId)
+      .gte('start_time', startDate.toISOString())
+      .lte('start_time', endDate.toISOString())
+      .order('start_time');
 
-  if (error) {
-    console.log('Error fetching calendar events:', error);
-    return [];
+    if (error) {
+      console.log('Error fetching calendar events (table might not exist):', error);
+      // Continue with empty calendar events
+    } else {
+      calendarEvents = events || [];
+    }
+  } catch (err) {
+    console.log('Calendar events table might not exist, continuing with empty calendar');
   }
 
   // TODO: Implement actual time slot finding logic
@@ -196,13 +203,37 @@ export async function autoScheduleTasks(userId, token) {
   });
 
   // Get user scheduling preferences
-  const { data: preferences, error: prefsError } = await supabase
+  let { data: preferences, error: prefsError } = await supabase
     .from('user_scheduling_preferences')
     .select('*')
     .eq('user_id', userId)
     .single();
 
-  if (prefsError) {
+  // If user preferences don't exist, create default ones
+  if (prefsError && prefsError.code === 'PGRST116') {
+    console.log('User preferences not found, creating default preferences');
+    const { data: newPrefs, error: createError } = await supabase
+      .from('user_scheduling_preferences')
+      .insert([{
+        user_id: userId,
+        preferred_start_time: '09:00:00',
+        preferred_end_time: '17:00:00',
+        work_days: [1, 2, 3, 4, 5],
+        max_tasks_per_day: 5,
+        buffer_time_minutes: 15,
+        weather_check_enabled: true,
+        travel_time_enabled: true,
+        auto_scheduling_enabled: true
+      }])
+      .select()
+      .single();
+
+    if (createError) {
+      console.log('Error creating user preferences:', createError);
+      return { error: 'Failed to create user preferences' };
+    }
+    preferences = newPrefs;
+  } else if (prefsError) {
     console.log('Error fetching user preferences:', prefsError);
     return { error: 'Failed to fetch user preferences' };
   }
@@ -275,17 +306,13 @@ export async function autoScheduleTasks(userId, token) {
       // Schedule the task in the first available slot
       const scheduledTime = timeSlots[0].start_time;
       
-      // Create calendar event
-      const calendarEvent = await createCalendarEvent(userId, task, scheduledTime, token);
-      
-      if (!calendarEvent) {
-        results.push({
-          task_id: task.id,
-          task_title: task.title,
-          status: 'failed',
-          reason: 'Failed to create calendar event'
-        });
-        continue;
+      // Create calendar event (optional - continue even if it fails)
+      let calendarEvent = null;
+      try {
+        calendarEvent = await createCalendarEvent(userId, task, scheduledTime, token);
+      } catch (calendarError) {
+        console.log('Failed to create calendar event (table might not exist):', calendarError);
+        // Continue without calendar event
       }
 
       // Update task with scheduled time
@@ -299,17 +326,22 @@ export async function autoScheduleTasks(userId, token) {
         })
         .eq('id', task.id);
 
-      // Update scheduling history
-      await updateTaskSchedulingHistory(
-        userId,
-        task.id,
-        scheduledTime,
-        weatherData,
-        travelTime,
-        calendarEvent.id,
-        'Auto-scheduled based on availability and preferences',
-        token
-      );
+      // Update scheduling history (optional - continue even if it fails)
+      try {
+        await updateTaskSchedulingHistory(
+          userId,
+          task.id,
+          scheduledTime,
+          weatherData,
+          travelTime,
+          calendarEvent?.id,
+          'Auto-scheduled based on availability and preferences',
+          token
+        );
+      } catch (historyError) {
+        console.log('Failed to update scheduling history (table might not exist):', historyError);
+        // Continue without updating history
+      }
 
       results.push({
         task_id: task.id,
