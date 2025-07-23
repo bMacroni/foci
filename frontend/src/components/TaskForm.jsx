@@ -11,7 +11,15 @@ const TaskForm = ({ task = null, onSuccess, onCancel }) => {
     completed: task?.completed || false,
     preferred_time_of_day: task?.preferred_time_of_day || 'any',
     deadline_type: task?.deadline_type || 'soft',
-    travel_time_minutes: task?.travel_time_minutes || ''
+    travel_time_minutes: task?.travel_time_minutes || '',
+    // Auto-scheduling fields
+    auto_schedule_enabled: task?.auto_schedule_enabled || false,
+    weather_dependent: task?.weather_dependent || false,
+    location: task?.location || '',
+    task_type: task?.task_type || 'other',
+    recurrence_pattern: task?.recurrence_pattern || null,
+    preferred_time_windows: task?.preferred_time_windows || [],
+    buffer_time_minutes: task?.buffer_time_minutes || 15
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -229,6 +237,151 @@ const TaskForm = ({ task = null, onSuccess, onCancel }) => {
           <label htmlFor="completed" className="ml-2 block text-sm text-gray-900">
             Mark as completed
           </label>
+        </div>
+
+        {/* Auto-Scheduling Section */}
+        <div className="border-t pt-6">
+          <h4 className="text-md font-semibold mb-4 text-gray-800">Auto-Scheduling Options</h4>
+          
+          <div className="space-y-4">
+            {/* Auto-schedule toggle */}
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="auto_schedule_enabled"
+                name="auto_schedule_enabled"
+                checked={formData.auto_schedule_enabled}
+                onChange={handleChange}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label htmlFor="auto_schedule_enabled" className="ml-2 block text-sm text-gray-900">
+                Enable automatic scheduling
+              </label>
+            </div>
+
+            {/* Auto-scheduling fields - only show if enabled */}
+            {formData.auto_schedule_enabled && (
+              <div className="space-y-4 pl-6 border-l-2 border-blue-200">
+                {/* Task Type */}
+                <div>
+                  <label htmlFor="task_type" className="block text-sm font-medium text-gray-700 mb-1">
+                    Task Type
+                  </label>
+                  <select
+                    id="task_type"
+                    name="task_type"
+                    value={formData.task_type}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="other">Other</option>
+                    <option value="indoor">Indoor</option>
+                    <option value="outdoor">Outdoor</option>
+                    <option value="travel">Travel</option>
+                    <option value="virtual">Virtual</option>
+                  </select>
+                </div>
+
+                {/* Location */}
+                <div>
+                  <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
+                    Location (for weather and travel time)
+                  </label>
+                  <input
+                    type="text"
+                    id="location"
+                    name="location"
+                    value={formData.location}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g., Central Park, New York"
+                  />
+                </div>
+
+                {/* Weather dependent */}
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="weather_dependent"
+                    name="weather_dependent"
+                    checked={formData.weather_dependent}
+                    onChange={handleChange}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="weather_dependent" className="ml-2 block text-sm text-gray-900">
+                    Weather dependent (skip during bad weather)
+                  </label>
+                </div>
+
+                {/* Buffer time */}
+                <div>
+                  <label htmlFor="buffer_time_minutes" className="block text-sm font-medium text-gray-700 mb-1">
+                    Buffer time between tasks (minutes)
+                  </label>
+                  <input
+                    type="number"
+                    id="buffer_time_minutes"
+                    name="buffer_time_minutes"
+                    value={formData.buffer_time_minutes}
+                    onChange={handleChange}
+                    min="0"
+                    max="120"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="15"
+                  />
+                </div>
+
+                {/* Recurrence Pattern */}
+                <div>
+                  <label htmlFor="recurrence_type" className="block text-sm font-medium text-gray-700 mb-1">
+                    Recurrence (Optional)
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <select
+                      id="recurrence_type"
+                      name="recurrence_type"
+                      onChange={(e) => {
+                        const type = e.target.value;
+                        if (type === 'none') {
+                          setFormData(prev => ({ ...prev, recurrence_pattern: null }));
+                        } else {
+                          setFormData(prev => ({ 
+                            ...prev, 
+                            recurrence_pattern: { type, interval: 1 }
+                          }));
+                        }
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="none">No recurrence</option>
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                    </select>
+                    {formData.recurrence_pattern && formData.recurrence_pattern.type !== 'none' && (
+                      <input
+                        type="number"
+                        name="recurrence_interval"
+                        value={formData.recurrence_pattern.interval || 1}
+                        onChange={(e) => {
+                          setFormData(prev => ({
+                            ...prev,
+                            recurrence_pattern: {
+                              ...prev.recurrence_pattern,
+                              interval: parseInt(e.target.value)
+                            }
+                          }));
+                        }}
+                        min="1"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="1"
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex justify-end space-x-3 pt-4">

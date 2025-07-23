@@ -311,6 +311,72 @@ const TaskList = ({ showSuccess }) => {
                                 </div>
                               )}
                             </div>
+
+                            {/* Auto-scheduling indicators */}
+                            <div className="flex flex-wrap gap-2 mt-3">
+                              {task.auto_schedule_enabled && (
+                                <div className="flex items-center space-x-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  <span>Auto-Scheduled</span>
+                                </div>
+                              )}
+                              {task.weather_dependent && (
+                                <div className="flex items-center space-x-1 px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs">
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                                  </svg>
+                                  <span>Weather Dependent</span>
+                                </div>
+                              )}
+                              {task.recurrence_pattern && (
+                                <div className="flex items-center space-x-1 px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs">
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                  </svg>
+                                  <span>Recurring</span>
+                                </div>
+                              )}
+                              {task.task_type && task.task_type !== 'other' && (
+                                <div className="flex items-center space-x-1 px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs">
+                                  <span className="capitalize">{task.task_type}</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Quick auto-schedule toggle */}
+                            <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
+                              <div className="flex items-center space-x-2">
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      await tasksAPI.toggleAutoSchedule(task.id, !task.auto_schedule_enabled);
+                                      fetchTasks(); // Refresh the task list
+                                      showSuccess(`Auto-scheduling ${!task.auto_schedule_enabled ? 'enabled' : 'disabled'} for "${task.title}"`);
+                                    } catch (err) {
+                                      setError('Failed to toggle auto-scheduling');
+                                      console.error('Error toggling auto-scheduling:', err);
+                                    }
+                                  }}
+                                  className={`flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                                    task.auto_schedule_enabled
+                                      ? 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+                                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                  }`}
+                                >
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  <span>{task.auto_schedule_enabled ? 'Disable' : 'Enable'} Auto-Schedule</span>
+                                </button>
+                              </div>
+                              {task.location && (
+                                <div className="text-xs text-gray-500">
+                                  📍 {task.location}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         )}
                       </Draggable>

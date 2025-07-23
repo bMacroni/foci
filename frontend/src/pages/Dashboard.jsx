@@ -4,6 +4,7 @@ import TaskList from '../components/TaskList'
 import CalendarStatus from '../components/CalendarStatus'
 import CalendarEvents from '../components/CalendarEvents'
 import AIChat from '../components/AIChat'
+import AutoSchedulingDashboard from '../components/AutoSchedulingDashboard'
 import FeedbackModal from '../components/FeedbackModal';
 
 function Dashboard({ showSuccess }) {
@@ -116,6 +117,15 @@ function Dashboard({ showSuccess }) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
             )
+          },
+          {
+            id: 'auto-scheduling',
+            label: 'Auto-Schedule',
+            icon: (
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            )
           }
         ].map(tab => (
           <button
@@ -179,7 +189,8 @@ function Dashboard({ showSuccess }) {
                 <h2 className="text-xl lg:text-2xl font-bold text-black capitalize">
                   {activeTab === 'goals' ? 'Goals' : 
                    activeTab === 'tasks' ? 'Tasks' : 
-                   activeTab === 'calendar' ? 'Calendar' : activeTab}
+                   activeTab === 'calendar' ? 'Calendar' : 
+                   activeTab === 'auto-scheduling' ? 'Auto-Scheduling' : activeTab}
                 </h2>
                 {/* Removed Back to AI button */}
               </div>
@@ -193,6 +204,7 @@ function Dashboard({ showSuccess }) {
                     <CalendarEvents />
                   </div>
                 )}
+                {activeTab === 'auto-scheduling' && <AutoSchedulingDashboard showSuccess={showSuccess} />}
               </div>
             </div>
           )}
@@ -220,7 +232,8 @@ function Dashboard({ showSuccess }) {
                   { id: 'ai', label: 'AI Chat' },
                   { id: 'goals', label: 'Goals' },
                   { id: 'tasks', label: 'Tasks' },
-                  { id: 'calendar', label: 'Calendar' }
+                  { id: 'calendar', label: 'Calendar' },
+                  { id: 'auto-scheduling', label: 'Auto-Schedule' }
                 ].map((tab) => (
                   <button
                     key={tab.id}

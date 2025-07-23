@@ -53,6 +53,13 @@ export const tasksAPI = {
   update: (id, taskData) => api.put(`/tasks/${id}`, taskData),
   delete: (id) => api.delete(`/tasks/${id}`),
   bulkCreate: (tasks) => api.post('/tasks/bulk', tasks),
+  // Auto-scheduling endpoints
+  toggleAutoSchedule: (id, enabled) => api.put(`/tasks/${id}/toggle-auto-schedule`, { auto_schedule_enabled: enabled }),
+  getAutoSchedulingDashboard: () => api.get('/tasks/auto-scheduling/dashboard'),
+  getUserSchedulingPreferences: () => api.get('/tasks/auto-scheduling/preferences'),
+  updateUserSchedulingPreferences: (preferences) => api.put('/tasks/auto-scheduling/preferences', preferences),
+  getTaskSchedulingHistory: (taskId) => api.get(`/tasks/auto-scheduling/history${taskId ? `/${taskId}` : ''}`),
+  triggerAutoScheduling: () => api.post('/tasks/auto-scheduling/trigger'),
 };
 
 // Calendar API
