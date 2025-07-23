@@ -67,10 +67,27 @@ export async function findAvailableTimeSlots(userId, taskDuration, preferredWind
   // This would analyze calendar events and find available slots
   // that match the preferred windows and work days
 
+  // Get user preferences for preferred start time
+  const { data: userPrefs } = await supabase
+    .from('user_scheduling_preferences')
+    .select('preferred_start_time')
+    .eq('user_id', userId)
+    .single();
+
+  // Calculate tomorrow's date at preferred start time
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(9, 0, 0, 0); // Default to 9 AM if no preferences
+
+  if (userPrefs?.preferred_start_time) {
+    const [hours, minutes] = userPrefs.preferred_start_time.split(':');
+    tomorrow.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+  }
+
   return [
     {
-      start_time: new Date(Date.now() + 24 * 60 * 60 * 1000), // Tomorrow
-      end_time: new Date(Date.now() + 24 * 60 * 60 * 1000 + taskDuration * 60 * 1000),
+      start_time: tomorrow,
+      end_time: new Date(tomorrow.getTime() + taskDuration * 60 * 1000),
       duration_minutes: taskDuration
     }
   ];
@@ -245,6 +262,14 @@ export async function autoScheduleTasks(userId, token) {
     return { message: 'Auto-scheduling is disabled for this user' };
   }
 
+  // Get total task count before auto-scheduling
+  const { count: totalTasksBefore } = await supabase
+    .from('tasks')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId);
+  
+  console.log(`Total tasks before auto-scheduling: ${totalTasksBefore}`);
+
   // Get all tasks that need auto-scheduling
   const { data: tasks, error: tasksError } = await supabase
     .from('tasks')
@@ -258,6 +283,9 @@ export async function autoScheduleTasks(userId, token) {
     console.log('Error fetching tasks:', tasksError);
     return { error: 'Failed to fetch tasks' };
   }
+
+  console.log(`Found ${tasks.length} tasks eligible for auto-scheduling`);
+  console.log('Task IDs:', tasks.map(t => t.id));
 
   const results = [];
 
@@ -371,12 +399,22 @@ export async function autoScheduleTasks(userId, token) {
     }
   }
 
+  // Get total task count after auto-scheduling
+  const { count: totalTasksAfter } = await supabase
+    .from('tasks')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId);
+  
+  console.log(`Total tasks after auto-scheduling: ${totalTasksAfter}`);
+  console.log(`Task count change: ${totalTasksAfter - totalTasksBefore}`);
+
   return {
     message: 'Auto-scheduling completed',
     results: results,
     total_tasks: tasks.length,
     successful: results.filter(r => r.status === 'scheduled').length,
     failed: results.filter(r => r.status === 'failed' || r.status === 'error').length,
-    skipped: results.filter(r => r.status === 'skipped').length
+    skipped: results.filter(r => r.status === 'skipped').length,
+    task_count_change: totalTasksAfter - totalTasksBefore
   };
 } 
