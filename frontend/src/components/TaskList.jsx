@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { tasksAPI } from '../services/api';
+import { tasksAPI, goalsAPI } from '../services/api';
 import TaskForm from './TaskForm';
+import InlineTaskEditor from './InlineTaskEditor';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 
 // Remove the smokeStyle CSS and related logic
@@ -11,6 +12,10 @@ const TaskList = ({ showSuccess }) => {
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
+  const [inlineEditingTaskId, setInlineEditingTaskId] = useState(null);
+  const [goals, setGoals] = useState([]);
+  const [loadingGoals, setLoadingGoals] = useState(true);
+  const [newTaskId, setNewTaskId] = useState(null); // Track the new task being created
 
   const fetchTasks = async () => {
     try {
@@ -25,6 +30,22 @@ const TaskList = ({ showSuccess }) => {
       setLoading(false);
     }
   };
+
+  // Fetch goals when component mounts
+  useEffect(() => {
+    const fetchGoals = async () => {
+      try {
+        const response = await goalsAPI.getAll();
+        setGoals(response.data);
+      } catch (err) {
+        console.error('Error fetching goals:', err);
+      } finally {
+        setLoadingGoals(false);
+      }
+    };
+
+    fetchGoals();
+  }, []);
 
   useEffect(() => {
     fetchTasks();
@@ -48,6 +69,26 @@ const TaskList = ({ showSuccess }) => {
     setShowForm(true);
   };
 
+  const handleInlineEdit = (taskId) => {
+    setInlineEditingTaskId(taskId);
+  };
+
+  const handleInlineEditCancel = () => {
+    setInlineEditingTaskId(null);
+    // If this was a new task being cancelled, remove it from the list
+    if (newTaskId) {
+      setTasks(prev => Array.isArray(prev) ? prev.filter(task => task.id !== newTaskId) : []);
+      setNewTaskId(null);
+    }
+  };
+
+  const handleInlineEditSuccess = () => {
+    setInlineEditingTaskId(null);
+    setNewTaskId(null); // Clear the new task ID
+    fetchTasks();
+    showSuccess('Task updated successfully!');
+  };
+
   const handleFormSuccess = () => {
     setShowForm(false);
     setEditingTask(null);
@@ -58,6 +99,41 @@ const TaskList = ({ showSuccess }) => {
   const handleFormCancel = () => {
     setShowForm(false);
     setEditingTask(null);
+  };
+
+  // New function to handle adding a new task
+  const handleAddNewTask = async () => {
+    try {
+      // Create a new task with default values
+      const newTaskData = {
+        title: '',
+        description: '',
+        status: 'not_started',
+        priority: 'medium',
+        completed: false,
+        preferred_time_of_day: 'any',
+        deadline_type: 'soft',
+        auto_schedule_enabled: false,
+        weather_dependent: false,
+        task_type: 'other',
+        buffer_time_minutes: 15
+      };
+
+      const response = await tasksAPI.create(newTaskData);
+      const newTask = response.data;
+      
+      // Add the new task to the local state
+      setTasks(prev => Array.isArray(prev) ? [newTask, ...prev] : [newTask]);
+      
+      // Set it for inline editing
+      setNewTaskId(newTask.id);
+      setInlineEditingTaskId(newTask.id);
+      
+      showSuccess('New task created!');
+    } catch (err) {
+      setError('Failed to create new task');
+      console.error('Error creating new task:', err);
+    }
   };
 
   const formatDate = (dateString) => {
@@ -168,17 +244,7 @@ const TaskList = ({ showSuccess }) => {
           <h2 className="text-3xl font-bold text-black">Your Tasks</h2>
           <p className="text-gray-300 mt-1">Stay organized and productive</p>
         </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="px-6 py-3 bg-black text-white rounded-2xl hover:bg-gray-800 focus:outline-none focus:ring-4 focus:ring-white/20 shadow-lg transition-all duration-200 transform hover:scale-105 font-medium"
-        >
-          <span className="flex items-center space-x-2">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
-            <span>Add Task</span>
-          </span>
-        </button>
+        {/* Removed the Add Task button from header */}
       </div>
 
       {error && (
@@ -221,11 +287,25 @@ const TaskList = ({ showSuccess }) => {
                     {...provided.droppableProps}
                     className={`rounded-md min-h-[200px] p-3 transition-all duration-200 ${snapshot.isDraggingOver ? 'bg-blue-100/60' : 'bg-blue-50/40'}`}
                   >
-                    <div className="text-lg font-bold text-blue-900 mb-3 flex items-center space-x-2">
-                      {col.label === 'To Do' && <span>📝</span>}
-                      {col.label === 'In Progress' && <span>⏳</span>}
-                      {col.label === 'Done' && <span>✅</span>}
-                      <span>{col.label}</span>
+                    <div className="text-lg font-bold text-blue-900 mb-3 flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        {col.label === 'To Do' && <span>📝</span>}
+                        {col.label === 'In Progress' && <span>⏳</span>}
+                        {col.label === 'Done' && <span>✅</span>}
+                        <span>{col.label}</span>
+                      </div>
+                      {/* Add plus button only to To Do column */}
+                      {col.label === 'To Do' && (
+                        <button
+                          onClick={handleAddNewTask}
+                          className="w-8 h-8 bg-black text-white rounded-full hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-black/20 transition-all duration-200 flex items-center justify-center"
+                          title="Add new task"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                          </svg>
+                        </button>
+                      )}
                     </div>
                     {groupedTasks[col.status].map((task, idx) => (
                       <Draggable draggableId={task.id.toString()} index={idx} key={task.id}>
@@ -236,148 +316,160 @@ const TaskList = ({ showSuccess }) => {
                             {...provided.dragHandleProps}
                             className={`bg-white border ${getPriorityBorder(task.priority)} rounded-md shadow p-4 mb-3 transition-all duration-200 transform ${snapshot.isDragging ? 'scale-105 shadow-lg' : 'hover:shadow-md'} group`}
                           >
-                            <div className="flex justify-between items-start mb-4">
-                              <div className="flex-1">
-                                <div className="flex items-center space-x-3 mb-2">
-                                  <h3 className={`text-xl font-bold leading-tight ${task.completed ? 'line-through text-gray-500' : 'text-black'}`}>
-                                    {task.title}
-                                  </h3>
-                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${getPriorityColor(task.priority)}`}>
-                                    {getPriorityLabel(task.priority)}
-                                  </span>
-                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
-                                    task.completed 
-                                      ? 'bg-green-100 text-green-800 border-green-200' 
-                                      : 'bg-gray-100 text-gray-800 border-gray-200'
-                                  }`}>
-                                    <div className={`w-2 h-2 rounded-full mr-2 ${
-                                      task.completed ? 'bg-gray-500' : 'bg-gray-400'
-                                    }`}></div>
-                                    {task.completed ? (
-                                      <span className="flex items-center">
-                                        <svg className="w-4 h-4 text-green-500 animate-bounce-in" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                        </svg>
-                                        <span className="ml-1">Completed</span>
+                            {inlineEditingTaskId === task.id ? (
+                              <InlineTaskEditor
+                                task={task}
+                                goals={goals}
+                                loadingGoals={loadingGoals}
+                                onSuccess={handleInlineEditSuccess}
+                                onCancel={handleInlineEditCancel}
+                              />
+                            ) : (
+                              <div 
+                                className="cursor-pointer"
+                                onClick={() => handleInlineEdit(task.id)}
+                              >
+                                <div className="flex justify-between items-start mb-4">
+                                  <div className="flex-1">
+                                    <div className="flex items-center space-x-3 mb-2">
+                                      <h3 className={`text-xl font-bold leading-tight ${task.completed ? 'line-through text-gray-500' : 'text-black'}`}>
+                                        {task.title}
+                                      </h3>
+                                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${getPriorityColor(task.priority)}`}>
+                                        {getPriorityLabel(task.priority)}
                                       </span>
-                                    ) : 'Pending'}
-                                  </span>
+                                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
+                                        task.completed 
+                                          ? 'bg-green-100 text-green-800 border-green-200' 
+                                          : 'bg-gray-100 text-gray-800 border-gray-200'
+                                      }`}>
+                                        <div className={`w-2 h-2 rounded-full mr-2 ${
+                                          task.completed ? 'bg-gray-500' : 'bg-gray-400'
+                                        }`}></div>
+                                        {task.completed ? (
+                                          <span className="flex items-center">
+                                            <svg className="w-4 h-4 text-green-500 animate-bounce-in" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            <span className="ml-1">Completed</span>
+                                          </span>
+                                        ) : 'Pending'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div className="flex space-x-1" onClick={(e) => e.stopPropagation()}>
+                                    <button
+                                      onClick={() => handleDelete(task.id)}
+                                      className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors duration-200"
+                                      title="Delete task"
+                                    >
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                      </svg>
+                                    </button>
+                                  </div>
                                 </div>
-                              </div>
-                              <div className="flex space-x-1">
-                                <button
-                                  onClick={() => handleEdit(task)}
-                                  className="p-2 text-gray-600 hover:text-black hover:bg-gray-50 rounded-md transition-colors duration-200"
-                                  title="Edit task"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                  </svg>
-                                </button>
-                                <button
-                                  onClick={() => handleDelete(task.id)}
-                                  className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors duration-200"
-                                  title="Delete task"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </button>
-                              </div>
-                            </div>
-                            {task.description && (
-                              <p className={`text-gray-600 mb-4 leading-relaxed ${task.completed ? 'line-through opacity-60' : ''}`}>
-                                {task.description}
-                              </p>
-                            )}
-                            {/* New fields for AI scheduling */}
-                            <div className="flex flex-wrap gap-4 text-sm text-gray-500 mt-2">
-                              {task.preferred_time_of_day && (
-                                <div className="flex items-center space-x-1">
-                                  <span className="font-medium">Preferred Time:</span>
-                                  <span className="capitalize">{task.preferred_time_of_day}</span>
+                                {task.description && (
+                                  <p className={`text-gray-600 mb-4 leading-relaxed ${task.completed ? 'line-through opacity-60' : ''}`}>
+                                    {task.description}
+                                  </p>
+                                )}
+                                {/* New fields for AI scheduling */}
+                                <div className="flex flex-wrap gap-4 text-sm text-gray-500 mt-2">
+                                  {task.preferred_time_of_day && (
+                                    <div className="flex items-center space-x-1">
+                                      <span className="font-medium">Preferred Time:</span>
+                                      <span className="capitalize">{task.preferred_time_of_day}</span>
+                                    </div>
+                                  )}
+                                  {task.deadline_type && (
+                                    <div className="flex items-center space-x-1">
+                                      <span className="font-medium">Deadline Type:</span>
+                                      <span className="capitalize">{task.deadline_type}</span>
+                                    </div>
+                                  )}
+                                  {task.duration_minutes !== undefined && task.duration_minutes !== null && task.duration_minutes !== '' && (
+                                    <div className="flex items-center space-x-1">
+                                      <span className="font-medium">Duration:</span>
+                                      <span>{task.duration_minutes} min</span>
+                                    </div>
+                                  )}
+                                  {task.travel_time_minutes !== undefined && task.travel_time_minutes !== null && task.travel_time_minutes !== '' && (
+                                    <div className="flex items-center space-x-1">
+                                      <span className="font-medium">Travel Time:</span>
+                                      <span>{task.travel_time_minutes} min</span>
+                                    </div>
+                                  )}
                                 </div>
-                              )}
-                              {task.deadline_type && (
-                                <div className="flex items-center space-x-1">
-                                  <span className="font-medium">Deadline Type:</span>
-                                  <span className="capitalize">{task.deadline_type}</span>
-                                </div>
-                              )}
-                              {task.travel_time_minutes !== undefined && task.travel_time_minutes !== null && task.travel_time_minutes !== '' && (
-                                <div className="flex items-center space-x-1">
-                                  <span className="font-medium">Travel Time:</span>
-                                  <span>{task.travel_time_minutes} min</span>
-                                </div>
-                              )}
-                            </div>
 
-                            {/* Auto-scheduling indicators */}
-                            <div className="flex flex-wrap gap-2 mt-3">
-                              {task.auto_schedule_enabled && (
-                                <div className="flex items-center space-x-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
-                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                  </svg>
-                                  <span>Auto-Scheduled</span>
+                                {/* Auto-scheduling indicators */}
+                                <div className="flex flex-wrap gap-2 mt-3">
+                                  {task.auto_schedule_enabled && (
+                                    <div className="flex items-center space-x-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                      </svg>
+                                      <span>Auto-Scheduled</span>
+                                    </div>
+                                  )}
+                                  {task.weather_dependent && (
+                                    <div className="flex items-center space-x-1 px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs">
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                                      </svg>
+                                      <span>Weather Dependent</span>
+                                    </div>
+                                  )}
+                                  {task.recurrence_pattern && (
+                                    <div className="flex items-center space-x-1 px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs">
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                      </svg>
+                                      <span>Recurring</span>
+                                    </div>
+                                  )}
+                                  {task.task_type && task.task_type !== 'other' && (
+                                    <div className="flex items-center space-x-1 px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs">
+                                      <span className="capitalize">{task.task_type}</span>
+                                    </div>
+                                  )}
                                 </div>
-                              )}
-                              {task.weather_dependent && (
-                                <div className="flex items-center space-x-1 px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs">
-                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
-                                  </svg>
-                                  <span>Weather Dependent</span>
-                                </div>
-                              )}
-                              {task.recurrence_pattern && (
-                                <div className="flex items-center space-x-1 px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs">
-                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                  </svg>
-                                  <span>Recurring</span>
-                                </div>
-                              )}
-                              {task.task_type && task.task_type !== 'other' && (
-                                <div className="flex items-center space-x-1 px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs">
-                                  <span className="capitalize">{task.task_type}</span>
-                                </div>
-                              )}
-                            </div>
 
-                            {/* Quick auto-schedule toggle */}
-                            <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
-                              <div className="flex items-center space-x-2">
-                                <button
-                                  onClick={async () => {
-                                    try {
-                                      await tasksAPI.toggleAutoSchedule(task.id, !task.auto_schedule_enabled);
-                                      fetchTasks(); // Refresh the task list
-                                      showSuccess(`Auto-scheduling ${!task.auto_schedule_enabled ? 'enabled' : 'disabled'} for "${task.title}"`);
-                                    } catch (err) {
-                                      setError('Failed to toggle auto-scheduling');
-                                      console.error('Error toggling auto-scheduling:', err);
-                                    }
-                                  }}
-                                  className={`flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                                    task.auto_schedule_enabled
-                                      ? 'bg-blue-100 text-blue-800 hover:bg-blue-200'
-                                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                  }`}
-                                >
-                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                  </svg>
-                                  <span>{task.auto_schedule_enabled ? 'Disable' : 'Enable'} Auto-Schedule</span>
-                                </button>
-                              </div>
-                              {task.location && (
-                                <div className="text-xs text-gray-500">
-                                  📍 {task.location}
-                                </div>
-                              )}
-                            </div>
-                          </div>
+                                {/* Quick auto-schedule toggle */}
+                                <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
+                                  <div className="flex items-center space-x-2">
+                                    <button
+                                      onClick={async () => {
+                                        try {
+                                          await tasksAPI.toggleAutoSchedule(task.id, !task.auto_schedule_enabled);
+                                          fetchTasks(); // Refresh the task list
+                                          showSuccess(`Auto-scheduling ${!task.auto_schedule_enabled ? 'enabled' : 'disabled'} for "${task.title}"`);
+                                        } catch (err) {
+                                          setError('Failed to toggle auto-scheduling');
+                                          console.error('Error toggling auto-scheduling:', err);
+                                        }
+                                      }}
+                                      className={`flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                                        task.auto_schedule_enabled
+                                          ? 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+                                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                      }`}
+                                    >
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                      </svg>
+                                      <span>{task.auto_schedule_enabled ? 'Disable' : 'Enable'} Auto-Schedule</span>
+                                    </button>
+                                  </div>
+                                  {task.location && (
+                                    <div className="text-xs text-gray-500">
+                                      📍 {task.location}
+                                    </div>
+                                                                     )}
+                                 </div>
+                               </div>
+                             )}
+                           </div>
                         )}
                       </Draggable>
                     ))}
