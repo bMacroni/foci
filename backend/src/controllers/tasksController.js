@@ -120,21 +120,6 @@ export async function getTasks(req, res) {
     return res.status(400).json({ error: error.message });
   }
 
-  // Handle recurring task completion
-  if (isRecurringTaskCompletion && data.recurrence_pattern) {
-    try {
-      const updatedTask = await processRecurringTask(data, token);
-      if (updatedTask) {
-        // Return the updated task with new due date
-        res.json(updatedTask);
-        return;
-      }
-    } catch (recurringError) {
-      console.log('Error processing recurring task:', recurringError);
-      // Continue with normal response even if recurring processing fails
-    }
-  }
-
   res.json(data);
 }
 
@@ -250,6 +235,22 @@ export async function updateTask(req, res) {
     console.log('Supabase error:', error);
     return res.status(400).json({ error: error.message });
   }
+
+  // Handle recurring task completion
+  if (isRecurringTaskCompletion && data.recurrence_pattern) {
+    try {
+      const updatedTask = await processRecurringTask(data, token);
+      if (updatedTask) {
+        // Return the updated task with new due date
+        res.json(updatedTask);
+        return;
+      }
+    } catch (recurringError) {
+      console.log('Error processing recurring task:', recurringError);
+      // Continue with normal response even if recurring processing fails
+    }
+  }
+
   res.json(data);
 }
 
