@@ -6,7 +6,7 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 
 // Remove the smokeStyle CSS and related logic
 
-const TaskList = ({ showSuccess }) => {
+const TaskList = ({ showSuccess, onTaskChange, tasks: propTasks }) => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -16,6 +16,9 @@ const TaskList = ({ showSuccess }) => {
   const [goals, setGoals] = useState([]);
   const [loadingGoals, setLoadingGoals] = useState(true);
   const [newTaskId, setNewTaskId] = useState(null); // Track the new task being created
+
+  // Use propTasks if provided, otherwise fetch tasks
+  const displayTasks = propTasks !== undefined ? propTasks : tasks;
 
   const fetchTasks = async () => {
     try {
@@ -48,8 +51,13 @@ const TaskList = ({ showSuccess }) => {
   }, []);
 
   useEffect(() => {
-    fetchTasks();
-  }, []);
+    // Only fetch tasks if propTasks is not provided
+    if (propTasks === undefined) {
+      fetchTasks();
+    } else {
+      setLoading(false);
+    }
+  }, [propTasks]);
 
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this task?')) {
@@ -57,6 +65,10 @@ const TaskList = ({ showSuccess }) => {
         await tasksAPI.delete(id);
         setTasks(prev => Array.isArray(prev) ? prev.filter(task => task.id !== id) : []);
         showSuccess('Task deleted successfully!');
+        // Notify parent component to refresh dashboard data
+        if (onTaskChange) {
+          onTaskChange();
+        }
       } catch (err) {
         setError('Failed to delete task');
         console.error('Error deleting task:', err);
@@ -87,6 +99,10 @@ const TaskList = ({ showSuccess }) => {
     setNewTaskId(null); // Clear the new task ID
     fetchTasks();
     showSuccess('Task updated successfully!');
+    // Notify parent component to refresh dashboard data
+    if (onTaskChange) {
+      onTaskChange();
+    }
   };
 
   const handleFormSuccess = () => {
@@ -94,6 +110,10 @@ const TaskList = ({ showSuccess }) => {
     setEditingTask(null);
     fetchTasks();
     showSuccess(editingTask ? 'Task updated successfully!' : 'Task created successfully!');
+    // Notify parent component to refresh dashboard data
+    if (onTaskChange) {
+      onTaskChange();
+    }
   };
 
   const handleFormCancel = () => {
@@ -123,13 +143,19 @@ const TaskList = ({ showSuccess }) => {
       const newTask = response.data;
       
       // Add the new task to the local state
-      setTasks(prev => Array.isArray(prev) ? [newTask, ...prev] : [newTask]);
+      if (propTasks === undefined) {
+        setTasks(prev => Array.isArray(prev) ? [newTask, ...prev] : [newTask]);
+      }
       
       // Set it for inline editing
       setNewTaskId(newTask.id);
       setInlineEditingTaskId(newTask.id);
       
       showSuccess('New task created!');
+      // Notify parent component to refresh dashboard data
+      if (onTaskChange) {
+        onTaskChange();
+      }
     } catch (err) {
       setError('Failed to create new task');
       console.error('Error creating new task:', err);
@@ -184,7 +210,7 @@ const TaskList = ({ showSuccess }) => {
     in_progress: [],
     completed: []
   };
-  (Array.isArray(tasks) ? tasks : []).forEach(task => {
+  (Array.isArray(displayTasks) ? displayTasks : []).forEach(task => {
     if (task.completed || task.status === 'completed') groupedTasks.completed.push(task);
     else if (task.status === 'in_progress') groupedTasks.in_progress.push(task);
     else groupedTasks.not_started.push(task);
@@ -266,7 +292,7 @@ const TaskList = ({ showSuccess }) => {
         />
       )}
 
-      {(Array.isArray(tasks) ? tasks : []).length === 0 ? (
+      {(Array.isArray(displayTasks) ? displayTasks : []).length === 0 ? (
         <div className="text-center py-16">
           <div className="w-24 h-24 bg-black rounded-full flex items-center justify-center mx-auto mb-6">
             <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
