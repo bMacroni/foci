@@ -87,7 +87,7 @@ export async function getCalendarEventsFromDB(userId, maxResults = 100, timeMin 
 
     // Transform database format to match Google Calendar API format
     return data.map(event => ({
-      id: event.google_calendar_id,
+      id: event.id, // Use the database ID instead of google_calendar_id
       summary: event.title,
       description: event.description,
       start: {

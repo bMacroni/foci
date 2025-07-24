@@ -29,7 +29,7 @@ export async function calculateTravelTime(origin, destination, mode = 'driving')
   };
 }
 
-export async function findAvailableTimeSlots(userId, taskDuration, preferredWindows, workDays, token) {
+export async function findAvailableTimeSlots(userId, taskDuration, preferredWindows, workDays, token, additionalCommitments = []) {
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
     global: {
       headers: {
@@ -37,6 +37,21 @@ export async function findAvailableTimeSlots(userId, taskDuration, preferredWind
       }
     }
   });
+
+  // Get user preferences for buffer time and work hours
+  const { data: userPrefs } = await supabase
+    .from('user_scheduling_preferences')
+    .select('preferred_start_time, preferred_end_time, buffer_time_minutes')
+    .eq('user_id', userId)
+    .single();
+
+  const bufferTimeMinutes = userPrefs?.buffer_time_minutes || 15;
+  const workStartTime = userPrefs?.preferred_start_time || '09:00:00';
+  const workEndTime = userPrefs?.preferred_end_time || '17:00:00';
+
+  // Parse work hours
+  const [workStartHour, workStartMinute] = workStartTime.split(':').map(Number);
+  const [workEndHour, workEndMinute] = workEndTime.split(':').map(Number);
 
   // Get user's calendar events for the next 7 days
   const startDate = new Date();
@@ -63,34 +78,180 @@ export async function findAvailableTimeSlots(userId, taskDuration, preferredWind
     console.log('Calendar events table might not exist, continuing with empty calendar');
   }
 
-  // TODO: Implement actual time slot finding logic
-  // This would analyze calendar events and find available slots
-  // that match the preferred windows and work days
+  // Get already scheduled tasks (tasks with due dates in the next 7 days)
+  let scheduledTasks = [];
+  try {
+    const { data: tasks, error } = await supabase
+      .from('tasks')
+      .select('due_date, estimated_duration_minutes')
+      .eq('user_id', userId)
+      .not('due_date', 'is', null)
+      .gte('due_date', startDate.toISOString())
+      .lte('due_date', endDate.toISOString())
+      .order('due_date');
 
-  // Get user preferences for preferred start time
-  const { data: userPrefs } = await supabase
-    .from('user_scheduling_preferences')
-    .select('preferred_start_time')
-    .eq('user_id', userId)
-    .single();
-
-  // Calculate tomorrow's date at preferred start time
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(9, 0, 0, 0); // Default to 9 AM if no preferences
-
-  if (userPrefs?.preferred_start_time) {
-    const [hours, minutes] = userPrefs.preferred_start_time.split(':');
-    tomorrow.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+    if (error) {
+      console.log('Error fetching scheduled tasks:', error);
+    } else {
+      scheduledTasks = tasks || [];
+    }
+  } catch (err) {
+    console.log('Error fetching scheduled tasks:', err);
   }
 
-  return [
-    {
-      start_time: tomorrow,
-      end_time: new Date(tomorrow.getTime() + taskDuration * 60 * 1000),
-      duration_minutes: taskDuration
+  // Combine all existing commitments including additional ones from current run
+  const existingCommitments = [
+    ...calendarEvents.map(event => ({
+      start: new Date(event.start_time),
+      end: new Date(event.end_time),
+      type: 'calendar'
+    })),
+    ...scheduledTasks.map(task => ({
+      start: new Date(task.due_date),
+      end: new Date(new Date(task.due_date).getTime() + (task.estimated_duration_minutes || 60) * 60 * 1000),
+      type: 'task'
+    })),
+    ...additionalCommitments
+  ].sort((a, b) => a.start.getTime() - b.start.getTime());
+
+  console.log(`[findAvailableTimeSlots] Found ${existingCommitments.length} existing commitments:`, 
+    existingCommitments.map(c => ({
+      type: c.type,
+      start: c.start.toISOString(),
+      end: c.end.toISOString()
+    }))
+  );
+
+  // Generate available time slots
+  const availableSlots = [];
+  const now = new Date();
+  
+  // Look for slots in the next 7 days
+  for (let day = 0; day < 7; day++) {
+    const checkDate = new Date();
+    checkDate.setDate(checkDate.getDate() + day);
+    
+    // Check if it's a work day (1=Monday, 7=Sunday)
+    const dayOfWeek = checkDate.getDay();
+    const adjustedDayOfWeek = dayOfWeek === 0 ? 7 : dayOfWeek; // Convert Sunday=0 to Sunday=7
+    if (!workDays.includes(adjustedDayOfWeek)) {
+      continue; // Skip non-work days
     }
-  ];
+
+    // Set work hours for this day
+    const dayStart = new Date(checkDate);
+    dayStart.setHours(workStartHour, workStartMinute, 0, 0);
+    
+    const dayEnd = new Date(checkDate);
+    dayEnd.setHours(workEndHour, workEndMinute, 0, 0);
+
+    // Find commitments for this day
+    const dayCommitments = existingCommitments.filter(commitment => {
+      const commitmentDate = new Date(commitment.start);
+      return commitmentDate.toDateString() === checkDate.toDateString();
+    });
+
+    // Start with the beginning of the work day, but not before now
+    let currentTime = new Date(Math.max(dayStart.getTime(), now.getTime()));
+
+    // If current time is after work hours for today, skip to next day
+    if (day === 0 && currentTime.getTime() >= dayEnd.getTime()) {
+      continue;
+    }
+
+    // Check each commitment and find gaps
+    for (const commitment of dayCommitments) {
+      // If there's enough time before this commitment
+      const timeBeforeCommitment = commitment.start.getTime() - currentTime.getTime();
+      const requiredTime = (taskDuration + bufferTimeMinutes) * 60 * 1000;
+      
+      if (timeBeforeCommitment >= requiredTime) {
+        const slotEnd = new Date(currentTime.getTime() + taskDuration * 60 * 1000);
+        const slot = {
+          start_time: new Date(currentTime),
+          end_time: slotEnd,
+          duration_minutes: taskDuration
+        };
+        console.log(`[findAvailableTimeSlots] Found available slot:`, {
+          start: slot.start_time.toISOString(),
+          end: slot.end_time.toISOString(),
+          duration: taskDuration
+        });
+        availableSlots.push(slot);
+        return availableSlots; // Return first available slot
+      }
+      
+      // Move current time to after this commitment (plus buffer)
+      currentTime = new Date(commitment.end.getTime() + bufferTimeMinutes * 60 * 1000);
+    }
+
+    // Check if there's time after the last commitment
+    const timeAfterLastCommitment = dayEnd.getTime() - currentTime.getTime();
+    const requiredTime = (taskDuration + bufferTimeMinutes) * 60 * 1000;
+    
+    if (timeAfterLastCommitment >= requiredTime) {
+      const slotEnd = new Date(currentTime.getTime() + taskDuration * 60 * 1000);
+      const slot = {
+        start_time: new Date(currentTime),
+        end_time: slotEnd,
+        duration_minutes: taskDuration
+      };
+      console.log(`[findAvailableTimeSlots] Found available slot after last commitment:`, {
+        start: slot.start_time.toISOString(),
+        end: slot.end_time.toISOString(),
+        duration: taskDuration
+      });
+      availableSlots.push(slot);
+      return availableSlots; // Return first available slot
+    }
+  }
+
+  // If no slots found in the next 7 days, return a fallback slot (next work day at start time)
+  const fallbackDate = new Date();
+  let daysToAdd = 1;
+  while (daysToAdd <= 7) {
+    fallbackDate.setDate(fallbackDate.getDate() + daysToAdd);
+    const dayOfWeek = fallbackDate.getDay();
+    const adjustedDayOfWeek = dayOfWeek === 0 ? 7 : dayOfWeek;
+    
+    if (workDays.includes(adjustedDayOfWeek)) {
+      fallbackDate.setHours(workStartHour, workStartMinute, 0, 0);
+      const fallbackEnd = new Date(fallbackDate.getTime() + taskDuration * 60 * 1000);
+      
+      const fallbackSlot = {
+        start_time: new Date(fallbackDate),
+        end_time: fallbackEnd,
+        duration_minutes: taskDuration
+      };
+      console.log(`[findAvailableTimeSlots] Using fallback slot (next work day):`, {
+        start: fallbackSlot.start_time.toISOString(),
+        end: fallbackSlot.end_time.toISOString(),
+        duration: taskDuration
+      });
+      
+      return [fallbackSlot];
+    }
+    daysToAdd++;
+  }
+
+  // Ultimate fallback - tomorrow at 9 AM
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(9, 0, 0, 0);
+  
+  const ultimateFallbackSlot = {
+    start_time: tomorrow,
+    end_time: new Date(tomorrow.getTime() + taskDuration * 60 * 1000),
+    duration_minutes: taskDuration
+  };
+  
+  console.log(`[findAvailableTimeSlots] Using ultimate fallback slot:`, {
+    start: ultimateFallbackSlot.start_time.toISOString(),
+    end: ultimateFallbackSlot.end_time.toISOString(),
+    duration: taskDuration
+  });
+  
+  return [ultimateFallbackSlot];
 }
 
 export async function createCalendarEvent(userId, task, scheduledTime, token) {
@@ -288,6 +449,7 @@ export async function autoScheduleTasks(userId, token) {
   console.log('Task IDs:', tasks.map(t => t.id));
 
   const results = [];
+  const newlyScheduledTasks = []; // Track tasks scheduled in this run
 
   console.log(`Processing ${tasks.length} tasks for auto-scheduling`);
   
@@ -318,13 +480,14 @@ export async function autoScheduleTasks(userId, token) {
         travelTime = travelData.duration_minutes;
       }
 
-      // Find available time slots
+      // Find available time slots, considering newly scheduled tasks
       const timeSlots = await findAvailableTimeSlots(
         userId,
         (task.estimated_duration_minutes || 60) + travelTime,
         task.preferred_time_windows,
         preferences.work_days,
-        token
+        token,
+        newlyScheduledTasks
       );
 
       if (timeSlots.length === 0) {
@@ -353,7 +516,7 @@ export async function autoScheduleTasks(userId, token) {
       }
 
       // Update task with scheduled time
-      await supabase
+      const { error: updateError } = await supabase
         .from('tasks')
         .update({
           due_date: scheduledTime.toISOString(),
@@ -362,6 +525,24 @@ export async function autoScheduleTasks(userId, token) {
           travel_time_minutes: travelTime
         })
         .eq('id', task.id);
+
+      if (updateError) {
+        console.log('Error updating task with scheduled time:', updateError);
+        results.push({
+          task_id: task.id,
+          task_title: task.title,
+          status: 'error',
+          reason: 'Failed to update task with scheduled time'
+        });
+        continue;
+      }
+
+      // Add the newly scheduled task to our tracking array
+      newlyScheduledTasks.push({
+        start: scheduledTime,
+        end: new Date(scheduledTime.getTime() + (task.estimated_duration_minutes || 60) * 60 * 1000),
+        type: 'newly_scheduled_task'
+      });
 
       // Update scheduling history (optional - continue even if it fails)
       try {

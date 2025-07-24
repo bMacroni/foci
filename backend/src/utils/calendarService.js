@@ -101,6 +101,11 @@ export async function createCalendarEvent(userId, eventData) {
 }
 
 export async function updateCalendarEvent(userId, eventId, eventData) {
+  // Validate eventId
+  if (!eventId) {
+    throw new Error('Event ID is required');
+  }
+  
   const { summary, title, description, startTime, endTime, location } = eventData;
   const eventTitle = title || summary || 'Untitled Event';
   let query = supabase
@@ -139,6 +144,11 @@ export async function updateCalendarEventFromAI(args, userId, userContext) {
 } 
 
 export async function deleteCalendarEvent(userId, eventId) {
+  // Validate eventId
+  if (!eventId) {
+    throw new Error('Event ID is required');
+  }
+  
   let query = supabase
     .from('calendar_events')
     .delete()

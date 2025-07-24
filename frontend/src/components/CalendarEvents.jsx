@@ -866,12 +866,14 @@ const CalendarEvents = () => {
         `}
         style={{ position: 'relative', height: slotHeight }}
       >
-        {columns.map(({ event, col }) => {
+        {columns.map(({ event, col }, index) => {
           const width = `${100 / totalCols}%`;
           const left = `${(100 / totalCols) * col}%`;
+          // Use a combination of event.id and index to ensure unique keys
+          const uniqueKey = event.id || `event-${index}-${event.start?.dateTime || event.startTime || Date.now()}`;
           return (
             <DraggableEventCard
-              key={event.id}
+              key={uniqueKey}
               event={event}
               onClick={setEditingEvent}
               slotHeight={slotHeight}
@@ -887,11 +889,20 @@ const CalendarEvents = () => {
 
   const handleDeleteEvent = async (eventId) => {
     try {
+      // Validate eventId before making the API call
+      if (!eventId) {
+        showToast('Cannot delete event: Invalid event ID', 'error');
+        setDeletingEvent(null);
+        setShowDeleteConfirm(false);
+        return;
+      }
+      
       await calendarAPI.deleteEvent(eventId);
       showToast('Event deleted!', 'success');
       setDeletingEvent(null);
       setShowDeleteConfirm(false);
-      loadEvents();
+      // Force refresh to immediately update the UI
+      await loadEvents(true);
     } catch (err) {
       showToast('Failed to delete event', 'error');
       setDeletingEvent(null);

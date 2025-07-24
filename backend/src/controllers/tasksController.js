@@ -167,6 +167,8 @@ export async function updateTask(req, res) {
     deadline_type, 
     travel_time_minutes, 
     status,
+    estimated_duration_minutes,
+    scheduled_time,
     // Auto-scheduling fields
     auto_schedule_enabled,
     recurrence_pattern,
@@ -208,6 +210,8 @@ export async function updateTask(req, res) {
     ...(deadline_type !== undefined && { deadline_type }),
     ...(travel_time_minutes !== undefined && { travel_time_minutes }),
     ...(status !== undefined && { status }),
+    ...(estimated_duration_minutes !== undefined && { estimated_duration_minutes }),
+    ...(scheduled_time !== undefined && { scheduled_time }),
     // Auto-scheduling fields
     ...(auto_schedule_enabled !== undefined && { auto_schedule_enabled }),
     ...(recurrence_pattern !== undefined && { recurrence_pattern }),
