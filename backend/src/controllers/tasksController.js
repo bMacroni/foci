@@ -106,6 +106,12 @@ export async function getTasks(req, res) {
         id,
         title,
         description
+      ),
+      calendar_events!task_id (
+        id,
+        start_time,
+        end_time,
+        title
       )
     `)
     .eq('user_id', user_id)

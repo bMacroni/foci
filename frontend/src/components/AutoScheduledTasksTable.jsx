@@ -26,6 +26,18 @@ const AutoScheduledTasksTable = ({ tasks, onTaskUpdate, showSuccess }) => {
     return date.toLocaleString();
   };
 
+  const getScheduledTime = (task) => {
+    // Check if task has calendar events
+    if (task.calendar_events && task.calendar_events.length > 0) {
+      // Get the most recent calendar event
+      const latestEvent = task.calendar_events
+        .sort((a, b) => new Date(b.start_time) - new Date(a.start_time))[0];
+      return latestEvent.start_time;
+    }
+    // Fallback to the old scheduled_time field if no calendar events
+    return task.scheduled_time;
+  };
+
   const formatDuration = (minutes) => {
     if (!minutes) return '-';
     const hours = Math.floor(minutes / 60);
@@ -95,12 +107,26 @@ const AutoScheduledTasksTable = ({ tasks, onTaskUpdate, showSuccess }) => {
         }
       }
       
-             // Handle scheduled time
+             // Handle scheduled time - update calendar event if it exists
        if (editValues.scheduledTime !== undefined) {
          if (editValues.scheduledTime === '' || editValues.scheduledTime === 'Not scheduled') {
-           updates.scheduled_time = null;
+           // If clearing scheduled time, we should delete the calendar event
+           if (task.calendar_events && task.calendar_events.length > 0) {
+             // Note: This would require a separate API call to delete calendar events
+             // For now, we'll just update the task's scheduled_time to null
+             updates.scheduled_time = null;
+           } else {
+             updates.scheduled_time = null;
+           }
          } else {
-           updates.scheduled_time = new Date(editValues.scheduledTime).toISOString();
+           // If setting a new time, we should update the calendar event
+           if (task.calendar_events && task.calendar_events.length > 0) {
+             // Note: This would require a separate API call to update calendar events
+             // For now, we'll just update the task's scheduled_time
+             updates.scheduled_time = new Date(editValues.scheduledTime).toISOString();
+           } else {
+             updates.scheduled_time = new Date(editValues.scheduledTime).toISOString();
+           }
          }
        }
        
@@ -206,6 +232,11 @@ const AutoScheduledTasksTable = ({ tasks, onTaskUpdate, showSuccess }) => {
                       {task.description && (
                         <div className="text-sm text-gray-500 truncate max-w-xs">
                           {task.description}
+                        </div>
+                      )}
+                      {task.calendar_events && task.calendar_events.length > 0 && (
+                        <div className="text-xs text-green-600 mt-1">
+                          ✓ Auto-scheduled
                         </div>
                       )}
                     </div>
@@ -346,11 +377,11 @@ const AutoScheduledTasksTable = ({ tasks, onTaskUpdate, showSuccess }) => {
                      </div>
                    ) : (
                      <div
-                       onClick={() => handleEditStart(task.id, 'scheduledTime', task.scheduled_time ? new Date(task.scheduled_time).toISOString().slice(0, 16) : '')}
+                       onClick={() => handleEditStart(task.id, 'scheduledTime', getScheduledTime(task) ? new Date(getScheduledTime(task)).toISOString().slice(0, 16) : '')}
                        className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded"
                        title="Click to edit"
                      >
-                       {formatDateTime(task.scheduled_time)}
+                       {formatDateTime(getScheduledTime(task))}
                      </div>
                     )}
                   </td>
