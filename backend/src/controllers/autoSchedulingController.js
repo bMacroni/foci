@@ -1,32 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
+import { checkWeatherConditions } from '../utils/weatherService.js';
+import { getTravelTime } from '../utils/travelTimeService.js';
 
 // Auto-scheduling service functions
 
-export async function checkWeatherConditions(location, date) {
-  // TODO: Integrate with weather API (OpenWeatherMap, WeatherAPI, etc.)
-  // This is a placeholder implementation
-  console.log(`Checking weather for ${location} on ${date}`);
-  
-  // Mock weather data for now
-  return {
-    temperature: 72,
-    condition: 'sunny',
-    precipitation_chance: 0.1,
-    suitable_for_outdoor: true
-  };
-}
-
 export async function calculateTravelTime(origin, destination, mode = 'driving') {
-  // TODO: Integrate with Google Maps API or similar
-  // This is a placeholder implementation
-  console.log(`Calculating travel time from ${origin} to ${destination} via ${mode}`);
-  
-  // Mock travel time data for now
-  return {
-    duration_minutes: 25,
-    distance_miles: 8.5,
-    mode: mode
-  };
+  return await getTravelTime(origin, destination, mode);
 }
 
 export async function findAvailableTimeSlots(userId, taskDuration, preferredWindows, workDays, token, additionalCommitments = []) {
