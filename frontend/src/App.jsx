@@ -9,7 +9,7 @@ import './App.css'
 
 // Main app content
 const AppContent = () => {
-  const { user, login, loginWithCredentials, signup, logout, isAuthenticated } = useAuth();
+  const { user, loginWithCredentials, signup, logout, isAuthenticated } = useAuth();
   const [showSignup, setShowSignup] = useState(false);
   const [successToast, setSuccessToast] = useState({ message: '', isVisible: false });
 
@@ -21,15 +21,8 @@ const AppContent = () => {
     setSuccessToast({ message: '', isVisible: false });
   };
 
-  const handleLogin = async (emailOrToken, password) => {
-    // If password is provided, it's email/password login
-    if (password) {
-      return await loginWithCredentials(emailOrToken, password);
-    } else {
-      // Otherwise it's JWT token login
-      login(emailOrToken);
-      return { success: true };
-    }
+  const handleLogin = async (email, password) => {
+    return await loginWithCredentials(email, password);
   };
 
   if (!isAuthenticated()) {

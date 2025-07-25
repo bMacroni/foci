@@ -1,14 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {useNavigate} from 'react-router-dom'
 
 const Login = ({ onLogin, onSwitchToSignup }) => {
-  const [loginMethod, setLoginMethod] = useState('credentials'); // 'credentials' or 'jwt'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [jwtToken, setJwtToken] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [googleOAuthInfo, setGoogleOAuthInfo] = useState(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    // Check if we have Google OAuth info
+    const googleEmail = sessionStorage.getItem('google_oauth_email');
+    const googleName = sessionStorage.getItem('google_oauth_name');
+    
+    if (googleEmail) {
+      setGoogleOAuthInfo({ email: googleEmail, name: googleName });
+      setEmail(googleEmail); // Pre-fill the email field
+    }
+  }, []);
 
   const handleCredentialsSubmit = async (e) => {
     e.preventDefault();
@@ -19,17 +30,19 @@ const Login = ({ onLogin, onSwitchToSignup }) => {
     if (!result.success) {
       setError(result.error || 'Login failed');
     } else {
+      // Clear Google OAuth info on successful login
+      sessionStorage.removeItem('google_oauth_email');
+      sessionStorage.removeItem('google_oauth_name');
       navigate('/');
     }
     setLoading(false);
   };
 
-  const handleJwtSubmit = (e) => {
-    e.preventDefault();
-    if (jwtToken.trim()) {
-      onLogin(jwtToken);
-      navigate('/');
-    }
+  const handleGoogleLogin = () => {
+    const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+    const backendUrl = apiBaseUrl.replace('/api', ''); // Remove /api to get the base backend URL
+    const url = `${backendUrl}/api/auth/google/login`;
+    window.location.href = url;
   };
 
   return (
@@ -47,135 +60,135 @@ const Login = ({ onLogin, onSwitchToSignup }) => {
           <p className="text-gray-600 mt-2">Sign in to your Foci account</p>
         </div>
 
-        {/* Login Method Toggle */}
-        <div className="flex mb-8 bg-gray-100/80 backdrop-blur-sm rounded-2xl p-1">
-          <button
-            type="button"
-            onClick={() => setLoginMethod('credentials')}
-            className={`flex-1 py-3 px-6 rounded-xl text-sm font-medium transition-all duration-200 ${
-              loginMethod === 'credentials'
-                ? 'bg-black text-white shadow-lg transform scale-105'
-                : 'text-gray-600 hover:text-black hover:bg-gray-100'
-            }`}
-          >
-            Email & Password
-          </button>
-          <button
-            type="button"
-            onClick={() => setLoginMethod('jwt')}
-            className={`flex-1 py-3 px-6 rounded-xl text-sm font-medium transition-all duration-200 ${
-              loginMethod === 'jwt'
-                ? 'bg-black text-white shadow-lg transform scale-105'
-                : 'text-gray-600 hover:text-black hover:bg-gray-100'
-            }`}
-          >
-            JWT Token
-          </button>
-        </div>
-
-        {/* Email & Password Login */}
-        {loginMethod === 'credentials' && (
-          <form onSubmit={handleCredentialsSubmit} className="space-y-6">
-            <div>
-              <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
-                Email
-              </label>
-              <input
-                type="email"
-                id="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/80 backdrop-blur-sm shadow-sm transition-all duration-200"
-                placeholder="Enter your email"
-              />
+        {/* Google OAuth Info Message */}
+        {googleOAuthInfo && (
+          <div className="mb-6 bg-blue-50/80 backdrop-blur-sm border border-blue-200 text-blue-700 px-4 py-3 rounded-2xl text-sm">
+            <div className="flex items-center space-x-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>
+                Welcome, {googleOAuthInfo.name || googleOAuthInfo.email}! 
+                Please sign in with your email and password to continue.
+              </span>
             </div>
-            <div>
-              <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
-                Password
-              </label>
-              <input
-                type="password"
-                id="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/80 backdrop-blur-sm shadow-sm transition-all duration-200"
-                placeholder="Enter your password"
-              />
-            </div>
-            {error && (
-              <div className="bg-red-50/80 backdrop-blur-sm border border-red-200 text-red-700 px-4 py-3 rounded-2xl text-sm">
-                <div className="flex items-center space-x-2">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span>{error}</span>
-                </div>
-              </div>
-            )}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full px-6 py-4 bg-black text-white rounded-2xl hover:bg-gray-900 focus:outline-none focus:ring-4 focus:ring-black/10 disabled:opacity-50 shadow-lg transition-all duration-200 transform hover:scale-105 font-medium"
-            >
-              {loading ? (
-                <span className="flex items-center justify-center space-x-2">
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  <span>Signing in...</span>
-                </span>
-              ) : (
-                <span className="flex items-center justify-center space-x-2">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-                  </svg>
-                  <span>Sign In</span>
-                </span>
-              )}
-            </button>
-          </form>
+          </div>
         )}
 
-        {/* JWT Token Login */}
-        {loginMethod === 'jwt' && (
-          <form onSubmit={handleJwtSubmit} className="space-y-6">
-            <div>
-              <label htmlFor="jwt" className="block text-sm font-semibold text-gray-700 mb-2">
-                JWT Token
-              </label>
-              <textarea
-                id="jwt"
-                value={jwtToken}
-                onChange={(e) => setJwtToken(e.target.value)}
-                rows="4"
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/80 backdrop-blur-sm shadow-sm transition-all duration-200 resize-none"
-                placeholder="Paste your JWT token here..."
-              />
+        {/* Google OAuth Login Button */}
+        <div className="space-y-4">
+          <button
+            onClick={handleGoogleLogin}
+            className="w-full px-6 py-4 bg-white text-black rounded-2xl border-2 border-gray-200 hover:border-gray-300 focus:outline-none focus:ring-4 focus:ring-blue-500/20 shadow-lg transition-all duration-200 transform hover:scale-105 font-medium"
+          >
+            <span className="flex items-center justify-center space-x-3">
+              <svg className="w-5 h-5" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+              </svg>
+              <span>Continue with Google</span>
+            </span>
+          </button>
+
+          {/* Divider */}
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-300"></div>
             </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white text-gray-500">or</span>
+            </div>
+          </div>
+
+          {/* Email/Password Option */}
+          {!showEmailForm ? (
             <button
-              type="submit"
+              onClick={() => setShowEmailForm(true)}
               className="w-full px-6 py-4 bg-black text-white rounded-2xl hover:bg-gray-900 focus:outline-none focus:ring-4 focus:ring-black/10 shadow-lg transition-all duration-200 transform hover:scale-105 font-medium"
             >
               <span className="flex items-center justify-center space-x-2">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
                 </svg>
-                <span>Login with Token</span>
+                <span>Sign in with Email</span>
               </span>
             </button>
-            <div className="bg-blue-50/60 backdrop-blur-sm border border-blue-200 text-blue-700 px-4 py-3 rounded-2xl text-sm">
-              <div className="flex items-center space-x-2">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span>Get your JWT token from the backend or Supabase dashboard</span>
+          ) : (
+            <form onSubmit={handleCredentialsSubmit} className="space-y-6">
+              <div>
+                <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/80 backdrop-blur-sm shadow-sm transition-all duration-200"
+                  placeholder="Enter your email"
+                />
               </div>
-            </div>
-          </form>
-        )}
+              <div>
+                <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  id="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/80 backdrop-blur-sm shadow-sm transition-all duration-200"
+                  placeholder="Enter your password"
+                />
+              </div>
+              {error && (
+                <div className="bg-red-50/80 backdrop-blur-sm border border-red-200 text-red-700 px-4 py-3 rounded-2xl text-sm">
+                  <div className="flex items-center space-x-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>{error}</span>
+                  </div>
+                </div>
+              )}
+              <div className="flex space-x-3">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="flex-1 px-6 py-4 bg-black text-white rounded-2xl hover:bg-gray-900 focus:outline-none focus:ring-4 focus:ring-black/10 disabled:opacity-50 shadow-lg transition-all duration-200 transform hover:scale-105 font-medium"
+                >
+                  {loading ? (
+                    <span className="flex items-center justify-center space-x-2">
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span>Signing in...</span>
+                    </span>
+                  ) : (
+                    <span className="flex items-center justify-center space-x-2">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                      </svg>
+                      <span>Sign In</span>
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowEmailForm(false)}
+                  className="px-6 py-4 bg-gray-100 text-gray-700 rounded-2xl hover:bg-gray-200 focus:outline-none focus:ring-4 focus:ring-gray-500/20 shadow-lg transition-all duration-200 font-medium"
+                >
+                  Back
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
 
         {/* Signup Link */}
         <div className="mt-8 text-center">

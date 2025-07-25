@@ -108,4 +108,34 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// Profile endpoint - get user info from JWT token
+router.get('/profile', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'No token provided' });
+    }
+
+    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+    
+    // Verify the token with Supabase
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    
+    if (error || !user) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    res.json({
+      id: user.id,
+      email: user.email,
+      email_confirmed_at: user.email_confirmed_at,
+      created_at: user.created_at,
+      updated_at: user.updated_at
+    });
+  } catch (error) {
+    console.error('Profile error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router; 

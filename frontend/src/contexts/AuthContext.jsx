@@ -19,15 +19,63 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    // Check if user is logged in on app start
-    const token = localStorage.getItem('jwt_token');
-    if (token) {
-      // You could decode the JWT here to get user info
-      // For now, we'll just set a basic user object
-      setUser({ token });
+  // Check for Google OAuth callback
+  const checkGoogleOAuthCallback = async () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const googleParam = urlParams.get('google');
+    const email = urlParams.get('email');
+    const name = urlParams.get('name');
+    const message = urlParams.get('message');
+    
+    if (googleParam === 'info' && email) {
+      // Google OAuth provided user info
+      console.log(`Google OAuth user info: ${email} (${name})`);
+      // Store the email in sessionStorage for potential use
+      sessionStorage.setItem('google_oauth_email', email);
+      sessionStorage.setItem('google_oauth_name', name || '');
+      // Clean up the URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      return false; // User still needs to log in
+    } else if (googleParam === 'error' && message) {
+      // Google OAuth failed
+      console.error('Google OAuth error:', message);
+      // Clean up the URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      return false;
     }
-    setLoading(false);
+    return false;
+  };
+
+  useEffect(() => {
+    const initializeAuth = async () => {
+      // First check for Google OAuth callback
+      await checkGoogleOAuthCallback();
+      
+      // Check if user is logged in on app start
+      const token = localStorage.getItem('jwt_token');
+      if (token) {
+        try {
+          // Verify the token and get user info
+          const response = await api.get('/auth/profile');
+          if (response.data) {
+            setUser({ 
+              token, 
+              ...response.data 
+            });
+          } else {
+            // Token is invalid, remove it
+            localStorage.removeItem('jwt_token');
+          }
+        } catch (error) {
+          console.error('Error verifying token:', error);
+          localStorage.removeItem('jwt_token');
+        }
+      }
+      
+      setLoading(false);
+    };
+
+    initializeAuth();
   }, []);
 
   const login = (token) => {
@@ -41,7 +89,10 @@ export const AuthProvider = ({ children }) => {
       
       if (response.data.token) {
         localStorage.setItem('jwt_token', response.data.token);
-        setUser({ token: response.data.token });
+        setUser({ 
+          token: response.data.token,
+          ...response.data.user 
+        });
         return { success: true };
       } else {
         throw new Error('No token received');
@@ -63,7 +114,10 @@ export const AuthProvider = ({ children }) => {
       if (data.token) {
         // Auto-login succeeded
         localStorage.setItem('jwt_token', data.token);
-        setUser({ token: data.token });
+        setUser({ 
+          token: data.token,
+          ...data.user 
+        });
         return { success: true };
       } else if (data.userCreated) {
         // User was created but auto-login failed
@@ -82,6 +136,8 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem('jwt_token');
+    sessionStorage.removeItem('google_oauth_email');
+    sessionStorage.removeItem('google_oauth_name');
     setUser(null);
   };
 

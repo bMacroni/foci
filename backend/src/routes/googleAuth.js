@@ -1,12 +1,13 @@
 import express from 'express';
 import { google } from 'googleapis';
 import oauth2Client from '../utils/googleAuth.js';
-import { verifyJwt } from '../utils/jwtUtils.js';
+import { createClient } from '@supabase/supabase-js';
 import { storeGoogleTokens } from '../utils/googleTokenStorage.js';
 
 const router = express.Router();
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 
-// 1. Start OAuth flow
+// 1. Start OAuth flow for login
 router.get('/login', (req, res) => {
   const scopes = [
     'https://www.googleapis.com/auth/calendar',
@@ -15,44 +16,39 @@ router.get('/login', (req, res) => {
   const url = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: scopes,
-    prompt: 'consent',
-    state: req.query.state
+    prompt: 'consent'
   });
   res.redirect(url);
 });
 
-// 2. Handle OAuth callback
+// 2. Handle OAuth callback for login
 router.get('/callback', async (req, res) => {
   const code = req.query.code;
-  const state = req.query.state; // This should be the user's JWT
 
   if (!code) return res.status(400).send('No code provided');
-  if (!state) return res.status(400).send('No state provided');
-
-  // Verify the JWT (state) and get the user ID/email
-  // Example: decode and verify JWT, then get user info
-  // (You may already have a function for this in your auth middleware)
 
   try {
-    // 1. Verify JWT (state)
-    const user = await verifyJwt(state);
-            // User authenticated successfully
-
-    // 2. Exchange code for tokens
+    // 1. Exchange code for tokens
     const { tokens } = await oauth2Client.getToken(code);
-            // Google tokens received successfully
+    console.log('Google tokens received successfully');
 
-    // 3. Store tokens in your database, associated with user.id
-    await storeGoogleTokens(user.id, tokens);
-            // Google tokens stored successfully
+    // 2. Get user info from Google
+    oauth2Client.setCredentials(tokens);
+    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+    const userInfo = await oauth2.userinfo.get();
+    
+    const googleEmail = userInfo.data.email;
+    const googleName = userInfo.data.name;
 
-    // 4. Redirect to frontend with a success message
+    // 3. For now, just redirect with success and let the user log in manually
+    // In a production app, you'd want to implement proper user creation/login
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-            // Redirecting to frontend after Google OAuth success
-    res.redirect(`${frontendUrl}/dashboard?google=success`);
+    res.redirect(`${frontendUrl}?google=info&email=${encodeURIComponent(googleEmail)}&name=${encodeURIComponent(googleName)}`);
+    
   } catch (err) {
     console.error('Error in Google OAuth callback:', err);
-    res.status(500).send('Error processing Google OAuth callback');
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    res.redirect(`${frontendUrl}?google=error&message=${encodeURIComponent('OAuth callback failed')}`);
   }
 });
 
