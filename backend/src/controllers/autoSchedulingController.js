@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { checkWeatherConditions } from '../utils/weatherService.js';
 import { getTravelTime } from '../utils/travelTimeService.js';
+import { sendAutoSchedulingNotification } from '../services/notificationService.js';
 
 // Auto-scheduling service functions
 
@@ -499,7 +500,7 @@ export async function autoScheduleTasks(userId, token) {
         .from('tasks')
         .update({
           due_date: scheduledTime.toISOString(),
-          status: 'scheduled',
+          status: 'in_progress', // Changed from 'scheduled' to 'in_progress' since 'scheduled' is not a valid enum value
           last_scheduled_date: new Date().toISOString(),
           travel_time_minutes: travelTime
         })
@@ -543,7 +544,7 @@ export async function autoScheduleTasks(userId, token) {
       results.push({
         task_id: task.id,
         task_title: task.title,
-        status: 'scheduled',
+        status: 'scheduled', // This is fine for result tracking, not database enum
         scheduled_time: scheduledTime,
         calendar_event_id: calendarEvent?.id || null
       });
@@ -568,13 +569,42 @@ export async function autoScheduleTasks(userId, token) {
   console.log(`Total tasks after auto-scheduling: ${totalTasksAfter}`);
   console.log(`Task count change: ${totalTasksAfter - totalTasksBefore}`);
 
+  // Prepare notification data
+  const successfulTasks = results.filter(r => r.status === 'scheduled');
+  const failedTasks = results.filter(r => r.status === 'failed' || r.status === 'error');
+  const skippedTasks = results.filter(r => r.status === 'skipped');
+
+  // Send notification based on results
+  try {
+    if (successfulTasks.length > 0 || failedTasks.length > 0) {
+      const notificationData = {
+        type: failedTasks.length > 0 ? 'auto_scheduling_error' : 'auto_scheduling_completed',
+        title: failedTasks.length > 0 ? 'Auto-Scheduling Issues Detected' : 'Auto-Scheduling Completed',
+        message: failedTasks.length > 0 
+          ? `Auto-scheduling completed with ${successfulTasks.length} tasks scheduled and ${failedTasks.length} issues encountered.`
+          : `Successfully scheduled ${successfulTasks.length} tasks automatically.`,
+        details: failedTasks.length > 0 
+          ? `Some tasks couldn't be scheduled due to conflicts or missing information.`
+          : `All eligible tasks have been scheduled according to your preferences.`,
+        scheduledTasks: successfulTasks,
+        failedTasks: failedTasks
+      };
+
+      await sendAutoSchedulingNotification(userId, notificationData);
+      console.log(`[AutoScheduling] Notification sent to user ${userId}`);
+    }
+  } catch (notificationError) {
+    console.error('[AutoScheduling] Error sending notification:', notificationError);
+    // Don't fail the entire auto-scheduling process if notification fails
+  }
+
   return {
     message: 'Auto-scheduling completed',
     results: results,
     total_tasks: tasks.length,
-    successful: results.filter(r => r.status === 'scheduled').length,
-    failed: results.filter(r => r.status === 'failed' || r.status === 'error').length,
-    skipped: results.filter(r => r.status === 'skipped').length,
+    successful: successfulTasks.length,
+    failed: failedTasks.length,
+    skipped: skippedTasks.length,
     task_count_change: totalTasksAfter - totalTasksBefore
   };
 } 

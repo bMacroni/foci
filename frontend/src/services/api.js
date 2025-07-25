@@ -60,6 +60,10 @@ export const tasksAPI = {
   updateUserSchedulingPreferences: (preferences) => api.put('/tasks/auto-scheduling/preferences', preferences),
   getTaskSchedulingHistory: (taskId) => api.get(`/tasks/auto-scheduling/history${taskId ? `/${taskId}` : ''}`),
   triggerAutoScheduling: () => api.post('/tasks/auto-scheduling/trigger'),
+  // Notification endpoints
+  getNotifications: (limit) => api.get(`/tasks/notifications${limit ? `?limit=${limit}` : ''}`),
+  markNotificationAsRead: (id) => api.put(`/tasks/notifications/${id}/read`),
+  markAllNotificationsAsRead: () => api.put('/tasks/notifications/read-all'),
 };
 
 // Calendar API

@@ -168,8 +168,8 @@ const AutoScheduledTasksTable = ({ tasks, onTaskUpdate, showSuccess }) => {
     return (
       <div className="bg-white/90 rounded-md border border-gray-200 shadow mb-6">
         <div className="p-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">Auto-Scheduled Tasks</h3>
-          <p className="text-sm text-gray-600 mt-1">
+          <h3 className="text-lg text-left font-semibold text-gray-900">Auto-Scheduled Tasks</h3>
+          <p className="text-sm text-left text-gray-600 mt-1">
             Tasks with auto-scheduling enabled will appear here
           </p>
         </div>
@@ -184,8 +184,8 @@ const AutoScheduledTasksTable = ({ tasks, onTaskUpdate, showSuccess }) => {
   return (
     <div className="bg-white/90 rounded-md border border-gray-200 shadow mb-6">
       <div className="p-4 border-b border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-900">Auto-Scheduled Tasks</h3>
-        <p className="text-sm text-gray-600 mt-1">
+        <h3 className="text-lg text-left font-semibold text-gray-900">Auto-Scheduled Tasks</h3>
+        <p className="text-sm text-left text-gray-600 mt-1">
           Tasks with auto-scheduling enabled ({tasks.length} tasks)
         </p>
       </div>

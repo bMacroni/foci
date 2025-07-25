@@ -14,6 +14,7 @@ import conversationsRouter from './routes/conversations.js'
 import userRouter from './routes/user.js'
 import cron from 'node-cron';
 import { syncGoogleCalendarEvents } from './utils/syncService.js';
+import { autoScheduleTasks } from './controllers/autoSchedulingController.js';
 
 
 const app = express()
@@ -106,6 +107,22 @@ async function getAllUserIds() {
   return data.map(row => row.user_id);
 }
 
+async function getUsersWithAutoSchedulingEnabled() {
+  // Query users who have auto-scheduling enabled
+  const { data, error } = await supabase
+    .from('user_scheduling_preferences')
+    .select('user_id')
+    .eq('auto_scheduling_enabled', true);
+
+  if (error) {
+    console.error('Error fetching users with auto-scheduling enabled:', error);
+    return [];
+  }
+
+  // Return unique user IDs as an array of strings
+  return data.map(row => row.user_id);
+}
+
 // Schedule sync every day at 4:00 AM CST (America/Chicago)
 cron.schedule('0 4 * * *', async () => {
   console.log('[CRON] Starting Google Calendar sync for all users at 4:00 AM CST');
@@ -116,6 +133,93 @@ cron.schedule('0 4 * * *', async () => {
       console.log(`[CRON] Synced Google Calendar for user: ${userId}`);
     } catch (err) {
       console.error(`[CRON] Error syncing Google Calendar for user: ${userId}`, err);
+    }
+  }
+}, {
+  timezone: 'America/Chicago'
+});
+
+// Schedule auto-scheduling every day at 5:00 AM CST (after calendar sync)
+cron.schedule('0 5 * * *', async () => {
+  console.log('[CRON] Starting auto-scheduling for all enabled users at 5:00 AM CST');
+  const userIds = await getUsersWithAutoSchedulingEnabled();
+  
+  if (userIds.length === 0) {
+    console.log('[CRON] No users with auto-scheduling enabled found');
+    return;
+  }
+  
+  console.log(`[CRON] Found ${userIds.length} users with auto-scheduling enabled`);
+  
+  for (const userId of userIds) {
+    try {
+      // Get user's JWT token for API calls
+      const { data: tokenData, error: tokenError } = await supabase
+        .from('google_tokens')
+        .select('access_token')
+        .eq('user_id', userId)
+        .single();
+      
+      if (tokenError || !tokenData?.access_token) {
+        console.log(`[CRON] No valid token found for user: ${userId}, skipping auto-scheduling`);
+        continue;
+      }
+      
+      const token = tokenData.access_token;
+      const result = await autoScheduleTasks(userId, token);
+      
+      if (result.error) {
+        console.error(`[CRON] Error auto-scheduling for user ${userId}:`, result.error);
+      } else {
+        console.log(`[CRON] Auto-scheduling completed for user: ${userId}`);
+        if (result.successful > 0) {
+          console.log(`[CRON] Successfully scheduled ${result.successful} tasks for user: ${userId}`);
+        }
+      }
+    } catch (err) {
+      console.error(`[CRON] Error in auto-scheduling for user: ${userId}`, err);
+    }
+  }
+}, {
+  timezone: 'America/Chicago'
+});
+
+// Schedule auto-scheduling every 6 hours for recurring tasks and new tasks
+cron.schedule('0 */6 * * *', async () => {
+  console.log('[CRON] Starting periodic auto-scheduling check (every 6 hours)');
+  const userIds = await getUsersWithAutoSchedulingEnabled();
+  
+  if (userIds.length === 0) {
+    console.log('[CRON] No users with auto-scheduling enabled found for periodic check');
+    return;
+  }
+  
+  console.log(`[CRON] Found ${userIds.length} users for periodic auto-scheduling check`);
+  
+  for (const userId of userIds) {
+    try {
+      // Get user's JWT token for API calls
+      const { data: tokenData, error: tokenError } = await supabase
+        .from('google_tokens')
+        .select('access_token')
+        .eq('user_id', userId)
+        .single();
+      
+      if (tokenError || !tokenData?.access_token) {
+        console.log(`[CRON] No valid token found for user: ${userId}, skipping periodic auto-scheduling`);
+        continue;
+      }
+      
+      const token = tokenData.access_token;
+      const result = await autoScheduleTasks(userId, token);
+      
+      if (result.error) {
+        console.error(`[CRON] Error in periodic auto-scheduling for user ${userId}:`, result.error);
+      } else if (result.successful > 0) {
+        console.log(`[CRON] Periodically scheduled ${result.successful} tasks for user: ${userId}`);
+      }
+    } catch (err) {
+      console.error(`[CRON] Error in periodic auto-scheduling for user: ${userId}`, err);
     }
   }
 }, {

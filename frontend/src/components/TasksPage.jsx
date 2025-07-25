@@ -201,9 +201,9 @@ function TasksPage({ showSuccess }) {
       {/* Tasks Section */}
       <div className="flex-1 bg-white/90 rounded-md border border-gray-200 shadow">
         <div className="p-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">Tasks</h3>
-          <p className="text-sm text-gray-600 mt-1">
-            Manage your tasks and enable auto-scheduling for automatic time slot assignment
+          <h3 className="text-lg text-left font-semibold text-gray-900">One-off Tasks</h3>
+          <p className="text-sm text-left text-gray-600 mt-1">
+            Manage your one-off tasks, so you can focus on what matters most.
           </p>
         </div>
         <div className="p-4">

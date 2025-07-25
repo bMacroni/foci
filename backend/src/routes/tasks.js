@@ -15,6 +15,11 @@ import {
   getTaskSchedulingHistory,
   triggerAutoScheduling
 } from '../controllers/tasksController.js';
+import {
+  getUserNotifications,
+  markNotificationAsRead,
+  markAllNotificationsAsRead
+} from '../services/notificationService.js';
 
 const router = express.Router();
 
@@ -32,5 +37,44 @@ router.get('/auto-scheduling/preferences', requireAuth, getUserSchedulingPrefere
 router.put('/auto-scheduling/preferences', requireAuth, updateUserSchedulingPreferences);
 router.get('/auto-scheduling/history/:task_id?', requireAuth, getTaskSchedulingHistory);
 router.post('/auto-scheduling/trigger', requireAuth, triggerAutoScheduling);
+
+// Notification routes
+router.get('/notifications', requireAuth, async (req, res) => {
+  try {
+    const notifications = await getUserNotifications(req.user.id, req.query.limit ? parseInt(req.query.limit) : 10);
+    res.json(notifications);
+  } catch (error) {
+    console.error('Error fetching notifications:', error);
+    res.status(500).json({ error: 'Failed to fetch notifications' });
+  }
+});
+
+router.put('/notifications/:id/read', requireAuth, async (req, res) => {
+  try {
+    const result = await markNotificationAsRead(req.params.id, req.user.id);
+    if (result.success) {
+      res.json({ success: true });
+    } else {
+      res.status(400).json({ error: result.error });
+    }
+  } catch (error) {
+    console.error('Error marking notification as read:', error);
+    res.status(500).json({ error: 'Failed to mark notification as read' });
+  }
+});
+
+router.put('/notifications/read-all', requireAuth, async (req, res) => {
+  try {
+    const result = await markAllNotificationsAsRead(req.user.id);
+    if (result.success) {
+      res.json({ success: true });
+    } else {
+      res.status(400).json({ error: result.error });
+    }
+  } catch (error) {
+    console.error('Error marking all notifications as read:', error);
+    res.status(500).json({ error: 'Failed to mark all notifications as read' });
+  }
+});
 
 export default router; 
