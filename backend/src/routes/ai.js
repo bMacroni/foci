@@ -190,15 +190,14 @@ router.post('/goal-suggestions', requireAuth, async (req, res) => {
       });
     }
 
-    console.log(`Goal Suggestions - User ${userId}: ${goalTitle}`);
+    // Goal suggestions requested
 
     // Try Gemini first, fallback to basic suggestions if needed
     let suggestions;
     try {
       suggestions = await geminiService.generateGoalSuggestions(goalTitle);
-      console.log(`Goal suggestions generated for: ${goalTitle}`);
     } catch (error) {
-      console.log('Gemini failed, using fallback suggestions');
+      // Using fallback suggestions
       suggestions = `• Break down the goal into smaller, manageable steps
 • Set specific milestones and deadlines
 • Track your progress regularly
@@ -212,7 +211,6 @@ router.post('/goal-suggestions', requireAuth, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Goal Suggestions Error:', error);
     res.status(500).json({ 
       error: 'Failed to generate suggestions',
       message: "I'm sorry, I couldn't generate suggestions right now. Please try again."
@@ -232,15 +230,13 @@ router.post('/goal-breakdown', requireAuth, async (req, res) => {
       });
     }
 
-    console.log(`Goal Breakdown - User ${userId}: ${goalTitle}`);
+    // Goal breakdown requested
 
     // Generate breakdown suggestions using Gemini
     let breakdown;
     try {
       breakdown = await geminiService.generateGoalBreakdown(goalTitle, goalDescription);
-      console.log(`Goal breakdown generated for: ${goalTitle}`);
     } catch (error) {
-      console.error('Goal breakdown generation failed:', error);
       return res.status(500).json({ 
         error: 'Failed to generate goal breakdown',
         message: "I'm sorry, I couldn't generate a breakdown right now. Please try again."
@@ -254,7 +250,6 @@ router.post('/goal-breakdown', requireAuth, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Goal Breakdown Error:', error);
     res.status(500).json({ 
       error: 'Failed to generate breakdown',
       message: "I'm sorry, I couldn't generate a breakdown right now. Please try again."

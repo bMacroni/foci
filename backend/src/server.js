@@ -69,9 +69,7 @@ app.get('/api/protected', requireAuth, (req, res) => {
   res.json({ message: `Hello, ${req.user.email}! You have accessed a protected route.` });
 });
 
-console.log('Registering goals router...');
 app.use('/api/goals', goalsRouter);
-console.log('Goals router registered');
 
 app.use('/api/tasks', tasksRouter);
 

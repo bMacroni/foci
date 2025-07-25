@@ -91,7 +91,6 @@ const GoalForm = ({ goal = null, onSuccess, onCancel, isInline = false }) => {
       }, 3000);
       
     } catch (err) {
-      console.error('Error getting suggestions:', err);
       setError('Failed to get AI suggestions. Please try again.');
     } finally {
       setSuggestionsLoading(false);
@@ -110,20 +109,15 @@ const GoalForm = ({ goal = null, onSuccess, onCancel, isInline = false }) => {
         target_completion_date: formData.target_completion_date || null
       };
 
-      console.log('Submitting goal data:', submitData);
       if (goal) {
         // Update existing goal
-        console.log('Updating goal:', goal.id);
         await goalsAPI.update(goal.id, submitData);
       } else {
         // Create new goal
-        console.log('Creating new goal');
         const response = await goalsAPI.create(submitData);
-        console.log('Goal created:', response.data);
       }
       onSuccess();
     } catch (err) {
-      console.error('Error submitting goal:', err);
       setError(err.response?.data?.error || 'An error occurred');
     } finally {
       setLoading(false);

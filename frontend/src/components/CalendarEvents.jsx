@@ -238,35 +238,22 @@ const CalendarEvents = () => {
   }, [userTimezone, detectedTimezone]);
 
   const loadEvents = async (forceRefresh = false) => {
-    console.log('[CalendarEvents] loadEvents called with forceRefresh:', forceRefresh);
     try {
       // Check if we have cached data and it's still valid
       const now = Date.now();
       if (!forceRefresh && lastFetchTime && (now - lastFetchTime) < CACHE_DURATION && events.length > 0) {
-        console.log('[CalendarEvents] Using cached events, last fetch was', Math.round((now - lastFetchTime) / 1000), 'seconds ago');
         setLoading(false);
         return;
       }
       
       setLoading(true);
-      console.log('[CalendarEvents] Fetching fresh events from API...');
       const response = await calendarAPI.getEvents(1000); // Increased from 100 to 1000
       const eventsData = Array.isArray(response.data) ? response.data : [];
       setEvents(eventsData);
       setLastFetchTime(now);
       setError(null);
-      console.log('[CalendarEvents] Events loaded:', eventsData.length, 'events');
-      if (eventsData.length > 0) {
-        console.log('[CalendarEvents] First event:', eventsData[0]);
-        console.log('[CalendarEvents] All events:', eventsData.map(e => ({
-          title: e.summary,
-          start: e.start?.dateTime || e.start,
-          end: e.end?.dateTime || e.end
-        })));
-      }
     } catch (err) {
         setError('Failed to load calendar events');
-      console.error('[CalendarEvents] Error loading events:', err);
     } finally {
       setLoading(false);
     }
@@ -285,7 +272,6 @@ const CalendarEvents = () => {
       // Force refresh events after sync
       await loadEvents(true);
     } catch (error) {
-      console.error('Sync error:', error);
       showToast('Sync failed. Please try again.', 'error');
     } finally {
       setSyncing(false);
@@ -321,12 +307,6 @@ const CalendarEvents = () => {
 
   // --- Click and Drag Selection ---
   const handleDayMouseDown = (date) => {
-    console.log('[CalendarEvents] handleDayMouseDown called with date:', {
-      originalDate: date,
-      dateString: date.toDateString(),
-      isoString: date.toISOString(),
-      localString: date.toLocaleDateString()
-    });
     setSelectedRange({ start: date, end: date });
     setDragging(true);
   };

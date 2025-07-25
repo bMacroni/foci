@@ -20,7 +20,6 @@ export async function sendAutoSchedulingNotification(userId, notificationData) {
 
     // Check if email configuration is available
     if (!process.env.FEEDBACK_EMAIL_USER || !process.env.FEEDBACK_EMAIL_PASS) {
-      console.log('Email configuration not available, skipping email notification');
       // Still store in-app notification even if email fails
       await storeInAppNotification(userId, {
         type,
@@ -43,13 +42,11 @@ export async function sendAutoSchedulingNotification(userId, notificationData) {
     // If user not found, use fallback values but still send notification
     let user;
     if (userError || !userData) {
-      console.error('Error fetching user for notification:', userError);
       // Use fallback values instead of failing
       user = {
         email: process.env.FALLBACK_EMAIL || 'user@example.com',
         full_name: 'User'
       };
-      console.log('Using fallback user values for notification');
     } else {
       user = userData;
     }
@@ -92,9 +89,7 @@ export async function sendAutoSchedulingNotification(userId, notificationData) {
 
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`Email notification sent to ${user.email}`);
     } catch (emailError) {
-      console.error('Error sending email notification:', emailError);
       // Continue with in-app notification even if email fails
     }
 
@@ -110,7 +105,6 @@ export async function sendAutoSchedulingNotification(userId, notificationData) {
 
     return { success: true };
   } catch (error) {
-    console.error('Error sending auto-scheduling notification:', error);
     return { success: false, error: error.message };
   }
 }
@@ -316,10 +310,10 @@ async function storeInAppNotification(userId, notification) {
       }]);
 
     if (insertError) {
-      console.error('Error storing in-app notification:', insertError);
+      // Silent fail for notification storage
     }
   } catch (error) {
-    console.error('Error in storeInAppNotification:', error);
+    // Silent fail for notification storage
   }
 }
 
@@ -360,10 +354,10 @@ async function createNotificationsTable() {
     });
 
     if (error) {
-      console.error('Error creating notifications table:', error);
+      // Silent fail for table creation
     }
   } catch (error) {
-    console.error('Error in createNotificationsTable:', error);
+    // Silent fail for table creation
   }
 }
 
@@ -384,13 +378,11 @@ export async function getUserNotifications(userId, limit = 10) {
       .limit(limit);
 
     if (error) {
-      console.error('Error fetching user notifications:', error);
       return [];
     }
 
     return data || [];
   } catch (error) {
-    console.error('Error in getUserNotifications:', error);
     return [];
   }
 }
@@ -410,13 +402,11 @@ export async function markNotificationAsRead(notificationId, userId) {
       .eq('user_id', userId);
 
     if (error) {
-      console.error('Error marking notification as read:', error);
       return { success: false, error: error.message };
     }
 
     return { success: true };
   } catch (error) {
-    console.error('Error in markNotificationAsRead:', error);
     return { success: false, error: error.message };
   }
 }
@@ -436,13 +426,11 @@ export async function markAllNotificationsAsRead(userId) {
       .eq('read', false);
 
     if (error) {
-      console.error('Error marking all notifications as read:', error);
       return { success: false, error: error.message };
     }
 
     return { success: true };
   } catch (error) {
-    console.error('Error in markAllNotificationsAsRead:', error);
     return { success: false, error: error.message };
   }
 } 

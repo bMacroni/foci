@@ -34,7 +34,6 @@ const TaskForm = ({ task = null, onSuccess, onCancel }) => {
         const response = await goalsAPI.getAll();
         setGoals(response.data);
       } catch (err) {
-        console.error('Error fetching goals:', err);
         setError('Failed to load goals');
       } finally {
         setLoadingGoals(false);

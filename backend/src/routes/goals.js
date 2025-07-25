@@ -24,23 +24,14 @@ import {
 
 const router = express.Router();
 
-console.log('Goals router being set up...');
+// Goals router setup
 
 // Goal endpoints
 router.post('/', requireAuth, createGoal);
-router.get('/', requireAuth, (req, res, next) => {
-  console.log('Goals GET / route hit!');
-  getGoals(req, res, next);
-});
-router.get('/:id', requireAuth, (req, res, next) => {
-  console.log('Goals :id route hit with id:', req.params.id);
-  getGoalById(req, res, next);
-});
+router.get('/', requireAuth, getGoals);
+router.get('/:id', requireAuth, getGoalById);
 router.put('/:id', requireAuth, updateGoal);
-router.delete('/:id', requireAuth, (req, res, next) => {
-  console.log('DELETE /goals/:id route hit with id:', req.params.id);
-  deleteGoal(req, res, next);
-});
+router.delete('/:id', requireAuth, deleteGoal);
 
 // Milestone endpoints
 router.post('/:goalId/milestones', requireAuth, createMilestone);

@@ -412,9 +412,6 @@ export async function lookupCalendarEventbyTitle(userId, searchString, date) {
       return [];
     }
     // Enhanced logging for debugging
-    const logLine = `LOOKUP SEARCH: ${searchString} DATE: ${date}\n`;
-    console.log(logLine.trim());
-    fs.appendFileSync('event_lookup_debug.log', logLine);
     let query = supabase
       .from('calendar_events')
       .select('id, title, start_time, end_time, location, description')
@@ -436,9 +433,6 @@ export async function lookupCalendarEventbyTitle(userId, searchString, date) {
       throw error;
     }
     // Log only the count of DB results
-    const countLog = `DB EVENTS COUNT: ${data ? data.length : 0}\n`;
-    console.log(countLog.trim());
-    fs.appendFileSync('event_lookup_debug.log', countLog);
     // Format events for AI lookup
     return data.map(event => ({
       id: event.id,

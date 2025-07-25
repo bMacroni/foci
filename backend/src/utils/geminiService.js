@@ -464,10 +464,9 @@ Make the milestones and steps specific to this goal, encouraging, and achievable
         ]
       };
 
-    } catch (error) {
-      console.error('Error generating goal breakdown:', error);
-      throw error;
-    }
+      } catch (error) {
+    throw error;
+  }
   }
 
   /**

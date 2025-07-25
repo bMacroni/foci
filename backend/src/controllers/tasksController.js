@@ -95,9 +95,6 @@ export async function getTasks(req, res) {
     }
   });
   
-  console.log('=== GET TASKS DEBUG ===');
-  console.log('User ID:', user_id);
-  
   const { data, error } = await supabase
     .from('tasks')
     .select(`
@@ -117,12 +114,7 @@ export async function getTasks(req, res) {
     .eq('user_id', user_id)
     .order('created_at', { ascending: false });
   
-  console.log('Supabase response data:', data);
-  console.log('Supabase response error:', error);
-  console.log('=== END GET TASKS DEBUG ===');
-  
   if (error) {
-    console.log('Supabase error:', error);
     return res.status(400).json({ error: error.message });
   }
 
@@ -153,7 +145,6 @@ export async function getTaskById(req, res) {
     .single();
   
   if (error) {
-    console.log('Supabase error:', error);
     return res.status(404).json({ error: error.message });
   }
   res.json(data);
@@ -493,14 +484,7 @@ export async function deleteTaskFromAI(args, userId, userContext) {
 }
 
 export async function lookupTaskbyTitle(userId, token) {
-  console.log('=== LOOKUP TASK DEBUG ===');
-  console.log('User ID:', userId);
-  console.log('Token (first 50 chars):', token ? token.substring(0, 50) + '...' : 'No token');
-  console.log('Token type:', typeof token);
-  console.log('Token length:', token ? token.length : 0);
-  
   if (!token) {
-    console.log('ERROR: No token provided to lookupTaskbyTitle');
     return { error: 'No authentication token provided' };
   }
 
@@ -512,35 +496,27 @@ export async function lookupTaskbyTitle(userId, token) {
     }
   });
 
-  // Get ALL goals for this user
+  // Get ALL tasks for this user
   const { data, error } = await supabase
     .from('tasks')
     .select('id, title')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
 
-  console.log('All goals for user:', data);
-  console.log('Supabase response error:', error);
-  console.log('=== END LOOKUP GOAL DEBUG ===');
-
   if (error) {
     return { error: error.message };
   }
   
-  // Return all goals with their IDs and titles
+  // Return all tasks with their IDs and titles
   if (data && data.length > 0) {
-    console.log('Returning', data.length, 'tasks');
     return data;
   } else {
-    console.log('No tasks found for user');
     return { error: 'No tasks found for this user' };
   }
 }
 
 
 export async function readTaskFromAI(args, userId, userContext) {
-  console.log('=== READ TASK FROM AI DEBUG ===');
-  console.log('Incoming args:', JSON.stringify(args, null, 2));
   const { due_date, related_goal } = args;
   const token = userContext?.token;
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {

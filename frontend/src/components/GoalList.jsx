@@ -91,20 +91,10 @@ const GoalList = ({ showSuccess }) => {
   const fetchGoals = async () => {
     try {
       setLoading(true);
-      console.log('Fetching goals...');
       const response = await goalsAPI.getAll();
-      console.log('Goals response:', response);
-      console.log('Goals data:', response.data);
-      console.log('Goals data length:', response.data?.length);
-      console.log('Goals data is array:', Array.isArray(response.data));
-      
       const goalsArray = Array.isArray(response.data) ? response.data : [];
-      console.log('Setting goals state with:', goalsArray);
-      console.log('Goals array length:', goalsArray.length);
-      
       setGoals(goalsArray);
     } catch (err) {
-      console.error('Error fetching goals:', err);
       setError('Failed to load goals');
     } finally {
       setLoading(false);
@@ -146,19 +136,14 @@ const GoalList = ({ showSuccess }) => {
 
   // Add a function to refresh progress for a specific goal
   const refreshProgressForGoal = async (goalId) => {
-    console.log('refreshProgressForGoal: Called for goalId:', goalId);
     try {
       const token = localStorage.getItem('jwt_token') || '';
-      console.log('refreshProgressForGoal: Fetching milestones for goal:', goalId);
       const milestones = await milestonesAPI.readAll(goalId, token);
-      console.log('refreshProgressForGoal: Milestones data:', milestones);
       
       let totalSteps = 0;
       let completedSteps = 0;
       for (const milestone of milestones) {
-        console.log('refreshProgressForGoal: Fetching steps for milestone:', milestone.id);
         const steps = await stepsAPI.readAll(milestone.id, token);
-        console.log('refreshProgressForGoal: Steps for milestone', milestone.id, ':', steps);
         totalSteps += steps.length;
         completedSteps += steps.filter(s => s.completed).length;
       }
@@ -169,14 +154,12 @@ const GoalList = ({ showSuccess }) => {
         percent: totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0
       };
       
-      console.log('refreshProgressForGoal: Calculated progress:', newProgress);
       setProgressByGoal(prev => ({
         ...prev,
         [goalId]: newProgress
       }));
-      console.log('refreshProgressForGoal: Updated progressByGoal state');
     } catch (e) {
-      console.error('refreshProgressForGoal: Error refreshing progress for goal:', goalId, e);
+      // Silent fail for progress refresh
     }
   };
 
@@ -204,31 +187,10 @@ const GoalList = ({ showSuccess }) => {
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this goal?')) {
       try {
-        console.log('Attempting to delete goal with id:', id);
-        console.log('Using goalsAPI.delete with id:', id);
-        
-        // Add more detailed logging
-        const token = localStorage.getItem('jwt_token');
-        console.log('JWT token available:', !!token);
-        console.log('API base URL:', import.meta.env.VITE_API_URL || 'http://localhost:5000/api');
-        
-        // Try using goalsAPI.delete first
-        const response = await goalsAPI.delete(id);
-        console.log('Delete response:', response);
-        
-        console.log('About to call fetchGoals() to refresh the list...');
+        await goalsAPI.delete(id);
         await fetchGoals(); // Refresh from backend after deletion
-        console.log('fetchGoals() completed');
-        
         showSuccess('Goal deleted successfully!');
       } catch (err) {
-        console.error('Error deleting goal:', err);
-        console.error('Error details:', {
-          message: err.message,
-          response: err.response,
-          status: err.response?.status,
-          data: err.response?.data
-        });
         setError('Failed to delete goal');
       }
     }
@@ -259,10 +221,7 @@ const GoalList = ({ showSuccess }) => {
       setUpdatingStep(stepId);
       const token = localStorage.getItem('jwt_token') || '';
       
-      console.log('Toggling step:', stepId, 'from completed:', currentCompleted, 'to:', !currentCompleted);
-      
       const updatedStep = await stepsAPI.update(stepId, { completed: !currentCompleted }, token);
-      console.log('Step updated successfully:', updatedStep);
       
       // Update the local state
       setStepsByMilestone(prev => ({
@@ -277,7 +236,6 @@ const GoalList = ({ showSuccess }) => {
       
       showSuccess(`Step ${!currentCompleted ? 'completed' : 'marked as incomplete'}!`);
     } catch (err) {
-      console.error('Error updating step:', err);
       setError('Failed to update step');
     } finally {
       setUpdatingStep(null);

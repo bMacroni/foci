@@ -16,10 +16,7 @@ export async function createGoal(req, res) {
     }
   });
   
-  console.log('req.user:', req.user);
-  console.log('user_id being inserted:', user_id);
-  console.log('user_id type:', typeof user_id);
-  console.log('milestones data:', milestones);
+  // Goal creation initiated
   
   try {
     // Start a transaction by creating the goal first
@@ -30,7 +27,6 @@ export async function createGoal(req, res) {
       .single();
     
     if (goalError) {
-      console.log('Supabase goal creation error:', goalError);
       return res.status(400).json({ error: goalError.message });
     }
 
@@ -52,7 +48,6 @@ export async function createGoal(req, res) {
           .single();
         
         if (milestoneError) {
-          console.log('Supabase milestone creation error:', milestoneError);
           return res.status(400).json({ error: `Failed to create milestone: ${milestoneError.message}` });
         }
 
@@ -70,7 +65,6 @@ export async function createGoal(req, res) {
             .insert(stepsToInsert);
 
           if (stepsError) {
-            console.log('Supabase steps creation error:', stepsError);
             return res.status(400).json({ error: `Failed to create steps: ${stepsError.message}` });
           }
         }
@@ -91,13 +85,11 @@ export async function createGoal(req, res) {
       .single();
 
     if (fetchError) {
-      console.log('Supabase fetch error:', fetchError);
       return res.status(400).json({ error: fetchError.message });
     }
 
     res.status(201).json(completeGoal);
   } catch (error) {
-    console.log('Unexpected error:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
 }
@@ -114,10 +106,7 @@ export async function getGoals(req, res) {
       }
     }
   });
-  console.log('=== GET GOALS DEBUG ===');
-  console.log('User ID:', user_id);
-  console.log('JWT Token (first 50 chars):', token ? token.substring(0, 50) + '...' : 'No token');
-  console.log('Request headers:', req.headers.authorization ? 'Authorization header present' : 'No Authorization header');
+  // Fetching goals for user
 
   // Fetch all goals with nested milestones and steps in a single query
   const { data, error } = await supabase
@@ -132,12 +121,7 @@ export async function getGoals(req, res) {
     .eq('user_id', user_id)
     .order('created_at', { ascending: false });
 
-  console.log('Supabase response data:', data);
-  console.log('Supabase response error:', error);
-  console.log('=== END GET GOALS DEBUG ===');
-
   if (error) {
-    console.log('Supabase error:', error);
     return res.status(400).json({ error: error.message });
   }
   res.json(data);
@@ -189,16 +173,13 @@ export async function updateGoal(req, res) {
     .single();
     
   if (error) {
-    console.log('Supabase update error:', error);
     return res.status(400).json({ error: error.message });
   }
   res.json(data);
 }
 
 export async function deleteGoal(req, res) {
-  console.log('deleteGoal: Request received');
-  console.log('deleteGoal: User ID:', req.user.id);
-  console.log('deleteGoal: Goal ID to delete:', req.params.id);
+  // Goal deletion initiated
   
   // Get the JWT from the request
   const token = req.headers.authorization?.split(' ')[1];
@@ -215,7 +196,7 @@ export async function deleteGoal(req, res) {
   const user_id = req.user.id;
   const { id } = req.params;
   
-  console.log('deleteGoal: Attempting to delete goal with ID:', id, 'for user:', user_id);
+  // Attempting to delete goal
   
   const { error } = await supabase
     .from('goals')
@@ -224,11 +205,9 @@ export async function deleteGoal(req, res) {
     .eq('user_id', user_id);
     
   if (error) {
-    console.error('deleteGoal: Supabase error:', error);
     return res.status(400).json({ error: error.message });
   }
   
-  console.log('deleteGoal: Goal deleted successfully');
   res.status(204).send();
 } 
 
@@ -318,14 +297,7 @@ export async function getGoalsForUser(userId, token, args = {}) {
 }
 
 export async function lookupGoalbyTitle(userId, token) {
-  console.log('=== LOOKUP GOAL DEBUG ===');
-  console.log('User ID:', userId);
-  console.log('Token (first 50 chars):', token ? token.substring(0, 50) + '...' : 'No token');
-  console.log('Token type:', typeof token);
-  console.log('Token length:', token ? token.length : 0);
-  
   if (!token) {
-    console.log('ERROR: No token provided to lookupGoalbyTitle');
     return { error: 'No authentication token provided' };
   }
 
@@ -344,20 +316,14 @@ export async function lookupGoalbyTitle(userId, token) {
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
 
-  console.log('All goals for user:', data);
-  console.log('Supabase response error:', error);
-  console.log('=== END LOOKUP GOAL DEBUG ===');
-
   if (error) {
     return { error: error.message };
   }
   
   // Return all goals with their IDs and titles
   if (data && data.length > 0) {
-    console.log('Returning', data.length, 'goals');
     return data;
   } else {
-    console.log('No goals found for user');
     return { error: 'No goals found for this user' };
   }
 }
@@ -653,9 +619,7 @@ export async function updateStep(req, res) {
   const { text, order, completed } = req.body;
   const token = req.headers.authorization?.split(' ')[1];
   
-  console.log('updateStep: Received request for stepId:', stepId);
-  console.log('updateStep: Request body:', req.body);
-  console.log('updateStep: Token present:', !!token);
+  // Step update initiated
   
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
     global: { headers: { Authorization: `Bearer ${token}` } }
@@ -664,7 +628,7 @@ export async function updateStep(req, res) {
   const updateFields = { text, order, updated_at: new Date().toISOString() };
   if (typeof completed === 'boolean') updateFields.completed = completed;
   
-  console.log('updateStep: Update fields:', updateFields);
+  // Updating step fields
   
   const { data, error } = await supabase
     .from('steps')
@@ -674,11 +638,9 @@ export async function updateStep(req, res) {
     .single();
 
   if (error) {
-    console.error('updateStep: Supabase error:', error);
     return res.status(400).json({ error: error.message });
   }
   
-  console.log('updateStep: Successfully updated step:', data);
   res.json(data);
 }
 

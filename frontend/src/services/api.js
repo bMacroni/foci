@@ -159,20 +159,16 @@ export const stepsAPI = {
     return res.json();
   },
   update: async (stepId, stepData, token) => {
-    console.log('stepsAPI.update: Making request to update step:', stepId, 'with data:', stepData);
     const res = await fetch(`${API_BASE_URL}/goals/steps/${stepId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(stepData),
     });
-    console.log('stepsAPI.update: Response status:', res.status);
     if (!res.ok) {
       const errorText = await res.text();
-      console.error('stepsAPI.update: Error response:', errorText);
       throw new Error(errorText);
     }
     const result = await res.json();
-    console.log('stepsAPI.update: Success response:', result);
     return result;
   },
   delete: async (stepId, token) => {

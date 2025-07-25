@@ -16,7 +16,6 @@ const NotificationCenter = ({ showSuccess }) => {
       const response = await tasksAPI.getNotifications(20);
       setNotifications(response.data);
     } catch (err) {
-      console.error('Error fetching notifications:', err);
       setError('Failed to load notifications');
     } finally {
       setLoading(false);
@@ -34,7 +33,7 @@ const NotificationCenter = ({ showSuccess }) => {
         )
       );
     } catch (err) {
-      console.error('Error marking notification as read:', err);
+      // Silent fail for individual notification marking
     }
   };
 
@@ -46,7 +45,6 @@ const NotificationCenter = ({ showSuccess }) => {
       );
       showSuccess('All notifications marked as read');
     } catch (err) {
-      console.error('Error marking all notifications as read:', err);
       setError('Failed to mark all notifications as read');
     }
   };

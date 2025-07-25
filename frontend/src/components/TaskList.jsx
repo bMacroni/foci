@@ -24,11 +24,9 @@ const TaskList = ({ showSuccess, onTaskChange, tasks: propTasks }) => {
     try {
       setLoading(true);
       const response = await tasksAPI.getAll();
-      console.log('Frontend received tasks data:', response.data);
       setTasks(Array.isArray(response.data) ? response.data : []);
     } catch (err) {
       setError('Failed to load tasks');
-      console.error('Error fetching tasks:', err);
     } finally {
       setLoading(false);
     }
@@ -41,7 +39,7 @@ const TaskList = ({ showSuccess, onTaskChange, tasks: propTasks }) => {
         const response = await goalsAPI.getAll();
         setGoals(response.data);
       } catch (err) {
-        console.error('Error fetching goals:', err);
+        // Silent fail for goals loading
       } finally {
         setLoadingGoals(false);
       }
@@ -71,7 +69,6 @@ const TaskList = ({ showSuccess, onTaskChange, tasks: propTasks }) => {
         }
       } catch (err) {
         setError('Failed to delete task');
-        console.error('Error deleting task:', err);
       }
     }
   };

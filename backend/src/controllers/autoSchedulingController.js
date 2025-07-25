@@ -537,7 +537,6 @@ export async function autoScheduleTasks(userId, token) {
           token
         );
       } catch (historyError) {
-        console.log('Failed to update scheduling history (table might not exist):', historyError);
         // Continue without updating history
       }
 
@@ -550,7 +549,6 @@ export async function autoScheduleTasks(userId, token) {
       });
 
     } catch (error) {
-      console.log(`Error auto-scheduling task ${task.id}:`, error);
       results.push({
         task_id: task.id,
         task_title: task.title,
@@ -565,9 +563,6 @@ export async function autoScheduleTasks(userId, token) {
     .from('tasks')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', userId);
-  
-  console.log(`Total tasks after auto-scheduling: ${totalTasksAfter}`);
-  console.log(`Task count change: ${totalTasksAfter - totalTasksBefore}`);
 
   // Prepare notification data
   const successfulTasks = results.filter(r => r.status === 'scheduled');
@@ -591,10 +586,8 @@ export async function autoScheduleTasks(userId, token) {
       };
 
       await sendAutoSchedulingNotification(userId, notificationData);
-      console.log(`[AutoScheduling] Notification sent to user ${userId}`);
     }
   } catch (notificationError) {
-    console.error('[AutoScheduling] Error sending notification:', notificationError);
     // Don't fail the entire auto-scheduling process if notification fails
   }
 

@@ -26,7 +26,6 @@ function TasksPage({ showSuccess }) {
         setPreferences(preferencesResponse.data);
         setAllTasks(Array.isArray(tasksResponse.data) ? tasksResponse.data : []);
       } catch (error) {
-        console.error('Error loading data:', error);
         setError('Failed to load dashboard data');
       } finally {
         setLoading(false);
