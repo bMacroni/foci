@@ -272,11 +272,14 @@ export async function checkWeatherConditions(location, date) {
     const weatherData = await getWeatherData(location, date);
     
     // Weather check completed for location
-      temperature: weatherData.temperature,
-      condition: weatherData.condition,
-      precipitation_chance: weatherData.precipitation_chance,
-      suitable_for_outdoor: weatherData.suitable_for_outdoor
-    });
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[WeatherService] Weather check completed for ${location}:`, {
+        temperature: weatherData.temperature,
+        condition: weatherData.condition,
+        precipitation_chance: weatherData.precipitation_chance,
+        suitable_for_outdoor: weatherData.suitable_for_outdoor
+      });
+    }
     
     return weatherData;
   } catch (error) {
