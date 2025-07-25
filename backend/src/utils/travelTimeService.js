@@ -19,11 +19,11 @@ export async function calculateTravelTime(origin, destination, mode = 'driving')
     // Check cache first
     const cachedData = travelCache.get(cacheKey);
     if (cachedData && (Date.now() - cachedData.timestamp) < TRAVEL_CACHE_DURATION) {
-      console.log(`[TravelTimeService] Using cached travel data for ${origin} to ${destination}`);
+      // Using cached travel data
       return cachedData.data;
     }
 
-    console.log(`[TravelTimeService] Calculating travel time from ${origin} to ${destination} via ${mode}`);
+    // Calculating travel time
 
     // Parse locations - if they're coordinates, use them directly
     let originCoords = await parseLocation(origin);
@@ -32,13 +32,11 @@ export async function calculateTravelTime(origin, destination, mode = 'driving')
     // If geocoding fails, try with just the city name (before comma)
     if (!originCoords && origin.includes(',')) {
       const cityName = origin.split(',')[0].trim();
-      console.log(`[TravelTimeService] Trying geocoding with city name only: ${cityName}`);
       originCoords = await parseLocation(cityName);
     }
     
     if (!destCoords && destination.includes(',')) {
       const cityName = destination.split(',')[0].trim();
-      console.log(`[TravelTimeService] Trying geocoding with city name only: ${cityName}`);
       destCoords = await parseLocation(cityName);
     }
 
@@ -74,7 +72,7 @@ export async function calculateTravelTime(origin, destination, mode = 'driving')
       timestamp: Date.now()
     });
 
-    console.log(`[TravelTimeService] Travel data fetched and cached for ${origin} to ${destination}`);
+    // Travel data fetched and cached
     return processedData;
 
   } catch (error) {
@@ -114,7 +112,7 @@ async function parseLocation(location) {
 
   // Try to geocode the location using Open-Meteo geocoding (same as weather service)
   try {
-    console.log(`[TravelTimeService] Geocoding location: ${location}`);
+    // Geocoding location
     const geocodeUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=en&format=json`;
     
     const response = await fetch(geocodeUrl);
@@ -126,7 +124,7 @@ async function parseLocation(location) {
     
     if (geocodeData.results && geocodeData.results.length > 0) {
       const result = geocodeData.results[0];
-      console.log(`[TravelTimeService] Found coordinates: ${result.latitude}, ${result.longitude} for ${result.name}`);
+      // Found coordinates for location
       return {
         latitude: result.latitude,
         longitude: result.longitude,
@@ -135,7 +133,7 @@ async function parseLocation(location) {
       };
     }
     
-    console.log(`[TravelTimeService] No geocoding results found for: ${location}`);
+    // No geocoding results found
     return null;
   } catch (error) {
     console.error(`[TravelTimeService] Geocoding error for ${location}:`, error);
@@ -200,7 +198,7 @@ function processTravelData(travelData, mode) {
 export async function getTravelTime(origin, destination, mode = 'driving') {
   // Handle special location cases
   if (origin === 'current_location' || destination === 'current_location') {
-    console.log('[TravelTimeService] Current location specified, using fallback travel time');
+    // Current location specified, using fallback travel time
     return {
       duration_minutes: 15,
       distance_miles: 5,
@@ -210,7 +208,7 @@ export async function getTravelTime(origin, destination, mode = 'driving') {
   }
 
   if (origin === 'home' || destination === 'home') {
-    console.log('[TravelTimeService] Home location specified, using fallback travel time');
+    // Home location specified, using fallback travel time
     return {
       duration_minutes: 20,
       distance_miles: 8,
@@ -220,7 +218,7 @@ export async function getTravelTime(origin, destination, mode = 'driving') {
   }
 
   if (origin === 'work' || destination === 'work') {
-    console.log('[TravelTimeService] Work location specified, using fallback travel time');
+    // Work location specified, using fallback travel time
     return {
       duration_minutes: 25,
       distance_miles: 12,
@@ -238,7 +236,7 @@ export async function getTravelTime(origin, destination, mode = 'driving') {
  */
 export function clearTravelCache() {
   travelCache.clear();
-  console.log('[TravelTimeService] Travel cache cleared');
+  // Travel cache cleared
 }
 
 /**

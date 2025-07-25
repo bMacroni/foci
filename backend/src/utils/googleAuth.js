@@ -10,6 +10,6 @@ const oauth2Client = new google.auth.OAuth2(
 );
 
 // Google OAuth client initialized
-console.log('Google OAuth client initialized');
+// Google OAuth client initialized
 
 export default oauth2Client;

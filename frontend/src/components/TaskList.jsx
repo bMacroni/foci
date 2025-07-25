@@ -155,7 +155,6 @@ const TaskList = ({ showSuccess, onTaskChange, tasks: propTasks }) => {
       }
     } catch (err) {
       setError('Failed to create new task');
-      console.error('Error creating new task:', err);
     }
   };
 

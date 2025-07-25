@@ -19,7 +19,6 @@ const AutoSchedulingDashboard = ({ showSuccess }) => {
       const response = await tasksAPI.getAutoSchedulingDashboard();
       setDashboardData(response.data);
     } catch (err) {
-      console.error('Error fetching dashboard data:', err);
       setError('Failed to load auto-scheduling dashboard');
     }
   };
@@ -29,7 +28,7 @@ const AutoSchedulingDashboard = ({ showSuccess }) => {
       const response = await tasksAPI.getUserSchedulingPreferences();
       setPreferences(response.data);
     } catch (err) {
-      console.error('Error fetching preferences:', err);
+      // Silent fail for preferences
     } finally {
       setLoading(false);
     }
@@ -43,7 +42,6 @@ const AutoSchedulingDashboard = ({ showSuccess }) => {
       fetchDashboardData(); // Refresh dashboard data
     } catch (err) {
       setError('Failed to trigger auto-scheduling');
-      console.error('Error triggering auto-scheduling:', err);
     } finally {
       setTriggering(false);
     }

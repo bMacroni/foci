@@ -98,28 +98,15 @@ const CalendarEvents = () => {
 
   // Process events for display
   useEffect(() => {
-    console.log('[CalendarEvents] useEffect triggered with:', {
-      eventsLength: events.length,
-      rangeDaysLength: rangeDays.length,
-      userTimezone,
-      detectedTimezone
-    });
-    
     if (events.length === 0 || rangeDays.length === 0) {
-      console.log('[CalendarEvents] Skipping processing - no events or range days');
       return;
     }
-
-
 
     // Simple cache check to prevent unnecessary processing
     const cacheKey = `${rangeDays.map(d => d.toDateString()).join(',')}-${events.length}`;
     if (eventsByDayTimeRef.current.cacheKey === cacheKey) {
-      console.log('[CalendarEvents] Using cached data, skipping processing');
       return;
     }
-    
-    console.log('[CalendarEvents] Processing events for range:', rangeDays.map(d => d.toDateString()));
 
     // Initialize time slots for each day in the range
     const newEventsByDayTime = {};
@@ -129,101 +116,29 @@ const CalendarEvents = () => {
       TIME_SLOTS.forEach(({ hour, min }) => {
         newEventsByDayTime[key][`${hour}:${min}`] = [];
       });
-      console.log(`[CalendarEvents] Initialized time slots for ${key}:`, Object.keys(newEventsByDayTime[key]).slice(0, 5), '...');
     });
-
-    // Debug logging for selected range
-    console.log('[CalendarEvents] Selected date range:', {
-      start: selectedRange.start?.toDateString(),
-      end: selectedRange.end?.toDateString(),
-      rangeDays: rangeDays.map(d => d.toDateString()),
-      totalEvents: events.length
-    });
-    
-    // Check if July 22, 2025 is in the selected range
-    // Create July 22, 2025 in the user's timezone to avoid timezone conversion issues
-    const tz = userTimezone || detectedTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-    const july22 = toZonedTime(new Date('2025-07-22T00:00:00Z'), tz);
-    const isJuly22InRange = rangeDays.some(day => day.toDateString() === july22.toDateString());
-    console.log('[CalendarEvents] July 22, 2025 in range:', isJuly22InRange);
-    console.log('[CalendarEvents] July 22, 2025 date string:', july22.toDateString());
-    console.log('[CalendarEvents] Range days:', rangeDays.map(d => d.toDateString()));
-    
-    // Show first few events to see what we're working with
-    if (events.length > 0) {
-      const tz = userTimezone || detectedTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-      console.log('[CalendarEvents] First 3 events:', events.slice(0, 3).map(event => ({
-        title: event.summary,
-        dateTime: event.start.dateTime || event.start,
-        parsedDate: toZonedTime(new Date(event.start.dateTime || event.start), tz).toDateString()
-      })));
-      
-      // Also show the date range of all events
-      const eventDates = events.map(event => toZonedTime(new Date(event.start.dateTime || event.start), tz));
-      const earliestDate = new Date(Math.min(...eventDates));
-      const latestDate = new Date(Math.max(...eventDates));
-      console.log('[CalendarEvents] Event date range:', {
-        earliest: earliestDate.toDateString(),
-        latest: latestDate.toDateString(),
-        totalEvents: events.length
-      });
-    }
 
     // Process each event
-    console.log(`[CalendarEvents] Processing ${events.length} events...`);
-    events.forEach((event, index) => {
+    events.forEach((event) => {
       // Get the user's timezone (preferred or detected)
       const tz = userTimezone || detectedTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
       
       // Convert UTC time to user's timezone
       const utcDate = new Date(event.start.dateTime || event.start);
-      console.log(`[CalendarEvents] Processing event "${event.summary}":`, {
-        originalDateTime: event.start.dateTime || event.start,
-        utcDate: utcDate.toISOString(),
-        timezone: tz
-      });
       const eventDate = toZonedTime(utcDate, tz);
       eventDate.setSeconds(0, 0);
       const dayKey = eventDate.toDateString();
       const hour = eventDate.getHours();
       const min = eventDate.getMinutes() - (eventDate.getMinutes() % 15);
       
-      // Debug logging for all events in the selected range
-      const isInSelectedRange = rangeDays.some(rangeDay => 
-        rangeDay.toDateString() === dayKey
-      );
-      
-      console.log(`[CalendarEvents] Event ${index + 1}/${events.length}: "${event.summary}" - dayKey: ${dayKey}, isInSelectedRange: ${isInSelectedRange}`);
-      
-      if (isInSelectedRange) {
-        console.log('[CalendarEvents] Processing event in selected range:', {
-          title: event.summary,
-          date: eventDate.toDateString(),
-          dayKey,
-          hour,
-          min,
-          slotKey: `${hour}:${min}`,
-          hasSlot: eventsByDayTime[dayKey] && eventsByDayTime[dayKey][`${hour}:${min}`],
-          originalDateTime: event.start.dateTime || event.start,
-          timezone: tz,
-          utcTime: utcDate.toISOString(),
-          localTime: eventDate.toISOString()
-        });
-      }
-      
       if (newEventsByDayTime[dayKey] && newEventsByDayTime[dayKey][`${hour}:${min}`]) {
         newEventsByDayTime[dayKey][`${hour}:${min}`].push(event);
-        console.log(`[CalendarEvents] Added event "${event.summary}" to slot ${hour}:${min} on ${dayKey}`);
-      } else {
-        console.log(`[CalendarEvents] No slot found for event "${event.summary}" at ${hour}:${min} on ${dayKey}`);
-        console.log(`[CalendarEvents] Available slots for ${dayKey}:`, Object.keys(newEventsByDayTime[dayKey] || {}));
       }
     });
     
     // Update the state with the processed events
     setEventsByDayTime(newEventsByDayTime);
     eventsByDayTimeRef.current = { cacheKey };
-    console.log('[CalendarEvents] Updated eventsByDayTime with:', Object.keys(newEventsByDayTime));
   }, [events, rangeDays, userTimezone, detectedTimezone]);
 
   // Update current time every minute, using user-selected or detected timezone
@@ -405,8 +320,6 @@ const CalendarEvents = () => {
     } catch (err) {
       setEvents(prevEvents);
       showToast('Failed to update event', 'error');
-      console.error('[CalendarEvents] Error updating event:', err);
-      console.error('[CalendarEvents] Backend error:', err.response?.data);
     }
   };
 
@@ -424,12 +337,6 @@ const CalendarEvents = () => {
 
   function getRangeDays(start, end) {
     if (!start || !end) return [];
-    console.log('[CalendarEvents] getRangeDays called with:', {
-      start: start?.toDateString(),
-      end: end?.toDateString(),
-      startISO: start?.toISOString(),
-      endISO: end?.toISOString()
-    });
     const days = [];
     let d = new Date(start < end ? start : end);
     const last = new Date(start > end ? start : end);
@@ -439,7 +346,6 @@ const CalendarEvents = () => {
       days.push(new Date(d));
       d.setDate(d.getDate() + 1);
     }
-    console.log('[CalendarEvents] getRangeDays returning days:', days.map(day => day.toDateString()));
     return days;
     }
 
@@ -806,12 +712,6 @@ const CalendarEvents = () => {
     const [{ isOver, canDrop }, drop] = useDrop({
       accept: ItemTypes.EVENT,
       drop: (item) => {
-        console.log('[CalendarEvents] Drop event:', {
-          eventId: item.event.id,
-          targetDay: day,
-          targetHour: hour,
-          targetMin: min
-        });
         onDropEvent(item.event, day, hour, min);
       },
       collect: (monitor) => ({

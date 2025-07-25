@@ -18,7 +18,7 @@ export class GeminiService {
     this.enabled = true;
     this.genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
     this.model = this.genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    console.log('✅ Gemini AI initialized with model: gemini-2.5-flash');
+    // Gemini AI initialized with model: gemini-2.5-flash
   }
 
   /**
@@ -227,9 +227,6 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
           name: fr.name,
           response: fr.response
         }));
-        console.log('=== FINAL RESPONSE DEBUG ===');
-        console.log('Function responses being sent to Gemini:', JSON.stringify(functionResponses, null, 2));
-        
         const followupContents = [
           ...contents,
           ...functionResponses.map(fr => ({
@@ -242,7 +239,6 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
             }]
           }))
         ];
-        console.log('Followup contents being sent to Gemini:', JSON.stringify(followupContents, null, 2));
         
         let message = '';
         if (actions.length > 1) {
@@ -253,13 +249,9 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
             tools: [{ functionDeclarations: allGeminiFunctionDeclarations }]
           });
           const finalResponse = await finalResult.response;
-          console.log('Final Gemini response received');
-          console.log('Final response has text:', !!finalResponse.text);
-          console.log('Final response text length:', finalResponse.text ? finalResponse.text().length : 'undefined');
           
           // Check for additional function calls in the final response
           const finalFunctionCalls = finalResponse.functionCalls ? await finalResponse.functionCalls() : [];
-          console.log('Final function calls count:', finalFunctionCalls ? finalFunctionCalls.length : 0);
           
           if (finalFunctionCalls && finalFunctionCalls.length > 0) {
             // Process the additional function calls
@@ -292,8 +284,6 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
           }
           
           message = finalResponse.text ? await finalResponse.text() : '';
-          console.log('Final message extracted:', message);
-          console.log('Final message length:', message.length);
           
           // Always inject code block for the first read_task action if present
           const firstReadTask = actions.find(a => a.action_type === 'read' && a.entity_type === 'task');
@@ -301,7 +291,6 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
             message = `Here are your tasks:\n\n\`\`\`json\n${JSON.stringify(firstReadTask, null, 2)}\`\`\``;
           }
         }
-        console.log('=== END FINAL RESPONSE DEBUG ===');
         // Add to conversation history
         this._addToHistory(userId, { role: 'model', content: message });
         return {
@@ -475,7 +464,7 @@ Make the milestones and steps specific to this goal, encouraging, and achievable
   async _executeFunctionCall(functionCall, userId, userContext) {
     const { name, args } = functionCall;
     try {
-      console.log('Gemini function call name:', name);
+      // Processing function call: ${name}
       switch (name) {
         case 'create_task':
           // args: { title, description, due_date, priority, related_goal }

@@ -20,11 +20,11 @@ export async function getWeatherData(location, date = new Date()) {
     // Check cache first
     const cachedData = weatherCache.get(cacheKey);
     if (cachedData && (Date.now() - cachedData.timestamp) < WEATHER_CACHE_DURATION) {
-      console.log(`[WeatherService] Using cached weather data for ${location}`);
+      // Using cached weather data
       return cachedData.data;
     }
 
-    console.log(`[WeatherService] Fetching weather data for ${location} on ${date.toISOString().split('T')[0]}`);
+    // Fetching fresh weather data
 
     // Parse location - if it's coordinates, use them directly
     let latitude, longitude;
@@ -45,7 +45,7 @@ export async function getWeatherData(location, date = new Date()) {
       // If geocoding fails, try with just the city name (before comma)
       if (!geocodeResult && location.includes(',')) {
         const cityName = location.split(',')[0].trim();
-        console.log(`[WeatherService] Trying geocoding with city name only: ${cityName}`);
+        // Trying geocoding with city name only
         geocodeResult = await geocodeLocation(cityName);
       }
       
@@ -79,7 +79,7 @@ export async function getWeatherData(location, date = new Date()) {
       timestamp: Date.now()
     });
 
-    console.log(`[WeatherService] Weather data fetched and cached for ${location}`);
+    // Weather data fetched and cached
     return processedData;
 
   } catch (error) {
@@ -103,10 +103,10 @@ export async function getWeatherData(location, date = new Date()) {
  */
 async function geocodeLocation(location) {
   try {
-    console.log(`[WeatherService] Geocoding location: ${location}`);
+    // Geocoding location
     const geocodeUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=en&format=json`;
     
-    console.log(`[WeatherService] Geocoding URL: ${geocodeUrl}`);
+    // Geocoding URL constructed
     const response = await fetch(geocodeUrl);
     
     if (!response.ok) {
@@ -114,11 +114,11 @@ async function geocodeLocation(location) {
     }
 
     const geocodeData = await response.json();
-    console.log(`[WeatherService] Geocoding response:`, geocodeData);
+    // Geocoding response received
     
     if (geocodeData.results && geocodeData.results.length > 0) {
       const result = geocodeData.results[0];
-      console.log(`[WeatherService] Found coordinates: ${result.latitude}, ${result.longitude} for ${result.name}`);
+      // Found coordinates for location
       return {
         latitude: result.latitude,
         longitude: result.longitude,
@@ -127,7 +127,7 @@ async function geocodeLocation(location) {
       };
     }
     
-    console.log(`[WeatherService] No geocoding results found for: ${location}`);
+    // No geocoding results found
     return null;
   } catch (error) {
     console.error(`[WeatherService] Geocoding error for ${location}:`, error);
@@ -258,7 +258,7 @@ function isWeatherSuitableForOutdoor(temperature, precipitationChance, weatherCo
  */
 export async function checkWeatherConditions(location, date) {
   if (!location) {
-    console.log('[WeatherService] No location provided, skipping weather check');
+    // No location provided, skipping weather check
     return {
       temperature: 70,
       condition: 'unknown',
@@ -271,7 +271,7 @@ export async function checkWeatherConditions(location, date) {
   try {
     const weatherData = await getWeatherData(location, date);
     
-    console.log(`[WeatherService] Weather check for ${location}:`, {
+    // Weather check completed for location
       temperature: weatherData.temperature,
       condition: weatherData.condition,
       precipitation_chance: weatherData.precipitation_chance,
@@ -298,7 +298,7 @@ export async function checkWeatherConditions(location, date) {
  */
 export function clearWeatherCache() {
   weatherCache.clear();
-  console.log('[WeatherService] Weather cache cleared');
+      // Weather cache cleared
 }
 
 /**

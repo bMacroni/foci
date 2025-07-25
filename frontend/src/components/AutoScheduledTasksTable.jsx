@@ -13,7 +13,6 @@ const AutoScheduledTasksTable = ({ tasks, onTaskUpdate, showSuccess }) => {
       showSuccess('Task auto-scheduling updated successfully!');
       onTaskUpdate(); // Refresh the parent component
     } catch (error) {
-      console.error('Error updating task:', error);
       showSuccess('Failed to update task auto-scheduling');
     } finally {
       setUpdatingTask(null);

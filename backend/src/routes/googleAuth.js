@@ -36,19 +36,19 @@ router.get('/callback', async (req, res) => {
   try {
     // 1. Verify JWT (state)
     const user = await verifyJwt(state);
-    console.log('User authenticated:', user.email);
+            // User authenticated successfully
 
     // 2. Exchange code for tokens
     const { tokens } = await oauth2Client.getToken(code);
-    console.log('Google tokens received for user:', user.email);
+            // Google tokens received successfully
 
     // 3. Store tokens in your database, associated with user.id
     await storeGoogleTokens(user.id, tokens);
-    console.log('Google tokens stored for user:', user.email);
+            // Google tokens stored successfully
 
     // 4. Redirect to frontend with a success message
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    console.log('Redirecting to frontend after Google OAuth success');
+            // Redirecting to frontend after Google OAuth success
     res.redirect(`${frontendUrl}/dashboard?google=success`);
   } catch (err) {
     console.error('Error in Google OAuth callback:', err);

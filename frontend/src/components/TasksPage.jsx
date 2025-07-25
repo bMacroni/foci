@@ -38,23 +38,17 @@ function TasksPage({ showSuccess }) {
   const handleTriggerAutoScheduling = async () => {
     setTriggering(true);
     try {
-      console.log('Triggering auto-scheduling...');
       const triggerResponse = await tasksAPI.triggerAutoScheduling();
-      console.log('Auto-scheduling response:', triggerResponse);
       showSuccess('Auto-scheduling triggered successfully!');
       
       // Reload dashboard data and tasks
-      console.log('Refreshing dashboard data...');
       const [dashboardResponse, tasksResponse] = await Promise.all([
         tasksAPI.getAutoSchedulingDashboard(),
         tasksAPI.getAll()
       ]);
-      console.log('Dashboard response:', dashboardResponse);
       setDashboardData(dashboardResponse.data);
       setAllTasks(Array.isArray(tasksResponse.data) ? tasksResponse.data : []);
-      console.log('Dashboard data updated:', dashboardResponse.data);
     } catch (error) {
-      console.error('Error triggering auto-scheduling:', error);
       setError('Failed to trigger auto-scheduling');
     } finally {
       setTriggering(false);
@@ -69,23 +63,19 @@ function TasksPage({ showSuccess }) {
       showSuccess('Scheduling preferences updated successfully!');
     } catch (err) {
       setError('Failed to update preferences');
-      console.error('Error updating preferences:', err);
     }
   };
 
   const refreshDashboardData = async () => {
     try {
-      console.log('Refreshing dashboard data from refreshDashboardData...');
       const [dashboardResponse, tasksResponse] = await Promise.all([
         tasksAPI.getAutoSchedulingDashboard(),
         tasksAPI.getAll()
       ]);
-      console.log('Dashboard response from refreshDashboardData:', dashboardResponse);
       setDashboardData(dashboardResponse.data);
       setAllTasks(Array.isArray(tasksResponse.data) ? tasksResponse.data : []);
-      console.log('Dashboard data updated from refreshDashboardData:', dashboardResponse.data);
     } catch (error) {
-      console.error('Error refreshing dashboard data:', error);
+      // Silent fail for dashboard refresh
     }
   };
 
