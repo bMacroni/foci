@@ -35,6 +35,9 @@ const CalendarEvents = () => {
   // --- Delete Event Logic ---
   const [deletingEvent, setDeletingEvent] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [showEventOverlay, setShowEventOverlay] = useState(false);
+  const [overlayPosition, setOverlayPosition] = useState({ x: 0, y: 0 });
   
   // Events organized by day and time slot
   const [eventsByDayTime, setEventsByDayTime] = useState({});
@@ -95,6 +98,22 @@ const CalendarEvents = () => {
   useEffect(() => {
     loadEvents();
   }, []);
+
+  // Close event overlay when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showEventOverlay && !event.target.closest('.event-overlay-container')) {
+        setShowEventOverlay(false);
+        setSelectedEvent(null);
+        setOverlayPosition({ x: 0, y: 0 });
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showEventOverlay]);
 
   // Process events for display
   useEffect(() => {
@@ -255,7 +274,37 @@ const CalendarEvents = () => {
       date.getMonth() === now.getMonth() &&
       date.getDate() === now.getDate()
     );
+  }
+
+  // Utility to calculate optimal overlay position to keep it on screen
+  function calculateOptimalPosition(clickX, clickY, overlayWidth = 320, overlayHeight = 200) {
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    let x = clickX;
+    let y = clickY;
+    
+    // Debug logging
+    console.log('calculateOptimalPosition input:', { clickX, clickY, overlayWidth, overlayHeight });
+    console.log('viewport dimensions:', { viewportWidth, viewportHeight });
+    
+    // Adjust horizontal position if overlay would go off-screen
+    if (clickX + overlayWidth / 2 > viewportWidth) {
+      x = viewportWidth - overlayWidth / 2 - 20; // 20px margin
+    } else if (clickX - overlayWidth / 2 < 0) {
+      x = overlayWidth / 2 + 20; // 20px margin
     }
+    
+    // Adjust vertical position if overlay would go off-screen
+    if (clickY + overlayHeight / 2 > viewportHeight) {
+      y = viewportHeight - overlayHeight / 2 - 20; // 20px margin
+    } else if (clickY - overlayHeight / 2 < 0) {
+      y = overlayHeight / 2 + 20; // 20px margin
+    }
+    
+    console.log('calculateOptimalPosition output:', { x, y });
+    return { x, y };
+  }
 
   // --- Filter Events for Selected Range ---
   const getEventsForRange = () => {
@@ -466,14 +515,23 @@ const CalendarEvents = () => {
     }
     };
 
-    // Prevent modal opening if just resized
+    // Handle card click for overlay
     const handleCardClick = e => {
       e.stopPropagation();
       if (justResized) {
         setJustResized(false);
         return;
       }
-      onClick(event);
+      // Capture mouse click position and calculate optimal position
+      const clickX = e.clientX;
+      const clickY = e.clientY;
+      console.log('handleCardClick - mouse coordinates:', { clickX, clickY });
+      const optimalPosition = calculateOptimalPosition(clickX, clickY);
+      
+      console.log('handleCardClick - setting overlay position:', optimalPosition);
+      setOverlayPosition(optimalPosition);
+      setSelectedEvent(event);
+      setShowEventOverlay(true);
     };
 
     // Tooltip logic for truncated text
@@ -496,9 +554,9 @@ const CalendarEvents = () => {
       <div
         ref={setRefs}
         onClick={handleCardClick}
-        className={`bg-white border border-gray-200 rounded-xl shadow-md p-2 mb-2 cursor-pointer transition-all absolute left-0 w-full
+        className={`bg-white border border-gray-200 rounded-xl shadow-md p-2 mb-2 cursor-pointer transition-all absolute left-0
           ${isDragging ? 'opacity-40 scale-95' : ''}
-          hover:shadow-xl hover:scale-[1.03] focus:shadow-xl focus:scale-[1.03] active:scale-100
+          hover:shadow-xl hover:scale-[1.02] focus:shadow-xl focus:scale-[1.02] active:scale-100
           flex flex-col justify-center items-center group
           ${resizing ? 'ring-2 ring-blue-400 z-30' : ''}
         `}
@@ -507,41 +565,27 @@ const CalendarEvents = () => {
           height: cardHeight - 4,
           top: cardOffset,
           zIndex: resizing ? 30 : 2,
+          overflow: 'visible',
           ...style,
           transition: resizing ? 'none' : 'box-shadow 0.25s cubic-bezier(.4,0,.2,1), transform 0.25s cubic-bezier(.4,0,.2,1), height 0.3s cubic-bezier(.4,0,.2,1)',
         }}
         tabIndex={0}
       >
-        <div className="flex-1 w-full flex items-center relative">
-          <div
-            ref={titleRef}
-            className="font-semibold text-black text-sm truncate text-left w-full px-3 pr-8 relative"
-            onMouseEnter={() => isTruncated && setShowTooltip(true)}
-            onMouseLeave={() => setShowTooltip(false)}
-            style={{ cursor: isTruncated ? 'pointer' : 'default' }}
-          >
-            {startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}: {event.title || event.summary}
-            {showTooltip && isTruncated && (
-              <div className="absolute left-0 bottom-full mb-2 px-3 py-1 bg-black text-white text-xs rounded shadow-lg whitespace-nowrap z-50 pointer-events-none animate-fade-in">
-                {startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}: {event.title || event.summary}
-              </div>
-            )}
-          </div>
-          {/* Delete button */}
-          <button
-            className="absolute top-1 right-1 p-1 rounded hover:bg-red-100 focus:bg-red-200"
-            title="Delete event"
-            onClick={e => {
-              e.stopPropagation();
-              setDeletingEvent(event);
-              setShowDeleteConfirm(true);
-            }}
-            style={{ zIndex: 10 }}
-          >
-            <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+                  <div className="flex-1 w-full flex items-center relative">
+            <div
+              ref={titleRef}
+              className="font-semibold text-black text-sm truncate text-left w-full px-3 relative"
+              onMouseEnter={() => isTruncated && setShowTooltip(true)}
+              onMouseLeave={() => setShowTooltip(false)}
+              style={{ cursor: isTruncated ? 'pointer' : 'default' }}
+            >
+              {startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}: {event.title || event.summary}
+              {showTooltip && isTruncated && (
+                <div className="absolute left-0 bottom-full mb-2 px-3 py-1 bg-black text-white text-xs rounded shadow-lg whitespace-nowrap z-50 pointer-events-none animate-fade-in">
+                  {startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}: {event.title || event.summary}
+                </div>
+              )}
+            </div>
           {/* Resize handle in middle - drawer style */}
           <div
             className="absolute left-1/2 -translate-x-1/2 bottom-0 w-8 h-2 flex items-center justify-center cursor-ns-resize z-20 opacity-0 hover:opacity-100 group-hover:opacity-100"
@@ -747,8 +791,11 @@ const CalendarEvents = () => {
         style={{ position: 'relative', height: slotHeight }}
       >
         {columns.map(({ event, col }, index) => {
-          const width = `${100 / totalCols}%`;
-          const left = `${(100 / totalCols) * col}%`;
+          const baseWidth = `${100 / totalCols}%`;
+          const baseLeft = `${(100 / totalCols) * col}%`;
+          // Calculate 75% of the base width and align to the left of its allocated space
+          const width = `calc(${baseWidth} * 0.75)`;
+          const left = baseLeft; // Align to the left instead of centering
           // Use a combination of event.id and index to ensure unique keys
           const uniqueKey = event.id || `event-${index}-${event.start?.dateTime || event.startTime || Date.now()}`;
           return (
@@ -774,6 +821,8 @@ const CalendarEvents = () => {
         showToast('Cannot delete event: Invalid event ID', 'error');
         setDeletingEvent(null);
         setShowDeleteConfirm(false);
+        setShowEventOverlay(false);
+        setSelectedEvent(null);
         return;
       }
       
@@ -781,12 +830,18 @@ const CalendarEvents = () => {
       showToast('Event deleted!', 'success');
       setDeletingEvent(null);
       setShowDeleteConfirm(false);
+      setShowEventOverlay(false);
+      setSelectedEvent(null);
+      setOverlayPosition({ x: 0, y: 0 });
       // Force refresh to immediately update the UI
       await loadEvents(true);
     } catch (err) {
       showToast('Failed to delete event', 'error');
       setDeletingEvent(null);
       setShowDeleteConfirm(false);
+      setShowEventOverlay(false);
+      setSelectedEvent(null);
+      setOverlayPosition({ x: 0, y: 0 });
       console.error('Failed to delete event', err);
     }
   };
@@ -806,7 +861,7 @@ const CalendarEvents = () => {
           <div className="bg-white rounded-2xl shadow-xl p-8 max-w-sm w-full relative">
             <button
               className="absolute top-3 right-3 p-1 rounded hover:bg-gray-200"
-              onClick={() => { setShowDeleteConfirm(false); setDeletingEvent(null); }}
+              onClick={() => { setShowDeleteConfirm(false); setDeletingEvent(null); setShowEventOverlay(false); setSelectedEvent(null); setOverlayPosition({ x: 0, y: 0 }); }}
               aria-label="Close"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -817,13 +872,110 @@ const CalendarEvents = () => {
             <p className="mb-6">Are you sure you want to delete <span className="font-semibold">{deletingEvent.title || deletingEvent.summary}</span>? This action cannot be undone.</p>
             <div className="flex space-x-4 pt-2">
               <button
-                onClick={() => { setShowDeleteConfirm(false); setDeletingEvent(null); }}
+                onClick={() => { setShowDeleteConfirm(false); setDeletingEvent(null); setShowEventOverlay(false); setSelectedEvent(null); setOverlayPosition({ x: 0, y: 0 }); }}
                 className="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50"
               >Cancel</button>
               <button
                 onClick={() => handleDeleteEvent(deletingEvent.id)}
                 className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
               >Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Event Overlay */}
+      {showEventOverlay && selectedEvent && (
+        <div className="fixed inset-0 z-50 bg-black/20">
+          <div 
+            className="bg-white rounded-lg shadow-2xl border border-gray-200 p-6 max-w-sm w-full relative event-overlay-container transition-all duration-200 ease-out"
+            style={{
+              //position: 'fixed',
+              left: `${overlayPosition.x}px`,
+              top: `${overlayPosition.y}px`,
+              transform: 'translate(-50%, -50%)',
+              maxWidth: '320px',
+              zIndex: 60
+            }}
+            ref={(el) => {
+              if (el) {
+                console.log('Overlay rendered with position:', overlayPosition);
+                console.log('Overlay element rect:', el.getBoundingClientRect());
+              }
+            }}
+          >
+            <button
+              className="absolute top-2 right-2 p-1 rounded-full hover:bg-gray-100 transition-colors"
+              onClick={() => { setShowEventOverlay(false); setSelectedEvent(null); setOverlayPosition({ x: 0, y: 0 }); }}
+              aria-label="Close"
+            >
+              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            
+            <div className="mb-4">
+              <h3 className="text-lg font-medium mb-3 text-gray-900 leading-tight">{selectedEvent.title || selectedEvent.summary}</h3>
+              <div className="text-sm text-gray-600 space-y-2">
+                {(() => {
+                  const tz = userTimezone || detectedTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+                  const startTime = toZonedTime(new Date(selectedEvent.startTime || selectedEvent.start?.dateTime || selectedEvent.start), tz);
+                  const endTime = toZonedTime(new Date(selectedEvent.endTime || selectedEvent.end?.dateTime || selectedEvent.end), tz);
+                  return (
+                    <>
+                      <div className="flex items-start space-x-2">
+                        <svg className="w-4 h-4 mt-0.5 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div>
+                          <div className="font-medium text-gray-900">
+                            {startTime.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                          </div>
+                          <div className="text-gray-600">
+                            {startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </div>
+                      </div>
+                      {selectedEvent.description && (
+                        <div className="mt-3 pt-3 border-t border-gray-100">
+                          <p className="text-sm text-gray-700 leading-relaxed">{selectedEvent.description}</p>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+            
+            <div className="flex space-x-2 pt-2 border-t border-gray-100">
+              <button
+                onClick={() => {
+                  setEditingEvent(selectedEvent);
+                  setShowEventOverlay(false);
+                  setSelectedEvent(null);
+                  setOverlayPosition({ x: 0, y: 0 });
+                }}
+                className="flex-1 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-md transition-colors flex items-center justify-center space-x-1"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                <span>Edit</span>
+              </button>
+              <button
+                onClick={() => {
+                  setDeletingEvent(selectedEvent);
+                  setShowDeleteConfirm(true);
+                  setShowEventOverlay(false);
+                  setSelectedEvent(null);
+                  setOverlayPosition({ x: 0, y: 0 });
+                }}
+                className="flex-1 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-md transition-colors flex items-center justify-center space-x-1"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                <span>Delete</span>
+              </button>
             </div>
           </div>
         </div>
