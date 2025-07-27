@@ -1,0 +1,161 @@
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { colors } from '../../theme/colors';
+import { typography } from '../../theme/typography';
+import { spacing, borderRadius } from '../../theme/spacing';
+import { Input } from '../common/Input';
+import { Button } from '../common/Button';
+
+interface GoalFormProps {
+  goal?: {
+    id: string;
+    title: string;
+    description?: string;
+    category: string;
+    target_completion_date?: string;
+  };
+  onSave: (goalData: any) => void;
+  onCancel: () => void;
+}
+
+export const GoalForm: React.FC<GoalFormProps> = ({ goal, onSave, onCancel }) => {
+  const [formData, setFormData] = useState({
+    title: goal?.title || '',
+    description: goal?.description || '',
+    category: goal?.category || 'other',
+    target_completion_date: goal?.target_completion_date ? goal.target_completion_date.split('T')[0] : '',
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const categoryOptions = [
+    { value: 'career', label: 'Career' },
+    { value: 'health', label: 'Health' },
+    { value: 'personal', label: 'Personal' },
+    { value: 'education', label: 'Education' },
+    { value: 'finance', label: 'Finance' },
+    { value: 'relationships', label: 'Relationships' },
+    { value: 'other', label: 'Other' },
+  ];
+
+  const handleSave = async () => {
+    if (!formData.title.trim()) {
+      setError('Please enter a goal title');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const submitData = {
+        ...formData,
+        target_completion_date: formData.target_completion_date || null,
+      };
+      await onSave(submitData);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>
+          {goal ? 'Edit Goal' : 'Create New Goal'}
+        </Text>
+      </View>
+      
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <Input
+          label="Goal Title"
+          placeholder="Enter your goal title"
+          value={formData.title}
+          onChangeText={(text) => setFormData({ ...formData, title: text })}
+        />
+        
+        <Input
+          label="Description (Optional)"
+          placeholder="Describe your goal in detail"
+          value={formData.description}
+          onChangeText={(text) => setFormData({ ...formData, description: text })}
+          multiline
+          numberOfLines={4}
+        />
+        
+        <Input
+          label="Category"
+          placeholder="Select category"
+          value={formData.category}
+          onChangeText={(text) => setFormData({ ...formData, category: text })}
+        />
+        
+        <Input
+          label="Target Completion Date (Optional)"
+          placeholder="YYYY-MM-DD"
+          value={formData.target_completion_date}
+          onChangeText={(text) => setFormData({ ...formData, target_completion_date: text })}
+        />
+        
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        
+        <View style={styles.buttonContainer}>
+          <Button
+            title="Cancel"
+            onPress={onCancel}
+            variant="outline"
+            style={styles.cancelButton}
+          />
+          <Button
+            title={goal ? 'Update Goal' : 'Create Goal'}
+            onPress={handleSave}
+            loading={loading}
+            style={styles.saveButton}
+          />
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  header: {
+    padding: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.light,
+  },
+  title: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  content: {
+    flex: 1,
+    padding: spacing.md,
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: spacing.lg,
+  },
+  cancelButton: {
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  saveButton: {
+    flex: 1,
+    marginLeft: spacing.sm,
+  },
+  error: {
+    color: colors.error,
+    marginTop: spacing.sm,
+    textAlign: 'center',
+  },
+});
