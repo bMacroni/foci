@@ -2,6 +2,9 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
+// Add this line for vector icons
+apply from: file("../../node_modules/react-native-vector-icons/fonts.gradle")
+
 def hermesEnabled = true
 
 /**

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Icon from 'react-native-vector-icons/Octicons';
 import { colors } from '../../themes/colors';
 import { typography } from '../../themes/typography';
 
@@ -16,15 +17,15 @@ export const CustomTabBar: React.FC<CustomTabBarProps> = ({ state, descriptors, 
   const getIconName = (routeName: string) => {
     switch (routeName) {
       case 'AIChat':
-        return '●';
+        return 'comment-discussion';
       case 'Goals':
-        return '▲';
+        return 'goal';
       case 'Tasks':
-        return '■';
+        return 'checklist';
       case 'Calendar':
-        return '◆';
+        return 'calendar';
       default:
-        return '●';
+        return 'comment-discussion';
     }
   };
 
@@ -68,12 +69,11 @@ export const CustomTabBar: React.FC<CustomTabBarProps> = ({ state, descriptors, 
                 borderWidth: 1,
               }
             ]}>
-              <Text style={[
-                styles.tabIconText,
-                { color: isFocused ? colors.secondary : colors.text.disabled }
-              ]}>
-                {getIconName(route.name)}
-              </Text>
+              <Icon 
+                name={getIconName(route.name)}
+                size={16}
+                color={isFocused ? colors.secondary : colors.text.disabled}
+              />
             </View>
             <Text style={[
               styles.tabLabel,
@@ -113,10 +113,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 4,
-  },
-  tabIconText: {
-    fontSize: 14,
-    fontWeight: typography.fontWeight.bold as any,
   },
   tabLabel: {
     fontSize: typography.fontSize.sm,
