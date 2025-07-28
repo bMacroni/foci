@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Platform, Animated, Dimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAvoidingView } from 'react-native';
@@ -24,7 +24,7 @@ interface Conversation {
   lastMessageAt: Date;
 }
 
-export default function AIChatScreen({ navigation }: any) {
+export default function AIChatScreen({ navigation, route }: any) {
   const insets = useSafeAreaInsets();
   const screenWidth = Dimensions.get('window').width;
   
@@ -304,6 +304,39 @@ export default function AIChatScreen({ navigation }: any) {
       setLoading(false);
     }
   };
+
+  // Handle initial message from navigation
+  useEffect(() => {
+    if (route.params?.initialMessage) {
+      const initialMessage = route.params.initialMessage;
+      
+      // Create a new conversation with the initial message
+      const newConversation: Conversation = {
+        id: Date.now().toString(),
+        title: 'Goal Help',
+        messages: [
+          { id: 1, text: 'Welcome to Foci! How can I help you today?', sender: 'ai' },
+          { id: 2, text: initialMessage, sender: 'user' }
+        ],
+        isPinned: false,
+        createdAt: new Date(),
+        lastMessageAt: new Date(),
+      };
+      
+      setConversations([newConversation, ...conversations]);
+      setCurrentConversationId(newConversation.id);
+      
+      // Clear the route params to prevent re-triggering
+      navigation.setParams({ initialMessage: undefined });
+      
+      // Auto-send the message
+      setInput(initialMessage);
+      // Trigger handleSend after a short delay
+      setTimeout(() => {
+        handleSend();
+      }, 100);
+    }
+  }, [route.params?.initialMessage]);
 
   const renderMessage = (msg: Message) => {
     if (msg.sender === 'user') {

@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../../themes/colors';
 import { typography } from '../../themes/typography';
 import { spacing, borderRadius } from '../../themes/spacing';
 import { Input, Button } from '../../components/common';
+import { goalsAPI } from '../../services/api';
+import { authService, AuthState } from '../../services/auth';
+import GoalsListModal from '../../components/goals/GoalsListModal';
 
 interface Step {
   id: string;
@@ -39,169 +42,18 @@ interface Goal {
 }
 
 export default function GoalsScreen({ navigation }: any) {
-  const [goals, setGoals] = useState<Goal[]>([
-    {
-      id: '1',
-      title: 'Learn React Native',
-      description: 'Master mobile app development with React Native',
-      completedMilestones: 2,
-      totalMilestones: 3,
-      completedSteps: 8,
-      totalSteps: 12,
-      nextMilestone: 'Build first app',
-      nextStep: 'Create navigation structure',
-      status: 'active',
-      createdAt: new Date('2024-01-15'),
-      milestones: [
-        {
-          id: 'm1',
-          title: 'Learn React Native Basics',
-          description: 'Understand core concepts and fundamentals',
-          completed: true,
-          order: 1,
-          steps: [
-            { id: 's1', title: 'Install React Native', description: 'Set up development environment', completed: true, order: 1 },
-            { id: 's2', title: 'Learn Components', description: 'Understand React components', completed: true, order: 2 },
-            { id: 's3', title: 'Study Props & State', description: 'Master data flow concepts', completed: true, order: 3 },
-            { id: 's4', title: 'Practice Navigation', description: 'Learn stack and tab navigation', completed: true, order: 4 },
-          ],
-        },
-        {
-          id: 'm2',
-          title: 'Build Simple Components',
-          description: 'Create reusable UI components',
-          completed: true,
-          order: 2,
-          steps: [
-            { id: 's5', title: 'Create Button Component', description: 'Build reusable button with variants', completed: true, order: 1 },
-            { id: 's6', title: 'Design Input Fields', description: 'Create styled input components', completed: true, order: 2 },
-            { id: 's7', title: 'Build Card Layouts', description: 'Create card-based UI components', completed: true, order: 3 },
-            { id: 's8', title: 'Implement Lists', description: 'Create scrollable list components', completed: true, order: 4 },
-          ],
-        },
-        {
-          id: 'm3',
-          title: 'Build First App',
-          description: 'Create a complete mobile application',
-          completed: false,
-          order: 3,
-          steps: [
-            { id: 's9', title: 'Plan App Structure', description: 'Design app architecture and screens', completed: true, order: 1 },
-            { id: 's10', title: 'Create navigation structure', description: 'Set up app navigation flow', completed: false, order: 2 },
-            { id: 's11', title: 'Implement core features', description: 'Build main app functionality', completed: false, order: 3 },
-            { id: 's12', title: 'Test and deploy', description: 'Final testing and app store deployment', completed: false, order: 4 },
-          ],
-        },
-      ],
-    },
-    {
-      id: '2',
-      title: 'Exercise Regularly',
-      description: 'Establish a consistent fitness routine',
-      completedMilestones: 1,
-      totalMilestones: 3,
-      completedSteps: 3,
-      totalSteps: 9,
-      nextMilestone: 'Create workout plan',
-      nextStep: 'Research exercise types',
-      status: 'active',
-      createdAt: new Date('2024-01-20'),
-      milestones: [
-        {
-          id: 'm4',
-          title: 'Assess Current Fitness',
-          description: 'Evaluate current physical condition',
-          completed: true,
-          order: 1,
-          steps: [
-            { id: 's13', title: 'Measure body metrics', description: 'Record weight, measurements, and body composition', completed: true, order: 1 },
-            { id: 's14', title: 'Test basic fitness', description: 'Assess strength, flexibility, and endurance', completed: true, order: 2 },
-            { id: 's15', title: 'Set baseline goals', description: 'Define initial fitness targets', completed: true, order: 3 },
-          ],
-        },
-        {
-          id: 'm5',
-          title: 'Create Workout Plan',
-          description: 'Design a personalized exercise routine',
-          completed: false,
-          order: 2,
-          steps: [
-            { id: 's16', title: 'Research exercise types', description: 'Learn about different workout styles', completed: false, order: 1 },
-            { id: 's17', title: 'Choose workout frequency', description: 'Decide on weekly exercise schedule', completed: false, order: 2 },
-            { id: 's18', title: 'Plan progressive overload', description: 'Design gradual intensity increases', completed: false, order: 3 },
-          ],
-        },
-        {
-          id: 'm6',
-          title: 'Establish Routine',
-          description: 'Build consistent exercise habits',
-          completed: false,
-          order: 3,
-          steps: [
-            { id: 's19', title: 'Start with basics', description: 'Begin with simple, achievable workouts', completed: false, order: 1 },
-            { id: 's20', title: 'Track progress', description: 'Monitor improvements and adjustments', completed: false, order: 2 },
-            { id: 's21', title: 'Maintain consistency', description: 'Build long-term exercise habits', completed: false, order: 3 },
-          ],
-        },
-      ],
-    },
-    {
-      id: '3',
-      title: 'Read 12 Books This Year',
-      description: 'Expand knowledge through reading',
-      completedMilestones: 0,
-      totalMilestones: 3,
-      completedSteps: 0,
-      totalSteps: 9,
-      nextMilestone: 'Choose first book',
-      nextStep: 'Research book genres',
-      status: 'active',
-      createdAt: new Date('2024-01-25'),
-      milestones: [
-        {
-          id: 'm7',
-          title: 'Choose First Book',
-          description: 'Select and plan your reading journey',
-          completed: false,
-          order: 1,
-          steps: [
-            { id: 's22', title: 'Research book genres', description: 'Explore different types of books', completed: false, order: 1 },
-            { id: 's23', title: 'Create reading list', description: 'Compile 12 books for the year', completed: false, order: 2 },
-            { id: 's24', title: 'Set reading schedule', description: 'Plan daily/weekly reading time', completed: false, order: 3 },
-          ],
-        },
-        {
-          id: 'm8',
-          title: 'Establish Reading Habit',
-          description: 'Build consistent reading routine',
-          completed: false,
-          order: 2,
-          steps: [
-            { id: 's25', title: 'Create reading environment', description: 'Set up comfortable reading space', completed: false, order: 1 },
-            { id: 's26', title: 'Start first book', description: 'Begin reading the selected book', completed: false, order: 2 },
-            { id: 's27', title: 'Track reading progress', description: 'Monitor pages read and time spent', completed: false, order: 3 },
-          ],
-        },
-        {
-          id: 'm9',
-          title: 'Complete Reading Goal',
-          description: 'Finish all 12 books successfully',
-          completed: false,
-          order: 3,
-          steps: [
-            { id: 's28', title: 'Maintain reading pace', description: 'Stay on track with reading schedule', completed: false, order: 1 },
-            { id: 's29', title: 'Review and reflect', description: 'Take notes and reflect on learnings', completed: false, order: 2 },
-            { id: 's30', title: 'Celebrate completion', description: 'Acknowledge achievement of reading goal', completed: false, order: 3 },
-          ],
-        },
-      ],
-    },
-  ]);
-  
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [goalsLoading, setGoalsLoading] = useState(true);
+  const [authState, setAuthState] = useState<AuthState>({
+    user: null,
+    token: null,
+    isLoading: true,
+    isAuthenticated: false,
+  });
   const [aiInput, setAiInput] = useState('');
   const [showAiInput, setShowAiInput] = useState(false);
   const [showAiReview, setShowAiReview] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState<{
     title: string;
     description: string;
@@ -214,106 +66,239 @@ export default function GoalsScreen({ navigation }: any) {
       }>;
     }>;
   } | null>(null);
+  const [showGoalsModal, setShowGoalsModal] = useState(false);
+
+  // Subscribe to auth state changes
+  useEffect(() => {
+    console.log('🎯 GoalsScreen: Setting up auth subscription');
+    const unsubscribe = authService.subscribe((state) => {
+      console.log('🎯 GoalsScreen: Auth state changed:', state);
+      setAuthState(state);
+      
+      // If user becomes authenticated, load goals
+      if (state.isAuthenticated && !state.isLoading) {
+        console.log('🎯 GoalsScreen: User authenticated, loading goals');
+        loadGoals();
+      } else if (!state.isAuthenticated && !state.isLoading) {
+        // User is not authenticated, clear goals and stop loading
+        console.log('🎯 GoalsScreen: User not authenticated, clearing goals');
+        setGoals([]);
+        setGoalsLoading(false);
+      }
+    });
+
+    return unsubscribe;
+  }, []);
+
+  // Load goals from backend on component mount (only if authenticated)
+  useEffect(() => {
+    console.log('🎯 GoalsScreen: Auth state effect triggered:', authState);
+    if (authState.isAuthenticated && !authState.isLoading) {
+      console.log('🎯 GoalsScreen: User authenticated, loading goals');
+      loadGoals();
+    } else if (!authState.isAuthenticated && !authState.isLoading) {
+      console.log('🎯 GoalsScreen: User not authenticated, stopping loading');
+      setGoalsLoading(false);
+    }
+  }, [authState.isAuthenticated, authState.isLoading]);
+
+  const loadGoals = async () => {
+    try {
+      setGoalsLoading(true);
+      const fetchedGoals = await goalsAPI.getGoals();
+      
+      // Transform backend data to match our UI structure
+      const transformedGoals: Goal[] = fetchedGoals.map((goal: any) => {
+        const milestones = goal.milestones || [];
+        const totalMilestones = milestones.length;
+        const completedMilestones = milestones.filter((m: any) => m.completed).length;
+        
+        const totalSteps = milestones.reduce((total: number, milestone: any) => {
+          return total + (milestone.steps?.length || 0);
+        }, 0);
+        
+        const completedSteps = milestones.reduce((total: number, milestone: any) => {
+          return total + (milestone.steps?.filter((s: any) => s.completed).length || 0);
+        }, 0);
+
+        // Find next milestone and step
+        const nextMilestone = milestones.find((m: any) => !m.completed)?.title || '';
+        const nextStep = milestones.find((m: any) => !m.completed)?.steps?.find((s: any) => !s.completed)?.text || '';
+
+        return {
+          id: goal.id,
+          title: goal.title,
+          description: goal.description,
+          completedMilestones,
+          totalMilestones,
+          completedSteps,
+          totalSteps,
+          nextMilestone,
+          nextStep,
+          status: goal.status || 'active',
+          createdAt: new Date(goal.created_at || goal.createdAt),
+          milestones: milestones.map((milestone: any) => ({
+            id: milestone.id,
+            title: milestone.title,
+            description: milestone.description || '',
+            completed: milestone.completed || false,
+            order: milestone.order,
+            steps: (milestone.steps || []).map((step: any) => ({
+              id: step.id,
+              title: step.text || step.title,
+              description: step.description || '',
+              completed: step.completed || false,
+              order: step.order,
+            })),
+          })),
+        };
+      });
+
+      setGoals(transformedGoals);
+    } catch (error) {
+      console.error('Error loading goals:', error);
+      
+      // Check if it's an authentication error
+      if (error instanceof Error && error.message.includes('No authentication token')) {
+        // User needs to log in
+        Alert.alert(
+          'Authentication Required',
+          'Please log in to view your goals.',
+          [
+            {
+              text: 'Go to Login',
+              onPress: () => navigation.navigate('Login'),
+            },
+            {
+              text: 'Cancel',
+              style: 'cancel',
+            },
+          ]
+        );
+      } else {
+        Alert.alert('Error', 'Failed to load goals. Please try again.');
+      }
+    } finally {
+      setGoalsLoading(false);
+    }
+  };
 
   const handleAiSubmit = async () => {
     if (!aiInput.trim()) return;
     
     setLoading(true);
-    // TODO: Integrate with AI service
-    console.log('AI Goal Request:', aiInput);
     
-    // Simulate AI response with structured data
-    setTimeout(() => {
+    try {
+      // Extract goal title and description from user input
+      const goalTitle = aiInput.trim();
+      const goalDescription = ''; // Could be extracted from user input if they provide more details
+      
+      // Call the AI breakdown generation API
+      const breakdown = await goalsAPI.generateBreakdown({
+        title: goalTitle,
+        description: goalDescription,
+      });
+      
+      // Transform the API response to match our UI structure
       const suggestion = {
-        title: 'Learn React Native Development',
-        description: 'Master mobile app development with React Native by building real projects and understanding core concepts.',
-        milestones: [
-          {
-            title: 'Learn React Native Basics',
-            description: 'Understand components, props, state, and navigation fundamentals',
-            steps: [
-              { title: 'Install React Native CLI', description: 'Set up development environment' },
-              { title: 'Learn React Components', description: 'Understand component structure and lifecycle' },
-              { title: 'Master Props and State', description: 'Learn data flow and state management' },
-              { title: 'Practice Navigation', description: 'Implement stack and tab navigation' },
-            ],
-          },
-          {
-            title: 'Build Simple Components',
-            description: 'Create reusable UI components and basic screens',
-            steps: [
-              { title: 'Create Button Component', description: 'Build reusable button with variants' },
-              { title: 'Design Input Fields', description: 'Create styled input components' },
-              { title: 'Build Card Layouts', description: 'Create card-based UI components' },
-              { title: 'Implement Lists', description: 'Create scrollable list components' },
-            ],
-          },
-          {
-            title: 'Implement Navigation',
-            description: 'Set up stack and tab navigation between screens',
-            steps: [
-              { title: 'Plan Navigation Structure', description: 'Design app navigation flow' },
-              { title: 'Set up Stack Navigator', description: 'Configure screen navigation' },
-              { title: 'Add Tab Navigation', description: 'Implement bottom tab navigation' },
-              { title: 'Handle Navigation Events', description: 'Manage navigation state and events' },
-            ],
-          },
-          {
-            title: 'Build Complete App',
-            description: 'Create a full-featured mobile application with real functionality',
-            steps: [
-              { title: 'Design App Architecture', description: 'Plan app structure and data flow' },
-              { title: 'Implement Core Features', description: 'Build main app functionality' },
-              { title: 'Add Error Handling', description: 'Implement proper error management' },
-              { title: 'Test and Deploy', description: 'Final testing and app store deployment' },
-            ],
-          },
-        ],
+        title: goalTitle,
+        description: goalDescription || `AI-generated breakdown for: ${goalTitle}`,
+        milestones: breakdown.milestones.map((milestone, index) => ({
+          title: milestone.title,
+          description: `Milestone ${index + 1}: ${milestone.title}`,
+          steps: milestone.steps.map((step, stepIndex) => ({
+            title: step.text,
+            description: `Step ${stepIndex + 1}: ${step.text}`,
+          })),
+        })),
       };
       
       setAiSuggestion(suggestion);
       setLoading(false);
       setShowAiInput(false);
       setShowAiReview(true);
-    }, 2000);
+    } catch (error) {
+      console.error('Error generating AI breakdown:', error);
+      setLoading(false);
+      
+      // Check if it's an authentication error
+      if (error instanceof Error && error.message.includes('No authentication token')) {
+        Alert.alert(
+          'Authentication Required',
+          'Please log in to use the AI assistant.',
+          [
+            {
+              text: 'Go to Login',
+              onPress: () => navigation.navigate('Login'),
+            },
+            {
+              text: 'Cancel',
+              style: 'cancel',
+            },
+          ]
+        );
+      } else {
+        Alert.alert('Error', 'Failed to generate AI breakdown. Please try again.');
+      }
+    }
   };
 
-  const handleAcceptSuggestion = () => {
+  const handleAcceptSuggestion = async () => {
     if (!aiSuggestion) return;
     
-    // Create new goal with AI suggestions
-    const newGoal: Goal = {
-      id: Date.now().toString(),
-      title: aiSuggestion.title,
-      description: aiSuggestion.description,
-      completedMilestones: 0,
-      totalMilestones: aiSuggestion.milestones.length,
-      completedSteps: 0,
-      totalSteps: aiSuggestion.milestones.reduce((total, milestone) => total + (milestone.steps?.length || 0), 0),
-      nextMilestone: aiSuggestion.milestones[0]?.title || '',
-      nextStep: aiSuggestion.milestones[0]?.steps?.[0]?.title || '',
-      status: 'active',
-      createdAt: new Date(),
-      milestones: aiSuggestion.milestones.map((milestone, index) => ({
-        id: `m${Date.now()}_${index}`,
-        title: milestone.title,
-        description: milestone.description,
-        completed: false,
-        order: index + 1,
-        steps: milestone.steps?.map((step, stepIndex) => ({
-          id: `s${Date.now()}_${index}_${stepIndex}`,
-          title: step.title,
-          description: step.description,
-          completed: false,
-          order: stepIndex + 1,
-        })) || [],
-      })),
-    };
-    
-    setGoals([...goals, newGoal]);
-    setAiSuggestion(null);
-    setShowAiReview(false);
-    setAiInput('');
+    try {
+      setLoading(true);
+      
+      // Create goal data for backend
+      const goalData = {
+        title: aiSuggestion.title,
+        description: aiSuggestion.description,
+        milestones: aiSuggestion.milestones.map((milestone, index) => ({
+          title: milestone.title,
+          order: index + 1,
+          steps: milestone.steps.map((step, stepIndex) => ({
+            text: step.title,
+            order: stepIndex + 1,
+          })),
+        })),
+      };
+
+      // Create goal in backend
+      await goalsAPI.createGoal(goalData as any);
+      
+      // Reload goals to get the updated list
+      await loadGoals();
+      
+      setAiSuggestion(null);
+      setShowAiReview(false);
+      setAiInput('');
+      setLoading(false);
+      
+      Alert.alert('Success', 'Goal created successfully!');
+    } catch (error) {
+      console.error('Error creating goal:', error);
+      setLoading(false);
+      
+      // Check if it's an authentication error
+      if (error instanceof Error && error.message.includes('No authentication token')) {
+        Alert.alert(
+          'Authentication Required',
+          'Please log in to create goals.',
+          [
+            {
+              text: 'Go to Login',
+              onPress: () => navigation.navigate('Login'),
+            },
+            {
+              text: 'Cancel',
+              style: 'cancel',
+            },
+          ]
+        );
+      } else {
+        Alert.alert('Error', 'Failed to create goal. Please try again.');
+      }
+    }
   };
 
   const handleRedoSuggestion = () => {
@@ -326,6 +311,39 @@ export default function GoalsScreen({ navigation }: any) {
     setAiSuggestion(null);
     setShowAiReview(false);
     setAiInput('');
+  };
+
+  const handleGoalPress = (goalId: string) => {
+    setShowGoalsModal(false);
+    navigation.navigate('GoalDetail', { goalId });
+  };
+
+  const handleGoalDelete = async (goalId: string) => {
+    try {
+      // TODO: Implement goal deletion API call
+      Alert.alert(
+        'Delete Goal',
+        'Are you sure you want to delete this goal? This action cannot be undone.',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              // await goalsAPI.deleteGoal(goalId);
+              // await loadGoals();
+              Alert.alert('Success', 'Goal deleted successfully');
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('Error deleting goal:', error);
+      Alert.alert('Error', 'Failed to delete goal. Please try again.');
+    }
   };
 
   const getProgressPercentage = (completed: number, total: number) => {
@@ -362,23 +380,31 @@ export default function GoalsScreen({ navigation }: any) {
         
         <Text style={styles.goalDescription}>{goal.description}</Text>
         
-                 {renderProgressBar(goal.completedMilestones, goal.totalMilestones, 'milestones')}
-         {renderProgressBar(goal.completedSteps, goal.totalSteps, 'steps')}
+        {renderProgressBar(goal.completedMilestones, goal.totalMilestones, 'milestones')}
+        {renderProgressBar(goal.completedSteps, goal.totalSteps, 'steps')}
         
-                 <View style={styles.nextMilestoneContainer}>
-           <Text style={styles.nextMilestoneLabel}>Current Milestone:</Text>
-           <Text style={styles.nextMilestoneText}>{goal.nextMilestone}</Text>
-         </View>
-         <View style={styles.nextStepContainer}>
-           <Text style={styles.nextStepLabel}>Next Step:</Text>
-           <Text style={styles.nextStepText}>{goal.nextStep}</Text>
-         </View>
+        <View style={styles.nextMilestoneContainer}>
+          <Text style={styles.nextMilestoneLabel}>Current Milestone:</Text>
+          <Text style={styles.nextMilestoneText}>{goal.nextMilestone}</Text>
+        </View>
+        <View style={styles.nextStepContainer}>
+          <Text style={styles.nextStepLabel}>Next Step:</Text>
+          <Text style={styles.nextStepText}>{goal.nextStep}</Text>
+        </View>
         
         <View style={styles.goalActions}>
           <TouchableOpacity style={styles.actionButton}>
-            <Text style={styles.actionButtonText}>View Details</Text>
+            <Text style={styles.actionButtonText}>Schedule next step</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => {
+              // Navigate to AI Chat tab and start a new conversation with pre-filled message
+              navigation.navigate('AIChat', { 
+                initialMessage: `Can you help me update the ${goal.title} goal?`
+              });
+            }}
+          >
             <Text style={styles.actionButtonText}>Ask AI Help</Text>
           </TouchableOpacity>
         </View>
@@ -386,122 +412,228 @@ export default function GoalsScreen({ navigation }: any) {
     );
   };
 
+  // Show loading state while checking authentication
+  if (authState.isLoading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Goals</Text>
+        </View>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Checking authentication...</Text>
+          <Text style={styles.debugText}>Debug: {JSON.stringify(authState)}</Text>
+          <Button
+            title="Debug: Force Not Authenticated"
+            onPress={() => {
+              console.log('🎯 GoalsScreen: Manual debug - forcing not authenticated');
+              setAuthState({
+                user: null,
+                token: null,
+                isLoading: false,
+                isAuthenticated: false,
+              });
+            }}
+            variant="secondary"
+            style={styles.debugButton}
+          />
+                                  <Button
+                          title="Debug: Force Authenticated"
+                          onPress={() => {
+                            console.log('🎯 GoalsScreen: Manual debug - forcing authenticated');
+                            setAuthState({
+                              user: { id: 'debug-user', email: 'debug@test.com' },
+                              token: 'debug-token',
+                              isLoading: false,
+                              isAuthenticated: true,
+                            });
+                          }}
+                          variant="secondary"
+                          style={styles.debugButton}
+                        />
+                        <Button
+                          title="Debug: Re-initialize Auth"
+                          onPress={async () => {
+                            console.log('🎯 GoalsScreen: Manual debug - re-initializing auth');
+                            await authService.debugReinitialize();
+                          }}
+                          variant="secondary"
+                          style={styles.debugButton}
+                        />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Show login prompt if user is not authenticated
+  if (!authState.isAuthenticated) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Goals</Text>
+        </View>
+        <View style={styles.authContainer}>
+          <Text style={styles.authIcon}>🔐</Text>
+          <Text style={styles.authTitle}>Welcome to MindGarden</Text>
+          <Text style={styles.authSubtitle}>
+            Please log in to access your goals and use the AI assistant.
+          </Text>
+          <Button
+            title="Log In"
+            onPress={() => navigation.navigate('Login')}
+            style={styles.authButton}
+          />
+          <Button
+            title="Sign Up"
+            onPress={() => navigation.navigate('Signup')}
+            variant="outline"
+            style={styles.authButton}
+          />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Show loading state while fetching goals
+  if (goalsLoading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Goals</Text>
+        </View>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading goals...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Goals</Text>
-        <TouchableOpacity 
-          style={styles.addButton}
-          onPress={() => navigation.navigate('GoalForm')}
-        >
-          <Text style={styles.addButtonText}>Add Goal</Text>
-        </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-                 {/* AI Assistant Section */}
-         <View style={styles.aiSection}>
-           <View style={styles.aiHeader}>
-             <Text style={styles.aiIcon}>🪄</Text>
-             <Text style={styles.aiTitle}>AI Assistant</Text>
-           </View>
-           
-           {!showAiInput && !showAiReview ? (
-             <View style={styles.aiPrompt}>
-               <Text style={styles.aiPromptText}>Need help with your goals?</Text>
-               <Button
-                 title="Ask AI Assistant"
-                 onPress={() => setShowAiInput(true)}
-                 variant="outline"
-                 style={styles.aiButton}
-               />
-             </View>
-           ) : showAiInput ? (
-             <View style={styles.aiInputContainer}>
-               <Input
-                 placeholder="Describe your goal or ask for help..."
-                 value={aiInput}
-                 onChangeText={setAiInput}
-                 multiline
-                 numberOfLines={3}
-                 style={styles.aiInput}
-               />
-               <View style={styles.aiInputActions}>
-                 <Button
-                   title="Cancel"
-                   onPress={() => {
-                     setShowAiInput(false);
-                     setAiInput('');
-                   }}
-                   variant="secondary"
-                   style={styles.aiCancelButton}
-                 />
-                 <Button
-                   title={loading ? "Thinking..." : "Ask AI"}
-                   onPress={handleAiSubmit}
-                   loading={loading}
-                   style={styles.aiSubmitButton}
-                 />
-               </View>
-             </View>
-           ) : showAiReview && aiSuggestion ? (
-             <View style={styles.aiReviewContainer}>
-               <Text style={styles.aiReviewTitle}>AI Suggestion</Text>
-               
-               <View style={styles.suggestionCard}>
-                 <Text style={styles.suggestionGoalTitle}>{aiSuggestion.title}</Text>
-                 <Text style={styles.suggestionGoalDescription}>{aiSuggestion.description}</Text>
-                 
-                                   <Text style={styles.milestonesTitle}>Suggested Milestones & Steps:</Text>
-                  {aiSuggestion.milestones.map((milestone, index) => (
-                    <View key={index} style={styles.suggestionMilestone}>
-                      <Text style={styles.milestoneNumber}>{index + 1}.</Text>
-                      <View style={styles.milestoneContent}>
-                        <Text style={styles.milestoneTitle}>{milestone.title}</Text>
-                        <Text style={styles.milestoneDescription}>{milestone.description}</Text>
-                        {milestone.steps && milestone.steps.length > 0 && (
-                          <View style={styles.stepsContainer}>
-                            {milestone.steps.map((step, stepIndex) => (
-                              <View key={stepIndex} style={styles.suggestionStep}>
-                                <Text style={styles.stepNumber}>•</Text>
-                                <Text style={styles.stepTitle}>{step.title}</Text>
-                              </View>
-                            ))}
-                          </View>
-                        )}
-                      </View>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* AI Assistant Section */}
+        <View style={styles.aiSection}>
+          <View style={styles.aiHeader}>
+            <Text style={styles.aiIcon}>🪄</Text>
+            <Text style={styles.aiTitle}>AI Assistant</Text>
+          </View>
+          
+          {!showAiInput && !showAiReview ? (
+            <View style={styles.aiPrompt}>
+              <Text style={styles.aiPromptText}>Need help with your goals?</Text>
+              <Button
+                title="Ask AI Assistant"
+                onPress={() => setShowAiInput(true)}
+                variant="outline"
+                style={styles.aiButton}
+              />
+            </View>
+          ) : showAiInput ? (
+            <View style={styles.aiInputContainer}>
+              <Input
+                placeholder="Describe your goal or ask for help..."
+                value={aiInput}
+                onChangeText={setAiInput}
+                multiline
+                numberOfLines={3}
+                style={styles.aiInput}
+              />
+              <View style={styles.aiInputActions}>
+                <Button
+                  title="Cancel"
+                  onPress={() => {
+                    setShowAiInput(false);
+                    setAiInput('');
+                  }}
+                  variant="secondary"
+                  style={styles.aiCancelButton}
+                />
+                <Button
+                  title={loading ? "Thinking..." : "Ask AI"}
+                  onPress={handleAiSubmit}
+                  loading={loading}
+                  style={styles.aiSubmitButton}
+                />
+              </View>
+            </View>
+          ) : showAiReview && aiSuggestion ? (
+            <View style={styles.aiReviewContainer}>
+              <Text style={styles.aiReviewTitle}>AI Suggestion</Text>
+              
+              <View style={styles.suggestionCard}>
+                <Text style={styles.suggestionGoalTitle}>{aiSuggestion.title}</Text>
+                <Text style={styles.suggestionGoalDescription}>{aiSuggestion.description}</Text>
+                
+                <Text style={styles.milestonesTitle}>Suggested Milestones & Steps:</Text>
+                {aiSuggestion.milestones.map((milestone, index) => (
+                  <View key={index} style={styles.suggestionMilestone}>
+                    <Text style={styles.milestoneNumber}>{index + 1}.</Text>
+                    <View style={styles.milestoneContent}>
+                      <Text style={styles.milestoneTitle}>{milestone.title}</Text>
+                      <Text style={styles.milestoneDescription}>{milestone.description}</Text>
+                      {milestone.steps && milestone.steps.length > 0 && (
+                        <View style={styles.stepsContainer}>
+                          {milestone.steps.map((step, stepIndex) => (
+                            <View key={stepIndex} style={styles.suggestionStep}>
+                              <Text style={styles.stepNumber}>•</Text>
+                              <Text style={styles.stepTitle}>{step.title}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
                     </View>
-                  ))}
-               </View>
-               
-               <View style={styles.aiReviewActions}>
-                 <Button
-                   title="Accept"
-                   onPress={handleAcceptSuggestion}
-                   style={styles.acceptButton}
-                 />
-                 <Button
-                   title="Re-do"
-                   onPress={handleRedoSuggestion}
-                   variant="outline"
-                   style={styles.redoButton}
-                 />
-                 <Button
-                   title="Cancel"
-                   onPress={handleCancelSuggestion}
-                   variant="secondary"
-                   style={styles.cancelButton}
-                 />
-               </View>
-             </View>
-           ) : null}
-         </View>
+                  </View>
+                ))}
+              </View>
+              
+              <View style={styles.aiReviewActions}>
+                <Button
+                  title="Accept & Edit"
+                  onPress={() => {
+                    handleAcceptSuggestion();
+                    // Navigate to edit screen with the new goal
+                    navigation.navigate('GoalForm', { 
+                      editMode: true, 
+                      goalData: aiSuggestion 
+                    });
+                  }}
+                  style={styles.acceptButton}
+                />
+                <Button
+                  title="Accept As-Is"
+                  onPress={handleAcceptSuggestion}
+                  variant="outline"
+                  style={styles.acceptAsIsButton}
+                />
+                <Button
+                  title="Re-do"
+                  onPress={handleRedoSuggestion}
+                  variant="outline"
+                  style={styles.redoButton}
+                />
+                <Button
+                  title="Cancel"
+                  onPress={handleCancelSuggestion}
+                  variant="secondary"
+                  style={styles.cancelButton}
+                />
+              </View>
+            </View>
+          ) : null}
+        </View>
 
         {/* Goals Section */}
         <View style={styles.goalsSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Active Goals ({goals.length})</Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowGoalsModal(true)}>
               <Text style={styles.viewAllText}>View All</Text>
             </TouchableOpacity>
           </View>
@@ -511,11 +643,11 @@ export default function GoalsScreen({ navigation }: any) {
               <Text style={styles.emptyStateIcon}>🎯</Text>
               <Text style={styles.emptyStateTitle}>No goals yet</Text>
               <Text style={styles.emptyStateText}>
-                Start by creating your first goal or ask the AI assistant for help!
+                Start by asking the AI assistant to help you create your first goal!
               </Text>
               <Button
-                title="Create Your First Goal"
-                onPress={() => navigation.navigate('GoalForm')}
+                title="Ask AI Assistant"
+                onPress={() => setShowAiInput(true)}
                 style={styles.emptyStateButton}
               />
             </View>
@@ -536,6 +668,15 @@ export default function GoalsScreen({ navigation }: any) {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Goals List Modal */}
+      <GoalsListModal
+        visible={showGoalsModal}
+        onClose={() => setShowGoalsModal(false)}
+        goals={goals}
+        onGoalPress={handleGoalPress}
+        onGoalDelete={handleGoalDelete}
+      />
     </SafeAreaView>
   );
 }
@@ -558,20 +699,12 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
   },
-  addButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-  },
-  addButtonText: {
-    color: colors.secondary,
-    fontWeight: typography.fontWeight.bold,
-    fontSize: typography.fontSize.sm,
-  },
   content: {
     flex: 1,
     padding: spacing.md,
+  },
+  scrollContent: {
+    paddingBottom: spacing.xl * 2, // Extra padding for system navigation
   },
   aiSection: {
     backgroundColor: colors.surface,
@@ -707,16 +840,24 @@ const styles = StyleSheet.create({
   aiReviewActions: {
     flexDirection: 'row',
     gap: spacing.sm,
+    flexWrap: 'wrap',
   },
   acceptButton: {
     flex: 1,
     backgroundColor: colors.success,
+    minWidth: '45%',
+  },
+  acceptAsIsButton: {
+    flex: 1,
+    minWidth: '45%',
   },
   redoButton: {
     flex: 1,
+    minWidth: '45%',
   },
   cancelButton: {
     flex: 1,
+    minWidth: '45%',
   },
   goalsSection: {
     marginBottom: spacing.lg,
@@ -873,5 +1014,51 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     color: colors.primary,
     fontWeight: typography.fontWeight.medium as any,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.md,
+  },
+  loadingText: {
+    fontSize: typography.fontSize.lg,
+    color: colors.text.secondary,
+  },
+  debugText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    marginTop: spacing.sm,
+  },
+  debugButton: {
+    marginTop: spacing.sm,
+  },
+  authContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.md,
+    backgroundColor: colors.background,
+  },
+  authIcon: {
+    fontSize: 60,
+    marginBottom: spacing.sm,
+  },
+  authTitle: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+  },
+  authSubtitle: {
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+    paddingHorizontal: spacing.lg,
+  },
+  authButton: {
+    minWidth: 200,
+    marginBottom: spacing.sm,
   },
 });

@@ -7,7 +7,7 @@ export type RootStackParamList = {
 };
 
 export type MainTabParamList = {
-  AIChat: undefined;
+  AIChat: { initialMessage?: string } | undefined;
   Goals: undefined;
   Tasks: undefined;
   Calendar: undefined;

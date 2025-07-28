@@ -128,7 +128,18 @@ export async function getGoals(req, res) {
 }
 
 export async function getGoalById(req, res) {
-  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+  // Get the JWT from the request
+  const token = req.headers.authorization?.split(' ')[1];
+  
+  // Create Supabase client with the JWT
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  });
+  
   const user_id = req.user.id;
   const { id } = req.params;
   const { data, error } = await supabase
@@ -150,7 +161,7 @@ export async function getGoalById(req, res) {
 export async function updateGoal(req, res) {
   const user_id = req.user.id;
   const { id } = req.params;
-  const { title, description, target_completion_date, completed, category } = req.body;
+  const { title, description, target_completion_date, completed, category, milestones } = req.body;
   
   // Get the JWT from the request
   const token = req.headers.authorization?.split(' ')[1];
@@ -164,18 +175,86 @@ export async function updateGoal(req, res) {
     }
   });
   
-  const { data, error } = await supabase
-    .from('goals')
-    .update({ title, description, target_completion_date, completed, category })
-    .eq('id', id)
-    .eq('user_id', user_id)
-    .select()
-    .single();
-    
-  if (error) {
-    return res.status(400).json({ error: error.message });
+  try {
+    // Update the goal itself
+    const { data: goalData, error: goalError } = await supabase
+      .from('goals')
+      .update({ title, description, target_completion_date, completed, category })
+      .eq('id', id)
+      .eq('user_id', user_id)
+      .select()
+      .single();
+      
+    if (goalError) {
+      return res.status(400).json({ error: goalError.message });
+    }
+
+    // If milestones are provided, update them
+    if (milestones && Array.isArray(milestones)) {
+      for (const milestone of milestones) {
+        if (milestone.id) {
+          // Update existing milestone
+          const { error: milestoneError } = await supabase
+            .from('milestones')
+            .update({
+              title: milestone.title,
+              completed: milestone.completed,
+              order: milestone.order || 0
+            })
+            .eq('id', milestone.id)
+            .eq('goal_id', id);
+            
+          if (milestoneError) {
+            console.error('Error updating milestone:', milestoneError);
+          }
+
+          // Update steps for this milestone
+          if (milestone.steps && Array.isArray(milestone.steps)) {
+            for (const step of milestone.steps) {
+              if (step.id) {
+                const { error: stepError } = await supabase
+                  .from('steps')
+                  .update({
+                    text: step.text,
+                    completed: step.completed,
+                    order: step.order || 0
+                  })
+                  .eq('id', step.id)
+                  .eq('milestone_id', milestone.id);
+                  
+                if (stepError) {
+                  console.error('Error updating step:', stepError);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Fetch the updated goal with all its data
+    const { data: updatedGoal, error: fetchError } = await supabase
+      .from('goals')
+      .select(`
+        *,
+        milestones (
+          *,
+          steps (*)
+        )
+      `)
+      .eq('id', id)
+      .eq('user_id', user_id)
+      .single();
+
+    if (fetchError) {
+      return res.status(400).json({ error: fetchError.message });
+    }
+
+    res.json(updatedGoal);
+  } catch (error) {
+    console.error('Error updating goal:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
-  res.json(data);
 }
 
 export async function deleteGoal(req, res) {
@@ -710,4 +789,35 @@ export async function lookupStep(req, res) {
   if (error) return res.status(404).json({ error: error.message });
 
   res.json(step);
+} 
+
+export async function generateGoalBreakdown(req, res) {
+  const { title, description } = req.body;
+  const user_id = req.user.id;
+  
+  // Get the JWT from the request
+  const token = req.headers.authorization?.split(' ')[1];
+  
+  // Create Supabase client with the JWT
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  });
+  
+  try {
+    // Import the Gemini service
+    const { default: GeminiService } = await import('../utils/geminiService.js');
+    const geminiService = new GeminiService();
+    
+    // Generate goal breakdown using AI
+    const breakdown = await geminiService.generateGoalBreakdown(title, description);
+    
+    res.status(200).json(breakdown);
+  } catch (error) {
+    console.error('Error generating goal breakdown:', error);
+    return res.status(500).json({ error: 'Failed to generate goal breakdown' });
+  }
 } 

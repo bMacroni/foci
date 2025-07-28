@@ -1,87 +1,141 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../../themes/colors';
 import { typography } from '../../themes/typography';
 import { spacing, borderRadius } from '../../themes/spacing';
 import { Input, Button } from '../../components/common';
+import { goalsAPI } from '../../services/api';
 
 interface Milestone {
   id: string;
   title: string;
-  description: string;
+  description?: string;
   completed: boolean;
+  steps?: Array<{
+    id: string;
+    text: string;
+    completed: boolean;
+    order: number;
+  }>;
 }
 
 export default function GoalFormScreen({ navigation, route }: any) {
-  const isEditing = route.params?.goalId;
+  const goalId = route.params?.goalId;
+  const isEditing = !!goalId;
   
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [showAiHelp, setShowAiHelp] = useState(false);
-  const [aiInput, setAiInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(isEditing);
+
+  // Load existing goal data when editing
+  useEffect(() => {
+    if (isEditing && goalId) {
+      loadExistingGoal();
+    }
+  }, [goalId]);
+
+  const loadExistingGoal = async () => {
+    try {
+      setInitialLoading(true);
+      const goalData = await goalsAPI.getGoalById(goalId);
+      
+      setTitle(goalData.title);
+      setDescription(goalData.description);
+      
+      // Transform backend milestone format to UI format
+      const uiMilestones: Milestone[] = (goalData.milestones || []).map(milestone => ({
+        id: milestone.id,
+        title: milestone.title,
+        description: '', // Backend doesn't have description field
+        completed: milestone.completed,
+        steps: milestone.steps,
+      }));
+      
+      setMilestones(uiMilestones);
+    } catch (error) {
+      console.error('Error loading existing goal:', error);
+      Alert.alert('Error', 'Failed to load goal data. Please try again.');
+      navigation.goBack();
+    } finally {
+      setInitialLoading(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!title.trim()) {
-      // TODO: Show error message
+      Alert.alert('Error', 'Please enter a goal title.');
       return;
     }
 
     setLoading(true);
     
-    // TODO: Save goal to backend
-    const goalData = {
-      title: title.trim(),
-      description: description.trim(),
-      milestones: milestones.map(m => ({ ...m, id: undefined })),
-    };
+    try {
+      const goalData = {
+        title: title.trim(),
+        description: description.trim(),
+        milestones: milestones.map(m => ({
+          id: m.id,
+          title: m.title,
+          completed: m.completed,
+          order: 0, // Will be set by backend
+          steps: m.steps || [],
+        })),
+      };
 
-    console.log('Saving goal:', goalData);
-    
-    // Simulate API call
-    setTimeout(() => {
-      setLoading(false);
+      if (isEditing) {
+        // Update existing goal
+        await goalsAPI.updateGoal(goalId, goalData);
+        Alert.alert('Success', 'Goal updated successfully!');
+      } else {
+        // Create new goal
+        await goalsAPI.createGoal(goalData as any);
+        Alert.alert('Success', 'Goal created successfully!');
+      }
+      
       navigation.goBack();
-    }, 1000);
+    } catch (error) {
+      console.error('Error saving goal:', error);
+      Alert.alert('Error', 'Failed to save goal. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleAiSubmit = async () => {
-    if (!aiInput.trim()) return;
+    if (!title.trim()) return;
     
     setLoading(true);
-    // TODO: Integrate with AI service to generate milestones
-    console.log('AI Milestone Request:', aiInput);
     
-    // Simulate AI response with sample milestones
-    setTimeout(() => {
-      const aiMilestones: Milestone[] = [
-        {
-          id: Date.now().toString(),
-          title: 'Research and Planning',
-          description: 'Gather information and create a detailed plan',
-          completed: false,
-        },
-        {
-          id: (Date.now() + 1).toString(),
-          title: 'Take First Steps',
-          description: 'Begin implementation with small, manageable tasks',
-          completed: false,
-        },
-        {
-          id: (Date.now() + 2).toString(),
-          title: 'Review and Adjust',
-          description: 'Evaluate progress and make necessary adjustments',
-          completed: false,
-        },
-      ];
+    try {
+      // Import the API service
+      const { goalsAPI } = await import('../../services/api');
+      
+      // Call the AI breakdown generation API
+      const breakdown = await goalsAPI.generateBreakdown({
+        title: title.trim(),
+        description: description.trim(),
+      });
+      
+      // Transform the API response to match our UI structure
+      const aiMilestones: Milestone[] = breakdown.milestones.map((milestone, index) => ({
+        id: Date.now().toString() + index,
+        title: milestone.title,
+        description: `AI-generated milestone: ${milestone.title}`,
+        completed: false,
+      }));
       
       setMilestones(aiMilestones);
-      setAiInput('');
       setShowAiHelp(false);
       setLoading(false);
-    }, 2000);
+    } catch (error) {
+      console.error('Error generating AI breakdown:', error);
+      setLoading(false);
+      Alert.alert('Error', 'Failed to generate AI breakdown. Please try again.');
+    }
   };
 
   const addMilestone = () => {
@@ -110,6 +164,29 @@ export default function GoalFormScreen({ navigation, route }: any) {
     ));
   };
 
+  if (initialLoading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Text style={styles.backButton}>Cancel</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>
+            {isEditing ? 'Edit Goal' : 'New Goal'}
+          </Text>
+          <TouchableOpacity disabled={true}>
+            <Text style={[styles.saveButton, styles.saveButtonDisabled]}>
+              Loading...
+            </Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading goal data...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
@@ -126,7 +203,11 @@ export default function GoalFormScreen({ navigation, route }: any) {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
         {/* Goal Details */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Goal Details</Text>
@@ -152,30 +233,41 @@ export default function GoalFormScreen({ navigation, route }: any) {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Milestones</Text>
-            <TouchableOpacity onPress={() => setShowAiHelp(true)}>
-              <Text style={styles.aiHelpText}>🤖 AI Help</Text>
-            </TouchableOpacity>
           </View>
+          
+          {/* AI vs Manual Options - Only show for new goals */}
+          {!isEditing && (
+            <View style={styles.milestoneOptions}>
+              <TouchableOpacity 
+                style={styles.aiOptionButton}
+                onPress={() => setShowAiHelp(true)}
+              >
+                <Text style={styles.aiOptionIcon}>🤖</Text>
+                <Text style={styles.aiOptionTitle}>AI Generate</Text>
+                <Text style={styles.aiOptionSubtitle}>Let AI break down your goal</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.manualOptionButton}
+                onPress={addMilestone}
+              >
+                <Text style={styles.manualOptionIcon}>✏️</Text>
+                <Text style={styles.manualOptionTitle}>Manual Entry</Text>
+                <Text style={styles.manualOptionSubtitle}>Create milestones yourself</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {showAiHelp && (
             <View style={styles.aiSection}>
               <Text style={styles.aiPromptText}>
-                Describe your goal and I'll help you break it down into milestones:
+                Using your goal "{title}" to generate milestones...
               </Text>
-              <Input
-                placeholder="e.g., I want to learn React Native and build a mobile app..."
-                value={aiInput}
-                onChangeText={setAiInput}
-                multiline
-                numberOfLines={3}
-                style={styles.aiInput}
-              />
               <View style={styles.aiActions}>
                 <Button
                   title="Cancel"
                   onPress={() => {
                     setShowAiHelp(false);
-                    setAiInput('');
                   }}
                   variant="secondary"
                   style={styles.aiCancelButton}
@@ -236,6 +328,19 @@ export default function GoalFormScreen({ navigation, route }: any) {
                     numberOfLines={2}
                     style={styles.milestoneDescriptionInput}
                   />
+                  
+                  {/* Steps for this milestone */}
+                  {milestone.steps && milestone.steps.length > 0 && (
+                    <View style={styles.stepsContainer}>
+                      <Text style={styles.stepsTitle}>Steps:</Text>
+                      {milestone.steps.map((step, stepIndex) => (
+                        <View key={step.id} style={styles.stepItem}>
+                          <Text style={styles.stepNumber}>{stepIndex + 1}.</Text>
+                          <Text style={styles.stepText}>{step.text}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
                 </View>
               ))}
             </View>
@@ -288,6 +393,18 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: spacing.md,
+  },
+  scrollContent: {
+    paddingBottom: spacing.xl * 2, // Extra padding for system navigation
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: typography.fontSize.lg,
+    color: colors.text.secondary,
   },
   section: {
     marginBottom: spacing.xl,
@@ -413,5 +530,86 @@ const styles = StyleSheet.create({
   },
   addMilestoneButton: {
     marginTop: spacing.md,
+  },
+  milestoneOptions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  aiOptionButton: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  manualOptionButton: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border.medium,
+  },
+  aiOptionIcon: {
+    fontSize: 24,
+    marginBottom: spacing.xs,
+  },
+  aiOptionTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.secondary,
+    marginBottom: spacing.xs,
+  },
+  aiOptionSubtitle: {
+    fontSize: typography.fontSize.xs,
+    color: colors.secondary,
+    textAlign: 'center',
+    opacity: 0.8,
+  },
+  manualOptionIcon: {
+    fontSize: 24,
+    marginBottom: spacing.xs,
+  },
+  manualOptionTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+  },
+  manualOptionSubtitle: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    textAlign: 'center',
+  },
+  stepsContainer: {
+    marginTop: spacing.sm,
+    paddingLeft: spacing.md,
+  },
+  stepsTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+  },
+  stepItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: spacing.xs,
+  },
+  stepNumber: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.secondary,
+    marginRight: spacing.xs,
+    minWidth: 20,
+  },
+  stepText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.primary,
+    flex: 1,
   },
 }); 

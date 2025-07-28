@@ -5,7 +5,8 @@ import {
   getGoals,
   getGoalById,
   updateGoal,
-  deleteGoal
+  deleteGoal,
+  generateGoalBreakdown
 } from '../controllers/goalsController.js';
 import {
   createMilestone,
@@ -32,6 +33,7 @@ router.get('/', requireAuth, getGoals);
 router.get('/:id', requireAuth, getGoalById);
 router.put('/:id', requireAuth, updateGoal);
 router.delete('/:id', requireAuth, deleteGoal);
+router.post('/generate-breakdown', requireAuth, generateGoalBreakdown);
 
 // Milestone endpoints
 router.post('/:goalId/milestones', requireAuth, createMilestone);

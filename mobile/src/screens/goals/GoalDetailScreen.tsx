@@ -1,42 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../../themes/colors';
 import { typography } from '../../themes/typography';
 import { spacing, borderRadius } from '../../themes/spacing';
 import { Button } from '../../components/common';
+import { goalsAPI } from '../../services/api';
 
-interface Step {
-  id: string;
-  title: string;
-  description: string;
-  completed: boolean;
-  order: number;
-}
-
-interface Milestone {
-  id: string;
-  title: string;
-  description: string;
-  completed: boolean;
-  order: number;
-  steps: Step[];
-}
-
-interface Goal {
-  id: string;
-  title: string;
-  description: string;
-  completedMilestones: number;
-  totalMilestones: number;
-  completedSteps: number;
-  totalSteps: number;
-  nextMilestone: string;
-  nextStep: string;
-  status: 'active' | 'completed' | 'paused';
-  createdAt: Date;
-  milestones: Milestone[];
-}
+// Use the Goal interface from the API
+type Goal = Awaited<ReturnType<typeof goalsAPI.getGoalById>>;
 
 export default function GoalDetailScreen({ navigation, route }: any) {
   const { goalId } = route.params;
@@ -44,96 +16,97 @@ export default function GoalDetailScreen({ navigation, route }: any) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // TODO: Fetch goal details from backend
-    // For now, simulate loading with mock data
-    setTimeout(() => {
-      setGoal({
-        id: goalId,
-        title: 'Learn React Native',
-        description: 'Master mobile app development with React Native by building real projects and understanding core concepts.',
-        completedMilestones: 2,
-        totalMilestones: 3,
-        completedSteps: 8,
-        totalSteps: 12,
-        nextMilestone: 'Build first app',
-        nextStep: 'Create navigation structure',
-        status: 'active',
-        createdAt: new Date('2024-01-15'),
-        milestones: [
-          {
-            id: '1',
-            title: 'Learn React Native Basics',
-            description: 'Understand components, props, state, and navigation',
-            completed: true,
-            order: 1,
-            steps: [
-              { id: 's1', title: 'Install React Native', description: 'Set up development environment', completed: true, order: 1 },
-              { id: 's2', title: 'Learn Components', description: 'Understand React components', completed: true, order: 2 },
-              { id: 's3', title: 'Study Props & State', description: 'Master data flow concepts', completed: true, order: 3 },
-              { id: 's4', title: 'Practice Navigation', description: 'Learn stack and tab navigation', completed: true, order: 4 },
-            ],
-          },
-          {
-            id: '2',
-            title: 'Build Simple Components',
-            description: 'Create reusable UI components and screens',
-            completed: true,
-            order: 2,
-            steps: [
-              { id: 's5', title: 'Create Button Component', description: 'Build reusable button with variants', completed: true, order: 1 },
-              { id: 's6', title: 'Design Input Fields', description: 'Create styled input components', completed: true, order: 2 },
-              { id: 's7', title: 'Build Card Layouts', description: 'Create card-based UI components', completed: true, order: 3 },
-              { id: 's8', title: 'Implement Lists', description: 'Create scrollable list components', completed: true, order: 4 },
-            ],
-          },
-          {
-            id: '3',
-            title: 'Build First App',
-            description: 'Create a complete mobile application',
-            completed: false,
-            order: 3,
-            steps: [
-              { id: 's9', title: 'Plan App Structure', description: 'Design app architecture and screens', completed: true, order: 1 },
-              { id: 's10', title: 'Create navigation structure', description: 'Set up app navigation flow', completed: false, order: 2 },
-              { id: 's11', title: 'Implement core features', description: 'Build main app functionality', completed: false, order: 3 },
-              { id: 's12', title: 'Test and deploy', description: 'Final testing and app store deployment', completed: false, order: 4 },
-            ],
-          },
-        ],
-      });
-      setLoading(false);
-    }, 1000);
-  }, [goalId]);
+    const fetchGoal = async () => {
+      try {
+        setLoading(true);
+        const goalData = await goalsAPI.getGoalById(goalId);
+        setGoal(goalData);
+      } catch (error) {
+        console.error('🎯 GoalDetailScreen: Error fetching goal:', error);
+        Alert.alert(
+          'Error',
+          'Failed to load goal details. Please try again.',
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const toggleMilestone = (milestoneId: string) => {
-    if (!goal) return;
+    fetchGoal();
+  }, [goalId, navigation]);
+
+  const toggleMilestone = async (milestoneId: string) => {
+    if (!goal || !goal.milestones) return;
     
-    setGoal({
-      ...goal,
-      milestones: goal.milestones.map(m => 
-        m.id === milestoneId ? { ...m, completed: !m.completed } : m
-      ),
-    });
+    try {
+      const milestone = goal.milestones.find((m: any) => m.id === milestoneId);
+      if (!milestone) return;
+
+      const newCompleted = !milestone.completed;
+      
+      // Update in backend
+      await goalsAPI.updateMilestone(milestoneId, { completed: newCompleted });
+      
+      // Update local state
+      setGoal({
+        ...goal,
+        milestones: goal.milestones.map((m: any) => 
+          m.id === milestoneId ? { ...m, completed: newCompleted } : m
+        ),
+      });
+    } catch (error) {
+      console.error('Error updating milestone:', error);
+      Alert.alert('Error', 'Failed to update milestone. Please try again.');
+    }
   };
 
-  const toggleStep = (milestoneId: string, stepId: string) => {
-    if (!goal) return;
-    
-    setGoal({
-      ...goal,
-      milestones: goal.milestones.map(m => 
-        m.id === milestoneId ? {
-          ...m,
-          steps: m.steps.map(s => 
-            s.id === stepId ? { ...s, completed: !s.completed } : s
-          )
-        } : m
-      ),
-    });
+  const toggleStep = async (milestoneId: string, stepId: string) => {
+    if (!goal || !goal.milestones) return;
+    try {
+      const milestone = goal.milestones.find(m => m.id === milestoneId);
+      const step = milestone?.steps?.find(s => s.id === stepId);
+      if (!step) return;
+
+      const newCompleted = !step.completed;
+      
+      // Update in backend
+      await goalsAPI.updateStep(stepId, { completed: newCompleted });
+      
+      // Update local state
+      setGoal({
+        ...goal,
+        milestones: goal.milestones.map(m => 
+          m.id === milestoneId ? {
+            ...m,
+            steps: m.steps?.map(s => 
+              s.id === stepId ? { ...s, completed: newCompleted } : s
+            ) || []
+          } : m
+        ),
+      });
+    } catch (error) {
+      console.error('Error updating step:', error);
+      Alert.alert('Error', 'Failed to update step. Please try again.');
+    }
   };
 
   const getProgressPercentage = (completed: number, total: number) => {
     return total > 0 ? (completed / total) * 100 : 0;
+  };
+
+  const calculateProgress = () => {
+    if (!goal || !goal.milestones) return { completedMilestones: 0, totalMilestones: 0, completedSteps: 0, totalSteps: 0 };
+    
+    const totalMilestones = goal.milestones.length;
+    const completedMilestones = goal.milestones.filter(m => m.completed).length;
+    
+    const totalSteps = goal.milestones.reduce((sum, m) => sum + (m.steps?.length || 0), 0);
+    const completedSteps = goal.milestones.reduce((sum, m) => 
+      sum + (m.steps?.filter(s => s.completed).length || 0), 0
+    );
+    
+    return { completedMilestones, totalMilestones, completedSteps, totalSteps };
   };
 
   const renderProgressBar = (completed: number, total: number, type: 'milestones' | 'steps') => {
@@ -185,30 +158,46 @@ export default function GoalDetailScreen({ navigation, route }: any) {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
         {/* Goal Header */}
         <View style={styles.goalHeader}>
           <View style={styles.goalTitleContainer}>
             <Text style={styles.goalTitle}>{goal.title}</Text>
             <View style={[
               styles.statusIndicator,
-              { backgroundColor: goal.status === 'active' ? colors.success : colors.warning }
+              { backgroundColor: goal.completed ? colors.success : colors.warning }
             ]} />
           </View>
           
           <Text style={styles.goalDescription}>{goal.description}</Text>
           
-          {renderProgressBar(goal.completedMilestones, goal.totalMilestones, 'milestones')}
-          {renderProgressBar(goal.completedSteps, goal.totalSteps, 'steps')}
+          {(() => {
+            const progress = calculateProgress();
+            return (
+              <>
+                {renderProgressBar(progress.completedMilestones, progress.totalMilestones, 'milestones')}
+                {renderProgressBar(progress.completedSteps, progress.totalSteps, 'steps')}
+              </>
+            );
+          })()}
         </View>
 
         {/* Next Milestone */}
         <View style={styles.nextMilestoneSection}>
           <Text style={styles.sectionTitle}>Next Milestone</Text>
           <View style={styles.nextMilestoneCard}>
-            <Text style={styles.nextMilestoneTitle}>{goal.nextMilestone}</Text>
+            <Text style={styles.nextMilestoneTitle}>
+              {goal.milestones?.find(m => !m.completed)?.title || 'All milestones completed!'}
+            </Text>
             <Text style={styles.nextMilestoneDescription}>
-              This is your next step to achieve your goal
+              {goal.milestones?.find(m => !m.completed) 
+                ? 'This is your next step to achieve your goal'
+                : 'Congratulations! You\'ve completed all milestones.'
+              }
             </Text>
           </View>
         </View>
@@ -217,7 +206,7 @@ export default function GoalDetailScreen({ navigation, route }: any) {
         <View style={styles.milestonesSection}>
           <Text style={styles.sectionTitle}>All Milestones</Text>
           
-          {goal.milestones.map((milestone, index) => (
+          {goal.milestones?.map((milestone, index) => (
             <View key={milestone.id} style={styles.milestoneItem}>
               <View style={styles.milestoneHeader}>
                 <TouchableOpacity
@@ -238,12 +227,6 @@ export default function GoalDetailScreen({ navigation, route }: any) {
                     milestone.completed && styles.milestoneTitleCompleted
                   ]}>
                     {index + 1}. {milestone.title}
-                  </Text>
-                  <Text style={[
-                    styles.milestoneDescription,
-                    milestone.completed && styles.milestoneDescriptionCompleted
-                  ]}>
-                    {milestone.description}
                   </Text>
                   
                   {/* Steps */}
@@ -268,13 +251,7 @@ export default function GoalDetailScreen({ navigation, route }: any) {
                               styles.stepTitle,
                               step.completed && styles.stepTitleCompleted
                             ]}>
-                              {stepIndex + 1}. {step.title}
-                            </Text>
-                            <Text style={[
-                              styles.stepDescription,
-                              step.completed && styles.stepDescriptionCompleted
-                            ]}>
-                              {step.description}
+                              {stepIndex + 1}. {step.text}
                             </Text>
                           </View>
                         </View>
@@ -291,7 +268,9 @@ export default function GoalDetailScreen({ navigation, route }: any) {
         <View style={styles.actionsSection}>
           <Button
             title="Ask AI for Help"
-            onPress={() => navigation.navigate('AIChat')}
+            onPress={() => navigation.navigate('AIChat', { 
+              initialMessage: `Can you help me with the ${goal?.title || 'goal'}?`
+            })}
             variant="outline"
             style={styles.aiHelpButton}
           />
@@ -359,6 +338,9 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: spacing.md,
+  },
+  scrollContent: {
+    paddingBottom: spacing.xl * 2, // Extra padding for system navigation
   },
   goalHeader: {
     marginBottom: spacing.xl,
