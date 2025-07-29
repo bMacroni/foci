@@ -230,6 +230,11 @@ export async function scheduleSingleTask(userId, taskId, token) {
     throw new Error('Task not found');
   }
 
+  // Check if task is completed - don't schedule completed tasks
+  if (task.status === 'completed') {
+    throw new Error('Cannot schedule completed tasks');
+  }
+
   // Get user scheduling preferences
   const { data: preferences, error: prefsError } = await supabase
     .from('user_scheduling_preferences')

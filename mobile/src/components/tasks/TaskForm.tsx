@@ -9,6 +9,9 @@ import {
   Alert,
   Platform,
   Switch,
+  Modal,
+  FlatList,
+  Dimensions,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { colors } from '../../themes/colors';
@@ -48,6 +51,17 @@ interface TaskFormProps {
   loading?: boolean;
 }
 
+// Category options based on database schema
+const categoryOptions = [
+  { value: 'career', label: 'Career' },
+  { value: 'health', label: 'Health' },
+  { value: 'personal', label: 'Personal' },
+  { value: 'education', label: 'Education' },
+  { value: 'finance', label: 'Finance' },
+  { value: 'relationships', label: 'Relationships' },
+  { value: 'other', label: 'Other' },
+];
+
 export const TaskForm: React.FC<TaskFormProps> = ({
   task,
   goals = [],
@@ -74,6 +88,10 @@ export const TaskForm: React.FC<TaskFormProps> = ({
 
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+  const [showGoalDropdown, setShowGoalDropdown] = useState(false);
+  const [goalDropdownPosition, setGoalDropdownPosition] = useState({ x: 0, y: 0, width: 0 });
+  const [categoryDropdownPosition, setCategoryDropdownPosition] = useState({ x: 0, y: 0, width: 0 });
 
   useEffect(() => {
     if (task) {
@@ -209,254 +227,386 @@ export const TaskForm: React.FC<TaskFormProps> = ({
     );
   };
 
+  const getCategoryLabel = (category?: string) => {
+    if (!category) return 'Select category';
+    const option = categoryOptions.find(opt => opt.value === category);
+    return option?.label || category;
+  };
+
+  const handleCategorySelect = (category: string) => {
+    handleInputChange('category', category);
+    setShowCategoryDropdown(false);
+  };
+
+  const getGoalLabel = (goalId?: string) => {
+    if (!goalId) return 'Select a goal';
+    const goal = goals.find(g => g.id === goalId);
+    return goal?.title || 'Unknown Goal';
+  };
+
+  const handleGoalSelect = (goalId?: string) => {
+    handleInputChange('goal_id', goalId);
+    setShowGoalDropdown(false);
+  };
+
+  const goalOptions = [
+    { id: 'no-goal', title: 'No Goal', goalId: undefined },
+    ...goals.map(goal => ({ id: goal.id, title: goal.title, goalId: goal.id }))
+  ];
+
+  const handleGoalDropdownPress = (event: any) => {
+    // Close category dropdown if open
+    if (showCategoryDropdown) {
+      setShowCategoryDropdown(false);
+    }
+    
+    event.target.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
+      setGoalDropdownPosition({ x: pageX, y: pageY + height, width });
+      setShowGoalDropdown(!showGoalDropdown);
+    });
+  };
+
+  const handleCategoryDropdownPress = (event: any) => {
+    // Close goal dropdown if open
+    if (showGoalDropdown) {
+      setShowGoalDropdown(false);
+    }
+    
+    event.target.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
+      setCategoryDropdownPosition({ x: pageX, y: pageY + height, width });
+      setShowCategoryDropdown(!showCategoryDropdown);
+    });
+  };
+
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <View style={styles.content}>
-        <Text style={styles.title}>
-          {task ? 'Edit Task' : 'Create New Task'}
-        </Text>
+    <View style={styles.container}>
+      <ScrollView 
+        style={styles.scrollView} 
+        showsVerticalScrollIndicator={false}
+        scrollEnabled={!showCategoryDropdown && !showGoalDropdown}
+      >
+        <View style={styles.content}>
+          {/* Title */}
+          <View style={styles.field}>
+            <Text style={styles.label}>Title</Text>
+            <TextInput
+              style={styles.textInput}
+              value={formData.title}
+              onChangeText={(text) => handleInputChange('title', text)}
+              placeholder="Enter task title"
+              placeholderTextColor={colors.text.disabled}
+            />
+          </View>
 
-        {/* Title */}
-        <View style={styles.field}>
-          <Text style={styles.label}>Title *</Text>
-          <TextInput
-            style={styles.textInput}
-            value={formData.title}
-            onChangeText={(text) => handleInputChange('title', text)}
-            placeholder="Enter task title"
-            placeholderTextColor={colors.text.disabled}
-          />
-        </View>
+          {/* Description */}
+          <View style={styles.field}>
+            <Text style={styles.label}>Description</Text>
+            <TextInput
+              style={styles.textInput}
+              value={formData.description}
+              onChangeText={(text) => handleInputChange('description', text)}
+              placeholder="Enter task description"
+              placeholderTextColor={colors.text.disabled}
+              multiline
+              numberOfLines={3}
+            />
+          </View>
 
-        {/* Description */}
-        <View style={styles.field}>
-          <Text style={styles.label}>Description</Text>
-          <TextInput
-            style={[styles.textInput, styles.textArea]}
-            value={formData.description}
-            onChangeText={(text) => handleInputChange('description', text)}
-            placeholder="Enter task description"
-            placeholderTextColor={colors.text.disabled}
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-          />
-        </View>
-
-        {/* Status */}
-        <View style={styles.field}>
-          <Text style={styles.label}>Status</Text>
-          <View style={styles.segmentedControl}>
-            {(['not_started', 'in_progress', 'completed'] as const).map((status) => (
-              <TouchableOpacity
-                key={status}
-                style={[
-                  styles.segment,
-                  formData.status === status && {
-                    backgroundColor: getStatusColor(status),
-                  },
-                ]}
-                onPress={() => handleInputChange('status', status)}
-              >
-                <Text
+          {/* Status */}
+          <View style={styles.field}>
+            <Text style={styles.label}>Status</Text>
+            <View style={styles.segmentedControl}>
+              {(['not_started', 'in_progress', 'completed'] as const).map((status) => (
+                <TouchableOpacity
+                  key={status}
                   style={[
-                    styles.segmentText,
-                    formData.status === status && styles.segmentTextActive,
+                    styles.segment,
+                    formData.status === status && {
+                      backgroundColor: getStatusColor(status),
+                    },
                   ]}
+                  onPress={() => handleInputChange('status', status)}
                 >
-                  {status === 'not_started' ? 'Not Started' : 
-                   status === 'in_progress' ? 'In Progress' : 'Completed'}
+                  <Text
+                    style={[
+                      styles.segmentText,
+                      formData.status === status && styles.segmentTextActive,
+                    ]}
+                  >
+                    {status === 'not_started' ? 'Not Started' : 
+                     status === 'in_progress' ? 'In Progress' : 'Completed'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* Priority */}
+          <View style={styles.field}>
+            <Text style={styles.label}>Priority</Text>
+            <View style={styles.segmentedControl}>
+              {(['low', 'medium', 'high'] as const).map((priority) => (
+                <TouchableOpacity
+                  key={priority}
+                  style={[
+                    styles.segment,
+                    formData.priority === priority && {
+                      backgroundColor: getPriorityColor(priority),
+                    },
+                  ]}
+                  onPress={() => handleInputChange('priority', priority)}
+                >
+                  <Text
+                    style={[
+                      styles.segmentText,
+                      formData.priority === priority && styles.segmentTextActive,
+                    ]}
+                  >
+                    {priority.charAt(0).toUpperCase() + priority.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* Due Date */}
+          <View style={styles.field}>
+            <Text style={styles.label}>Due Date</Text>
+            <View style={styles.dateContainer}>
+              <TouchableOpacity
+                style={styles.dateButton}
+                onPress={() => setShowDatePicker(true)}
+              >
+                <Text style={styles.dateButtonText}>
+                  {selectedDate ? formatDate(selectedDate) : 'Select date'}
                 </Text>
               </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Priority */}
-        <View style={styles.field}>
-          <Text style={styles.label}>Priority</Text>
-          <View style={styles.segmentedControl}>
-            {(['low', 'medium', 'high'] as const).map((priority) => (
-              <TouchableOpacity
-                key={priority}
-                style={[
-                  styles.segment,
-                  formData.priority === priority && {
-                    backgroundColor: getPriorityColor(priority),
-                  },
-                ]}
-                onPress={() => handleInputChange('priority', priority)}
-              >
-                <Text
-                  style={[
-                    styles.segmentText,
-                    formData.priority === priority && styles.segmentTextActive,
-                  ]}
+              {selectedDate && (
+                <TouchableOpacity
+                  style={styles.clearDateButton}
+                  onPress={clearDueDate}
                 >
-                  {priority.charAt(0).toUpperCase() + priority.slice(1)}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Due Date */}
-        <View style={styles.field}>
-          <Text style={styles.label}>Due Date</Text>
-          <View style={styles.dateContainer}>
-            <TouchableOpacity
-              style={styles.dateButton}
-              onPress={() => setShowDatePicker(true)}
-            >
-              <Text style={styles.dateButtonText}>
-                {selectedDate ? formatDate(selectedDate) : 'Select date'}
-              </Text>
-            </TouchableOpacity>
-            {selectedDate && (
-              <TouchableOpacity
-                style={styles.clearDateButton}
-                onPress={clearDueDate}
-              >
-                <Text style={styles.clearDateText}>Clear</Text>
-              </TouchableOpacity>
+                  <Text style={styles.clearDateText}>Clear</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            {showDatePicker && (
+              <DateTimePicker
+                value={selectedDate || new Date()}
+                mode="date"
+                display="default"
+                onChange={handleDateChange}
+                minimumDate={new Date()}
+              />
             )}
           </View>
-          {showDatePicker && (
-            <DateTimePicker
-              value={selectedDate || new Date()}
-              mode="date"
-              display="default"
-              onChange={handleDateChange}
-              minimumDate={new Date()}
-            />
-          )}
-        </View>
 
-        {/* Category */}
-        <View style={styles.field}>
-          <Text style={styles.label}>Category</Text>
-          <TextInput
-            style={styles.textInput}
-            value={formData.category}
-            onChangeText={(text) => handleInputChange('category', text)}
-            placeholder="Enter category"
-            placeholderTextColor={colors.text.disabled}
-          />
-        </View>
-
-        {/* Goal */}
-        {goals.length > 0 && (
+          {/* Category */}
           <View style={styles.field}>
-            <Text style={styles.label}>Linked Goal</Text>
-            <View style={styles.pickerContainer}>
+            <Text style={styles.label}>Category</Text>
+            <View style={styles.dropdownContainer}>
               <TouchableOpacity
-                style={styles.pickerButton}
-                onPress={() => {
-                  // Show goal picker
-                  const goalOptions = [
-                    { label: 'No Goal', value: '' },
-                    ...goals.map(goal => ({ label: goal.title, value: goal.id })),
-                  ];
-                  
-                  Alert.alert(
-                    'Select Goal',
-                    'Choose a goal to link to this task',
-                    [
-                      ...goalOptions.map(option => ({
-                        text: option.label,
-                        onPress: () => handleInputChange('goal_id', option.value || undefined),
-                      })),
-                      { text: 'Cancel', style: 'cancel' },
-                    ]
-                  );
-                }}
+                style={styles.dropdownButton}
+                onPress={handleCategoryDropdownPress}
               >
-                <Text style={styles.pickerButtonText}>
-                  {formData.goal_id 
-                    ? goals.find(g => g.id === formData.goal_id)?.title || 'Unknown Goal'
-                    : 'Select a goal'
-                  }
+                <Text style={styles.dropdownButtonText}>
+                  {getCategoryLabel(formData.category)}
                 </Text>
+                <Icon 
+                  name={showCategoryDropdown ? "chevron-up" : "chevron-down"} 
+                  size={16} 
+                  color={colors.text.secondary} 
+                />
               </TouchableOpacity>
             </View>
           </View>
-        )}
 
-        {/* Estimated Duration */}
-        <View style={styles.field}>
-          <Text style={styles.label}>Estimated Duration (minutes)</Text>
-          <TextInput
-            style={styles.textInput}
-            value={formData.estimated_duration_minutes?.toString() || ''}
-            onChangeText={(text) => {
-              const value = parseInt(text) || undefined;
-              handleInputChange('estimated_duration_minutes', value);
-            }}
-            placeholder="Enter estimated duration"
-            placeholderTextColor={colors.text.disabled}
-            keyboardType="numeric"
-          />
-        </View>
-
-        {/* Auto-Scheduling Section */}
-        <View style={styles.autoScheduleSection}>
-          <Text style={styles.sectionTitle}>Auto-Scheduling</Text>
-          
-          {renderSwitch(
-            'Enable Auto-Scheduling',
-            formData.auto_schedule_enabled || false,
-            (value) => handleInputChange('auto_schedule_enabled', value),
-            'Automatically schedule this task based on your preferences'
-          )}
-
-          {formData.auto_schedule_enabled && (
-            <>
-              {/* Location */}
-              <View style={styles.field}>
-                <Text style={styles.label}>Location</Text>
-                <View style={styles.locationInputContainer}>
-                  <Icon name="location" size={16} color={colors.text.secondary} />
-                  <TextInput
-                    style={styles.locationInput}
-                    value={formData.location}
-                    onChangeText={(text) => handleInputChange('location', text)}
-                    placeholder="Enter location (optional)"
-                    placeholderTextColor={colors.text.disabled}
+          {/* Goal */}
+          {goals.length > 0 && (
+            <View style={styles.field}>
+              <Text style={styles.label}>Linked Goal</Text>
+              <View style={styles.dropdownContainer}>
+                <TouchableOpacity
+                  style={styles.dropdownButton}
+                  onPress={handleGoalDropdownPress}
+                >
+                  <Text style={styles.dropdownButtonText}>
+                    {getGoalLabel(formData.goal_id)}
+                  </Text>
+                  <Icon 
+                    name={showGoalDropdown ? "chevron-up" : "chevron-down"} 
+                    size={16} 
+                    color={colors.text.secondary} 
                   />
-                </View>
+                </TouchableOpacity>
               </View>
-
-              {/* Weather Dependency */}
-              {renderSwitch(
-                'Weather Dependent',
-                formData.weather_dependent || false,
-                (value) => handleInputChange('weather_dependent', value),
-                'Only schedule when weather is suitable for outdoor tasks'
-              )}
-
-              {/* Preferred Time Windows */}
-              {renderTimeWindowSelector()}
-            </>
+            </View>
           )}
-        </View>
 
-        {/* Action Buttons */}
-        <View style={styles.actions}>
-          <Button
-            title="Cancel"
-            onPress={onCancel}
-            variant="outline"
-            style={styles.cancelButton}
-          />
-          <Button
-            title={task ? 'Update Task' : 'Create Task'}
-            onPress={handleSave}
-            loading={loading}
-            style={styles.saveButton}
-          />
+          {/* Estimated Duration */}
+          <View style={styles.field}>
+            <Text style={styles.label}>Estimated Duration (minutes)</Text>
+            <TextInput
+              style={styles.textInput}
+              value={formData.estimated_duration_minutes?.toString() || ''}
+              onChangeText={(text) => {
+                const value = parseInt(text) || undefined;
+                handleInputChange('estimated_duration_minutes', value);
+              }}
+              placeholder="Enter estimated duration"
+              placeholderTextColor={colors.text.disabled}
+              keyboardType="numeric"
+            />
+          </View>
+
+          {/* Auto-Scheduling Section */}
+          <View style={styles.autoScheduleSection}>
+            <Text style={styles.sectionTitle}>Auto-Scheduling</Text>
+            
+            {renderSwitch(
+              'Enable Auto-Scheduling',
+              formData.auto_schedule_enabled || false,
+              (value) => handleInputChange('auto_schedule_enabled', value),
+              'Automatically schedule this task based on your preferences'
+            )}
+
+            {formData.auto_schedule_enabled && (
+              <>
+                {/* Location */}
+                <View style={styles.field}>
+                  <Text style={styles.label}>Location</Text>
+                  <View style={styles.locationInputContainer}>
+                    <Icon name="location" size={16} color={colors.text.secondary} />
+                    <TextInput
+                      style={styles.locationInput}
+                      value={formData.location}
+                      onChangeText={(text) => handleInputChange('location', text)}
+                      placeholder="Enter location (optional)"
+                      placeholderTextColor={colors.text.disabled}
+                    />
+                  </View>
+                </View>
+
+                {/* Weather Dependency */}
+                {renderSwitch(
+                  'Weather Dependent',
+                  formData.weather_dependent || false,
+                  (value) => handleInputChange('weather_dependent', value),
+                  'Only schedule when weather is suitable for outdoor tasks'
+                )}
+
+                {/* Preferred Time Windows */}
+                {renderTimeWindowSelector()}
+              </>
+            )}
+          </View>
+
+          {/* Action Buttons */}
+          <View style={styles.actions}>
+            <Button
+              title="Cancel"
+              onPress={onCancel}
+              variant="outline"
+              style={styles.cancelButton}
+            />
+            <Button
+              title={task ? 'Update Task' : 'Create Task'}
+              onPress={handleSave}
+              loading={loading}
+              style={styles.saveButton}
+            />
+          </View>
         </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+
+      {/* Category Dropdown Overlay */}
+      {showCategoryDropdown && (
+        <View style={styles.dropdownOverlay}>
+          <TouchableOpacity
+            style={styles.dropdownOverlayTouchable}
+            activeOpacity={1}
+            onPress={() => setShowCategoryDropdown(false)}
+          />
+          <View style={[
+            styles.dropdownOverlayContent,
+            {
+              left: categoryDropdownPosition.x,
+              top: categoryDropdownPosition.y,
+              width: categoryDropdownPosition.width,
+            }
+          ]}>
+            <FlatList
+              data={categoryOptions}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.dropdownOption,
+                    formData.category === item.value && styles.dropdownOptionSelected
+                  ]}
+                  onPress={() => handleCategorySelect(item.value)}
+                >
+                  <Text style={[
+                    styles.dropdownOptionText,
+                    formData.category === item.value && styles.dropdownOptionTextSelected
+                  ]}>
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              keyExtractor={(item) => item.value}
+              style={styles.dropdownOverlayList}
+              showsVerticalScrollIndicator={true}
+              scrollEnabled={true}
+              keyboardShouldPersistTaps="handled"
+            />
+          </View>
+        </View>
+      )}
+
+      {/* Goal Dropdown Overlay */}
+      {showGoalDropdown && (
+        <View style={styles.dropdownOverlay}>
+          <TouchableOpacity
+            style={styles.dropdownOverlayTouchable}
+            activeOpacity={1}
+            onPress={() => setShowGoalDropdown(false)}
+          />
+          <View style={[
+            styles.dropdownOverlayContent,
+            {
+              left: goalDropdownPosition.x,
+              top: goalDropdownPosition.y,
+              width: goalDropdownPosition.width,
+            }
+          ]}>
+            <FlatList
+              data={goalOptions}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.dropdownOption,
+                    formData.goal_id === item.goalId && styles.dropdownOptionSelected
+                  ]}
+                  onPress={() => handleGoalSelect(item.goalId)}
+                >
+                  <Text style={[
+                    styles.dropdownOptionText,
+                    formData.goal_id === item.goalId && styles.dropdownOptionTextSelected
+                  ]}>
+                    {item.title}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              keyExtractor={(item) => item.id}
+              style={styles.dropdownOverlayList}
+              showsVerticalScrollIndicator={true}
+              scrollEnabled={true}
+              keyboardShouldPersistTaps="handled"
+            />
+          </View>
+        </View>
+      )}
+    </View>
   );
 };
 
@@ -464,6 +614,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  scrollView: {
+    flex: 1,
   },
   content: {
     padding: spacing.md,
@@ -546,6 +699,70 @@ const styles = StyleSheet.create({
     color: colors.error,
     fontWeight: typography.fontWeight.medium as any,
   },
+  dropdownContainer: {
+    position: 'relative',
+    zIndex: 1000,
+  },
+  dropdownButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border.medium,
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    backgroundColor: colors.background,
+    minHeight: 48,
+  },
+  dropdownButtonText: {
+    fontSize: typography.fontSize.base,
+    color: colors.text.primary,
+    flex: 1,
+  },
+  dropdownOptions: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border.medium,
+    borderRadius: borderRadius.md,
+    marginTop: 2,
+    zIndex: 1002,
+    elevation: 8,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    overflow: 'hidden',
+  },
+  dropdownScrollView: {
+    flex: 1,
+    zIndex: 1002,
+  },
+  dropdownContentContainer: {
+    paddingVertical: spacing.sm,
+  },
+  dropdownOption: {
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.light,
+    backgroundColor: colors.background,
+  },
+  dropdownOptionSelected: {
+    backgroundColor: colors.primary,
+  },
+  dropdownOptionText: {
+    fontSize: typography.fontSize.base,
+    color: colors.text.primary,
+    fontWeight: typography.fontWeight.medium as any,
+  },
+  dropdownOptionTextSelected: {
+    color: colors.secondary,
+    fontWeight: typography.fontWeight.semibold as any,
+  },
   pickerContainer: {
     borderWidth: 1,
     borderColor: colors.border.medium,
@@ -553,11 +770,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   pickerButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     padding: spacing.sm,
   },
   pickerButtonText: {
     fontSize: typography.fontSize.base,
     color: colors.text.primary,
+    flex: 1,
   },
   // Auto-scheduling styles
   autoScheduleSection: {
@@ -641,5 +862,36 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     flex: 1,
+  },
+  dropdownOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1001,
+  },
+  dropdownOverlayTouchable: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  dropdownOverlayContent: {
+    position: 'absolute',
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border.medium,
+    elevation: 8,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    zIndex: 1001,
+  },
+  dropdownOverlayList: {
+    maxHeight: Dimensions.get('window').height * 0.4, // Adjust as needed
   },
 });

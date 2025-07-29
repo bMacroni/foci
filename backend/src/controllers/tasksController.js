@@ -597,6 +597,24 @@ export async function toggleAutoSchedule(req, res) {
     }
   });
 
+  // First get the task to check its status
+  const { data: task, error: taskError } = await supabase
+    .from('tasks')
+    .select('status')
+    .eq('id', id)
+    .eq('user_id', user_id)
+    .single();
+
+  if (taskError) {
+    console.log('Supabase error:', taskError);
+    return res.status(400).json({ error: taskError.message });
+  }
+
+  // Prevent toggling auto-scheduling for completed tasks
+  if (task.status === 'completed') {
+    return res.status(400).json({ error: 'Cannot modify auto-scheduling for completed tasks' });
+  }
+
   const { data, error } = await supabase
     .from('tasks')
     .update({ auto_schedule_enabled })

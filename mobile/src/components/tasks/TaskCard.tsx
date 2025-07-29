@@ -222,24 +222,29 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             <View style={styles.autoScheduleSection}>
               <View style={styles.autoScheduleRow}>
                 <TouchableOpacity
-                  style={styles.autoScheduleToggle}
+                  style={[
+                    styles.autoScheduleToggle,
+                    task.status === 'completed' && styles.autoScheduleToggleDisabled
+                  ]}
                   onPress={handleToggleAutoSchedule}
                   activeOpacity={0.7}
+                  disabled={task.status === 'completed'}
                 >
                   <Icon 
                     name={task.auto_schedule_enabled ? "check-circle" : "circle"} 
                     size={20} 
-                    color={task.auto_schedule_enabled ? colors.primary : colors.text.disabled} 
+                    color={task.status === 'completed' ? colors.text.disabled : (task.auto_schedule_enabled ? colors.primary : colors.text.disabled)} 
                   />
                   <Text style={[
                     styles.autoScheduleText,
-                    task.auto_schedule_enabled && styles.autoScheduleTextEnabled
+                    task.auto_schedule_enabled && styles.autoScheduleTextEnabled,
+                    task.status === 'completed' && styles.autoScheduleTextDisabled
                   ]}>
                     Auto-schedule
                   </Text>
                 </TouchableOpacity>
 
-                {task.auto_schedule_enabled && (
+                {task.auto_schedule_enabled && task.status !== 'completed' && (
                   <TouchableOpacity
                     style={styles.scheduleNowButton}
                     onPress={handleScheduleNow}
@@ -399,6 +404,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
   },
+  autoScheduleToggleDisabled: {
+    opacity: 0.5,
+  },
   autoScheduleText: {
     fontSize: typography.fontSize.sm,
     color: colors.text.disabled,
@@ -406,6 +414,9 @@ const styles = StyleSheet.create({
   },
   autoScheduleTextEnabled: {
     color: colors.text.primary,
+  },
+  autoScheduleTextDisabled: {
+    color: colors.text.disabled,
   },
   scheduleNowButton: {
     flexDirection: 'row',
