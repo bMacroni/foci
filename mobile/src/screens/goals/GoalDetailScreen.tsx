@@ -279,7 +279,6 @@ export default function GoalDetailScreen({ navigation, route }: any) {
             title="Mark as Completed"
             onPress={() => {
               // TODO: Mark goal as completed
-              console.log('Marking goal as completed');
             }}
             style={styles.completeButton}
           />

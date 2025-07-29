@@ -7,6 +7,8 @@ import SignupScreen from '../screens/auth/SignupScreen';
 import TabNavigator from './TabNavigator';
 import GoalFormScreen from '../screens/goals/GoalFormScreen';
 import GoalDetailScreen from '../screens/goals/GoalDetailScreen';
+import { TaskFormScreen } from '../screens/tasks/TaskFormScreen';
+import { TaskDetailScreen } from '../screens/tasks/TaskDetailScreen';
 import { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -41,6 +43,16 @@ export default function AppNavigator() {
         <Stack.Screen 
           name="GoalDetail" 
           component={GoalDetailScreen} 
+          options={{ headerShown: false }} 
+        />
+        <Stack.Screen 
+          name="TaskForm" 
+          component={TaskFormScreen} 
+          options={{ headerShown: false }} 
+        />
+        <Stack.Screen 
+          name="TaskDetail" 
+          component={TaskDetailScreen} 
           options={{ headerShown: false }} 
         />
       </Stack.Navigator>

@@ -49,13 +49,12 @@ export async function findAvailableTimeSlots(userId, taskDuration, preferredWind
       .order('start_time');
 
     if (error) {
-      console.log('Error fetching calendar events (table might not exist):', error);
       // Continue with empty calendar events
     } else {
       calendarEvents = events || [];
     }
   } catch (err) {
-    console.log('Calendar events table might not exist, continuing with empty calendar');
+    // Continue with empty calendar events
   }
 
   // Get already scheduled tasks (tasks with due dates in the next 7 days)
@@ -71,12 +70,12 @@ export async function findAvailableTimeSlots(userId, taskDuration, preferredWind
       .order('due_date');
 
     if (error) {
-      console.log('Error fetching scheduled tasks:', error);
+      // Continue with empty scheduled tasks
     } else {
       scheduledTasks = tasks || [];
     }
   } catch (err) {
-    console.log('Error fetching scheduled tasks:', err);
+    // Continue with empty scheduled tasks
   }
 
   // Combine all existing commitments including additional ones from current run
@@ -93,14 +92,6 @@ export async function findAvailableTimeSlots(userId, taskDuration, preferredWind
     })),
     ...additionalCommitments
   ].sort((a, b) => a.start.getTime() - b.start.getTime());
-
-  console.log(`[findAvailableTimeSlots] Found ${existingCommitments.length} existing commitments:`, 
-    existingCommitments.map(c => ({
-      type: c.type,
-      start: c.start.toISOString(),
-      end: c.end.toISOString()
-    }))
-  );
 
   // Generate available time slots
   const availableSlots = [];
@@ -152,11 +143,6 @@ export async function findAvailableTimeSlots(userId, taskDuration, preferredWind
           end_time: slotEnd,
           duration_minutes: taskDuration
         };
-        console.log(`[findAvailableTimeSlots] Found available slot:`, {
-          start: slot.start_time.toISOString(),
-          end: slot.end_time.toISOString(),
-          duration: taskDuration
-        });
         availableSlots.push(slot);
         return availableSlots; // Return first available slot
       }
@@ -176,11 +162,6 @@ export async function findAvailableTimeSlots(userId, taskDuration, preferredWind
         end_time: slotEnd,
         duration_minutes: taskDuration
       };
-      console.log(`[findAvailableTimeSlots] Found available slot after last commitment:`, {
-        start: slot.start_time.toISOString(),
-        end: slot.end_time.toISOString(),
-        duration: taskDuration
-      });
       availableSlots.push(slot);
       return availableSlots; // Return first available slot
     }
@@ -203,11 +184,6 @@ export async function findAvailableTimeSlots(userId, taskDuration, preferredWind
         end_time: fallbackEnd,
         duration_minutes: taskDuration
       };
-      console.log(`[findAvailableTimeSlots] Using fallback slot (next work day):`, {
-        start: fallbackSlot.start_time.toISOString(),
-        end: fallbackSlot.end_time.toISOString(),
-        duration: taskDuration
-      });
       
       return [fallbackSlot];
     }
@@ -225,13 +201,244 @@ export async function findAvailableTimeSlots(userId, taskDuration, preferredWind
     duration_minutes: taskDuration
   };
   
-  console.log(`[findAvailableTimeSlots] Using ultimate fallback slot:`, {
-    start: ultimateFallbackSlot.start_time.toISOString(),
-    end: ultimateFallbackSlot.end_time.toISOString(),
-    duration: taskDuration
-  });
-  
   return [ultimateFallbackSlot];
+}
+
+// New function for one-off task scheduling that properly handles conflicts
+export async function scheduleSingleTask(userId, taskId, token) {
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  });
+
+  // Get the task details
+  const { data: task, error: taskError } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('id', taskId)
+    .eq('user_id', userId)
+    .single();
+
+  if (taskError) {
+    throw new Error('Task not found');
+  }
+  
+  if (!task) {
+    throw new Error('Task not found');
+  }
+
+  // Get user scheduling preferences
+  const { data: preferences, error: prefsError } = await supabase
+    .from('user_scheduling_preferences')
+    .select('*')
+    .eq('user_id', userId)
+    .single();
+
+  if (prefsError) {
+    // Use default preferences if none exist
+    const defaultPreferences = {
+      preferred_start_time: '09:00:00',
+      preferred_end_time: '17:00:00',
+      work_days: [1, 2, 3, 4, 5],
+      buffer_time_minutes: 15
+    };
+    preferences = defaultPreferences;
+  }
+
+  // Calculate task duration including travel time
+  let totalDuration = task.estimated_duration_minutes || 30;
+  
+  // Add travel time if location is specified
+  if (task.location) {
+    try {
+      const travelData = await calculateTravelTime('current_location', task.location);
+      totalDuration += travelData.duration_minutes || 0;
+    } catch (error) {
+      // Continue without travel time
+    }
+  }
+
+  // Get existing calendar events and scheduled tasks
+  const startDate = new Date();
+  const endDate = new Date();
+  endDate.setDate(endDate.getDate() + 7);
+
+  let existingCommitments = [];
+
+  // Get calendar events
+  try {
+    const { data: events } = await supabase
+      .from('calendar_events')
+      .select('start_time, end_time')
+      .eq('user_id', userId)
+      .gte('start_time', startDate.toISOString())
+      .lte('start_time', endDate.toISOString())
+      .order('start_time');
+
+    if (events) {
+      existingCommitments.push(...events.map(event => ({
+        start: new Date(event.start_time),
+        end: new Date(event.end_time),
+        type: 'calendar'
+      })));
+    }
+  } catch (err) {
+    // Continue without calendar events
+  }
+
+  // Get scheduled tasks (tasks with due dates)
+  try {
+    const { data: scheduledTasks } = await supabase
+      .from('tasks')
+      .select('due_date, estimated_duration_minutes')
+      .eq('user_id', userId)
+      .not('due_date', 'is', null)
+      .gte('due_date', startDate.toISOString())
+      .lte('due_date', endDate.toISOString())
+      .order('due_date');
+
+    if (scheduledTasks) {
+      existingCommitments.push(...scheduledTasks.map(task => ({
+        start: new Date(task.due_date),
+        end: new Date(new Date(task.due_date).getTime() + (task.estimated_duration_minutes || 30) * 60 * 1000),
+        type: 'task'
+      })));
+    }
+  } catch (err) {
+    // Continue without scheduled tasks
+  }
+
+  // Sort commitments by start time
+  existingCommitments.sort((a, b) => a.start.getTime() - b.start.getTime());
+
+  // Parse work hours
+  const [workStartHour, workStartMinute] = preferences.preferred_start_time.split(':').map(Number);
+  const [workEndHour, workEndMinute] = preferences.preferred_end_time.split(':').map(Number);
+  const bufferTimeMinutes = preferences.buffer_time_minutes || 15;
+
+  // Find the next available slot
+  const now = new Date();
+  let scheduledTime = null;
+
+  // Look for slots in the next 7 days
+  for (let day = 0; day < 7; day++) {
+    const checkDate = new Date();
+    checkDate.setDate(checkDate.getDate() + day);
+    
+    // Check if it's a work day
+    const dayOfWeek = checkDate.getDay();
+    const adjustedDayOfWeek = dayOfWeek === 0 ? 7 : dayOfWeek;
+    if (!preferences.work_days.includes(adjustedDayOfWeek)) {
+      continue;
+    }
+
+    // Set work hours for this day
+    const dayStart = new Date(checkDate);
+    dayStart.setHours(workStartHour, workStartMinute, 0, 0);
+    
+    const dayEnd = new Date(checkDate);
+    dayEnd.setHours(workEndHour, workEndMinute, 0, 0);
+
+    // Find commitments for this day
+    const dayCommitments = existingCommitments.filter(commitment => {
+      const commitmentDate = new Date(commitment.start);
+      return commitmentDate.toDateString() === checkDate.toDateString();
+    });
+
+    // Start with the beginning of the work day, but not before now
+    let currentTime = new Date(Math.max(dayStart.getTime(), now.getTime()));
+
+    // If current time is after work hours for today, skip to next day
+    if (day === 0 && currentTime.getTime() >= dayEnd.getTime()) {
+      continue;
+    }
+
+    // Check each commitment and find gaps
+    for (const commitment of dayCommitments) {
+      // If there's enough time before this commitment
+      const timeBeforeCommitment = commitment.start.getTime() - currentTime.getTime();
+      const requiredTime = (totalDuration + bufferTimeMinutes) * 60 * 1000;
+      
+      if (timeBeforeCommitment >= requiredTime) {
+        scheduledTime = new Date(currentTime);
+        break;
+      }
+      
+      // Move current time to after this commitment (plus buffer)
+      currentTime = new Date(commitment.end.getTime() + bufferTimeMinutes * 60 * 1000);
+    }
+
+    // If we found a slot, break
+    if (scheduledTime) {
+      break;
+    }
+
+    // Check if there's time after the last commitment
+    const timeAfterLastCommitment = dayEnd.getTime() - currentTime.getTime();
+    const requiredTime = (totalDuration + bufferTimeMinutes) * 60 * 1000;
+    
+    if (timeAfterLastCommitment >= requiredTime) {
+      scheduledTime = new Date(currentTime);
+      break;
+    }
+  }
+
+  // If no slot found, use fallback (next work day at start time)
+  if (!scheduledTime) {
+    let daysToAdd = 1;
+    while (daysToAdd <= 7) {
+      const fallbackDate = new Date();
+      fallbackDate.setDate(fallbackDate.getDate() + daysToAdd);
+      const dayOfWeek = fallbackDate.getDay();
+      const adjustedDayOfWeek = dayOfWeek === 0 ? 7 : dayOfWeek;
+      
+      if (preferences.work_days.includes(adjustedDayOfWeek)) {
+        fallbackDate.setHours(workStartHour, workStartMinute, 0, 0);
+        scheduledTime = fallbackDate;
+        break;
+      }
+      daysToAdd++;
+    }
+  }
+
+  // Ultimate fallback - tomorrow at 9 AM
+  if (!scheduledTime) {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(9, 0, 0, 0);
+    scheduledTime = tomorrow;
+  }
+
+  // Update the task with the scheduled time
+  const { error: updateError } = await supabase
+    .from('tasks')
+    .update({
+      due_date: scheduledTime.toISOString(),
+      status: 'in_progress'
+    })
+    .eq('id', taskId);
+
+  if (updateError) {
+    throw new Error('Failed to update task with scheduled time');
+  }
+
+  // Create calendar event
+  let calendarEvent = null;
+  try {
+    calendarEvent = await createCalendarEvent(userId, task, scheduledTime, token);
+  } catch (error) {
+    // Continue without calendar event
+  }
+
+  return {
+    task_id: taskId,
+    scheduled_time: scheduledTime,
+    calendar_event_id: calendarEvent?.id || null,
+    duration_minutes: totalDuration
+  };
 }
 
 export async function createCalendarEvent(userId, task, scheduledTime, token) {
@@ -245,8 +452,6 @@ export async function createCalendarEvent(userId, task, scheduledTime, token) {
 
   const endTime = new Date(scheduledTime);
   endTime.setMinutes(endTime.getMinutes() + (task.estimated_duration_minutes || 60));
-
-  console.log('Creating calendar event for task:', task.title, 'at:', scheduledTime.toISOString());
   
   const { data, error } = await supabase
     .from('calendar_events')
@@ -263,11 +468,9 @@ export async function createCalendarEvent(userId, task, scheduledTime, token) {
     .single();
 
   if (error) {
-    console.log('Error creating calendar event:', error);
     return null;
   }
 
-  console.log('Successfully created calendar event:', data);
   return data;
 }
 
@@ -295,7 +498,6 @@ export async function updateTaskSchedulingHistory(userId, taskId, scheduledTime,
     .single();
 
   if (error) {
-    console.log('Error updating scheduling history:', error);
     return null;
   }
 
@@ -347,7 +549,6 @@ export async function processRecurringTask(task, token) {
     .single();
 
   if (error) {
-    console.log('Error updating recurring task:', error);
     return null;
   }
 
@@ -372,7 +573,6 @@ export async function autoScheduleTasks(userId, token) {
 
   // If user preferences don't exist, create default ones
   if (prefsError && prefsError.code === 'PGRST116') {
-    console.log('User preferences not found, creating default preferences');
     const { data: newPrefs, error: createError } = await supabase
       .from('user_scheduling_preferences')
       .insert([{
@@ -390,12 +590,10 @@ export async function autoScheduleTasks(userId, token) {
       .single();
 
     if (createError) {
-      console.log('Error creating user preferences:', createError);
       return { error: 'Failed to create user preferences' };
     }
     preferences = newPrefs;
   } else if (prefsError) {
-    console.log('Error fetching user preferences:', prefsError);
     return { error: 'Failed to fetch user preferences' };
   }
 
@@ -408,8 +606,6 @@ export async function autoScheduleTasks(userId, token) {
     .from('tasks')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', userId);
-  
-  console.log(`Total tasks before auto-scheduling: ${totalTasksBefore}`);
 
   // Get all tasks that need auto-scheduling
   const { data: tasks, error: tasksError } = await supabase
@@ -421,20 +617,13 @@ export async function autoScheduleTasks(userId, token) {
     .order('priority', { ascending: false });
 
   if (tasksError) {
-    console.log('Error fetching tasks:', tasksError);
     return { error: 'Failed to fetch tasks' };
   }
 
-  console.log(`Found ${tasks.length} tasks eligible for auto-scheduling`);
-  console.log('Task IDs:', tasks.map(t => t.id));
-
   const results = [];
   const newlyScheduledTasks = []; // Track tasks scheduled in this run
-
-  console.log(`Processing ${tasks.length} tasks for auto-scheduling`);
   
   for (const task of tasks) {
-    console.log(`Processing task: ${task.title} (ID: ${task.id})`);
     try {
       // Check if task is weather dependent
       let weatherData = null;
@@ -487,11 +676,7 @@ export async function autoScheduleTasks(userId, token) {
       let calendarEvent = null;
       try {
         calendarEvent = await createCalendarEvent(userId, task, scheduledTime, token);
-        if (!calendarEvent) {
-          console.log('Failed to create calendar event for task:', task.title);
-        }
       } catch (calendarError) {
-        console.log('Failed to create calendar event (table might not exist):', calendarError);
         // Continue without calendar event
       }
 
@@ -500,14 +685,13 @@ export async function autoScheduleTasks(userId, token) {
         .from('tasks')
         .update({
           due_date: scheduledTime.toISOString(),
-          status: 'in_progress', // Changed from 'scheduled' to 'in_progress' since 'scheduled' is not a valid enum value
+          status: 'in_progress',
           last_scheduled_date: new Date().toISOString(),
           travel_time_minutes: travelTime
         })
         .eq('id', task.id);
 
       if (updateError) {
-        console.log('Error updating task with scheduled time:', updateError);
         results.push({
           task_id: task.id,
           task_title: task.title,
@@ -543,7 +727,7 @@ export async function autoScheduleTasks(userId, token) {
       results.push({
         task_id: task.id,
         task_title: task.title,
-        status: 'scheduled', // This is fine for result tracking, not database enum
+        status: 'scheduled',
         scheduled_time: scheduledTime,
         calendar_event_id: calendarEvent?.id || null
       });
@@ -601,3 +785,223 @@ export async function autoScheduleTasks(userId, token) {
     task_count_change: totalTasksAfter - totalTasksBefore
   };
 } 
+
+// Get user scheduling preferences
+export async function getSchedulingPreferences(userId, token) {
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  });
+
+  const { data: preferences, error } = await supabase
+    .from('user_scheduling_preferences')
+    .select('*')
+    .eq('user_id', userId)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      // Return default preferences if none exist
+      return {
+        user_id: userId,
+        preferred_start_time: '09:00:00',
+        preferred_end_time: '17:00:00',
+        work_days: [1, 2, 3, 4, 5],
+        max_tasks_per_day: 5,
+        buffer_time_minutes: 15,
+        weather_check_enabled: true,
+        travel_time_enabled: true,
+        auto_scheduling_enabled: true
+      };
+    }
+    throw new Error('Failed to fetch scheduling preferences');
+  }
+
+  return preferences;
+}
+
+// Update user scheduling preferences
+export async function updateSchedulingPreferences(userId, preferences, token) {
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  });
+
+  // Check if preferences exist
+  const { data: existingPrefs, error: checkError } = await supabase
+    .from('user_scheduling_preferences')
+    .select('user_id')
+    .eq('user_id', userId)
+    .single();
+
+  let result;
+  if (checkError && checkError.code === 'PGRST116') {
+    // Create new preferences
+    const { data, error } = await supabase
+      .from('user_scheduling_preferences')
+      .insert([{
+        user_id: userId,
+        ...preferences
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error('Failed to create scheduling preferences');
+    }
+    result = data;
+  } else {
+    // Update existing preferences
+    const { data, error } = await supabase
+      .from('user_scheduling_preferences')
+      .update(preferences)
+      .eq('user_id', userId)
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error('Failed to update scheduling preferences');
+    }
+    result = data;
+  }
+
+  return result;
+}
+
+// Get auto-scheduling status for a specific task
+export async function getTaskSchedulingStatus(userId, taskId, token) {
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  });
+
+  const { data: task, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('id', taskId)
+    .eq('user_id', userId)
+    .single();
+
+  if (error) {
+    throw new Error('Task not found');
+  }
+
+  return {
+    task_id: taskId,
+    auto_schedule_enabled: task.auto_schedule_enabled || false,
+    scheduled_time: task.due_date,
+    scheduled_date: task.due_date ? new Date(task.due_date).toDateString() : null,
+    calendar_event_id: task.calendar_event_id,
+    weather_dependent: task.weather_dependent || false,
+    location: task.location,
+    travel_time_minutes: task.travel_time_minutes
+  };
+}
+
+// Toggle auto-scheduling for a specific task
+export async function toggleTaskAutoScheduling(userId, taskId, enabled, token) {
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  });
+
+  const { error } = await supabase
+    .from('tasks')
+    .update({ auto_schedule_enabled: enabled })
+    .eq('id', taskId)
+    .eq('user_id', userId);
+
+  if (error) {
+    throw new Error('Failed to update task auto-scheduling status');
+  }
+}
+
+// Get available time slots for a task
+export async function getAvailableTimeSlots(userId, taskId, token) {
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  });
+
+  // Get the task details
+  const { data: task, error: taskError } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('id', taskId)
+    .eq('user_id', userId)
+    .single();
+
+  if (taskError) {
+    throw new Error('Task not found');
+  }
+
+  // Get user preferences
+  const { data: preferences, error: prefsError } = await supabase
+    .from('user_scheduling_preferences')
+    .select('*')
+    .eq('user_id', userId)
+    .single();
+
+  if (prefsError) {
+    // Use default preferences
+    preferences = {
+      preferred_start_time: '09:00:00',
+      preferred_end_time: '17:00:00',
+      work_days: [1, 2, 3, 4, 5],
+      buffer_time_minutes: 15
+    };
+  }
+
+  // Calculate task duration including travel time
+  let totalDuration = task.estimated_duration_minutes || 30;
+  
+  if (task.location) {
+    try {
+      const travelData = await calculateTravelTime('current_location', task.location);
+      totalDuration += travelData.duration_minutes || 0;
+    } catch (error) {
+      // Continue without travel time
+    }
+  }
+
+  // Find available time slots
+  const timeSlots = await findAvailableTimeSlots(
+    userId,
+    totalDuration,
+    task.preferred_time_windows,
+    preferences.work_days,
+    token
+  );
+
+  return timeSlots;
+}
+
+// Export the controller object
+export const autoSchedulingController = {
+  findAvailableTimeSlots,
+  scheduleSingleTask,
+  createCalendarEvent,
+  updateTaskSchedulingHistory,
+  processRecurringTask,
+  autoScheduleTasks,
+  getSchedulingPreferences,
+  updateSchedulingPreferences,
+  getTaskSchedulingStatus,
+  toggleTaskAutoScheduling,
+  getAvailableTimeSlots
+}; 

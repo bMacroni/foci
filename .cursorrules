@@ -1,0 +1,59 @@
+# MindGarden Cursor Rules
+
+## Icon Usage Guidelines
+
+### Octicon Icons
+- **Use Octicons for UI icons**: The project uses `react-native-vector-icons/Octicons` for consistent UI icons
+- **Import pattern**: `import Icon from 'react-native-vector-icons/Octicons';`
+- **Usage pattern**: `<Icon name="icon-name" size={size} color={color} />`
+- **Common icons used**:
+  - `calendar` - For calendar/scheduling functionality
+  - `comment-discussion` - For AI chat
+  - `goal` - For goals
+  - `checklist` - For tasks
+  - `plus` - For add/create actions
+  - `trash` - For delete actions
+  - `edit` - For edit actions
+  - `check` - For completion/success states
+
+### Icon Sizing Guidelines
+- **Small icons**: 16px (for tab bars, small buttons)
+- **Medium icons**: 20px (for card actions, buttons)
+- **Large icons**: 24px (for primary actions, headers)
+
+### Color Guidelines
+- **Primary actions**: `colors.primary`
+- **Secondary actions**: `colors.text.secondary`
+- **Disabled state**: `colors.text.disabled`
+- **Success state**: `colors.success` (if available)
+- **Error state**: `colors.error` (if available)
+
+### Accessibility
+- Always provide meaningful touch targets (minimum 44px)
+- Use consistent iconography across similar actions
+- Consider adding accessibility labels for screen readers
+
+## Code Style Guidelines
+
+### React Native Components
+- Use TypeScript interfaces for props
+- Follow the established naming conventions
+- Use the theme system for colors, spacing, and typography
+- Implement proper error handling for async operations
+
+### API Integration
+- Use the established API service patterns
+- Include proper error handling and user feedback
+- Follow the authentication token pattern
+- Use consistent response handling
+
+### State Management
+- Use React hooks for local state
+- Implement proper loading and error states
+- Provide user feedback for all async operations
+
+## File Organization
+- Keep components in appropriate feature directories
+- Use consistent file naming (PascalCase for components)
+- Group related functionality together
+- Maintain clear separation of concerns

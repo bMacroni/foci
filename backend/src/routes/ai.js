@@ -4,6 +4,7 @@ import GeminiService from '../utils/geminiService.js';
 // import AIService from '../utils/aiService.js';
 import { conversationController } from '../controllers/conversationController.js';
 import { sendFeedback } from '../controllers/feedbackController.js';
+import { autoSchedulingController } from '../controllers/autoSchedulingController.js';
 
 const router = express.Router();
 const geminiService = new GeminiService();
@@ -21,21 +22,11 @@ router.post('/chat', requireAuth, async (req, res) => {
       });
     }
 
-    console.log(`AI Chat - User ${userId}: ${message}${threadId ? ` (Thread: ${threadId})` : ''}`);
-
     // Extract JWT token from Authorization header
     const token = req.headers.authorization?.split(' ')[1];
-    
-    console.log('=== AI ROUTE DEBUG ===');
-    console.log('Authorization header:', req.headers.authorization ? 'Present' : 'Missing');
-    console.log('Token (first 50 chars):', token ? token.substring(0, 50) + '...' : 'No token');
-    console.log('Token type:', typeof token);
-    console.log('Token length:', token ? token.length : 0);
-    console.log('=== END AI ROUTE DEBUG ===');
 
     // Process message with Gemini service, passing token in userContext
     const response = await geminiService.processMessage(message, userId, { token });
-    console.log(`Gemini Response: ${response.message}`);
 
     // Save conversation to database if threadId is provided
     if (threadId) {
@@ -43,7 +34,6 @@ router.post('/chat', requireAuth, async (req, res) => {
         await conversationController.addMessage(threadId, message, 'user', {}, token);
         await conversationController.addMessage(threadId, response.message, 'assistant', { actions: response.actions }, token);
       } catch (dbError) {
-        console.error('Error saving conversation to database:', dbError);
         // Continue with response even if database save fails
       }
     }
@@ -267,5 +257,111 @@ router.get('/health', requireAuth, (req, res) => {
 });
 
 router.post('/feedback', sendFeedback);
+
+// Auto-scheduling endpoints
+
+// Get user scheduling preferences
+router.get('/scheduling-preferences', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const token = req.headers.authorization?.split(' ')[1];
+    
+    const preferences = await autoSchedulingController.getSchedulingPreferences(userId, token);
+    res.json(preferences);
+  } catch (error) {
+    console.error('Get Scheduling Preferences Error:', error);
+    res.status(500).json({ error: 'Failed to get scheduling preferences' });
+  }
+});
+
+// Update user scheduling preferences
+router.put('/scheduling-preferences', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const token = req.headers.authorization?.split(' ')[1];
+    const preferences = req.body;
+    
+    const updatedPreferences = await autoSchedulingController.updateSchedulingPreferences(userId, preferences, token);
+    res.json(updatedPreferences);
+  } catch (error) {
+    console.error('Update Scheduling Preferences Error:', error);
+    res.status(500).json({ error: 'Failed to update scheduling preferences' });
+  }
+});
+
+// Get auto-scheduling status for a specific task
+router.get('/task-scheduling-status/:taskId', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { taskId } = req.params;
+    const token = req.headers.authorization?.split(' ')[1];
+    
+    const status = await autoSchedulingController.getTaskSchedulingStatus(userId, taskId, token);
+    res.json(status);
+  } catch (error) {
+    console.error('Get Task Scheduling Status Error:', error);
+    res.status(500).json({ error: 'Failed to get task scheduling status' });
+  }
+});
+
+// Toggle auto-scheduling for a specific task
+router.put('/task-scheduling-toggle/:taskId', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { taskId } = req.params;
+    const { enabled } = req.body;
+    const token = req.headers.authorization?.split(' ')[1];
+    
+    await autoSchedulingController.toggleTaskAutoScheduling(userId, taskId, enabled, token);
+    res.json({ message: 'Task auto-scheduling updated successfully' });
+  } catch (error) {
+    console.error('Toggle Task Auto-Scheduling Error:', error);
+    res.status(500).json({ error: 'Failed to toggle task auto-scheduling' });
+  }
+});
+
+// Auto-schedule all eligible tasks
+router.post('/auto-schedule-tasks', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const token = req.headers.authorization?.split(' ')[1];
+    
+    const result = await autoSchedulingController.autoScheduleTasks(userId, token);
+    res.json(result);
+  } catch (error) {
+    console.error('Auto-Schedule Tasks Error:', error);
+    res.status(500).json({ error: 'Failed to auto-schedule tasks' });
+  }
+});
+
+// Get available time slots for a task
+router.get('/available-time-slots/:taskId', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { taskId } = req.params;
+    const token = req.headers.authorization?.split(' ')[1];
+    
+    const timeSlots = await autoSchedulingController.getAvailableTimeSlots(userId, taskId, token);
+    res.json(timeSlots);
+  } catch (error) {
+    console.error('Get Available Time Slots Error:', error);
+    res.status(500).json({ error: 'Failed to get available time slots' });
+  }
+});
+
+// Schedule a single task now
+router.post('/schedule-single-task/:taskId', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { taskId } = req.params;
+    const token = req.headers.authorization?.split(' ')[1];
+    
+    const result = await autoSchedulingController.scheduleSingleTask(userId, taskId, token);
+    res.json(result);
+  } catch (error) {
+    console.error('Schedule Single Task Error:', error);
+    res.status(500).json({ error: 'Failed to schedule single task' });
+  }
+});
 
 export default router; 

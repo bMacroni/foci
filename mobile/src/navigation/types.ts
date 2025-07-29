@@ -4,6 +4,8 @@ export type RootStackParamList = {
   Main: undefined;
   GoalForm: { goalId?: string } | undefined;
   GoalDetail: { goalId: string };
+  TaskForm: { taskId?: string } | undefined;
+  TaskDetail: { taskId: string };
 };
 
 export type MainTabParamList = {

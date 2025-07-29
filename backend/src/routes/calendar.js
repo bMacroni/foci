@@ -9,6 +9,7 @@ import {
   getEventsForDate
 } from '../utils/calendarService.js';
 import { getCalendarEventsFromDB, syncGoogleCalendarEvents } from '../utils/syncService.js';
+import { scheduleSingleTask } from '../controllers/autoSchedulingController.js';
 
 const router = express.Router();
 
@@ -206,6 +207,37 @@ router.post('/sync', requireAuth, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: 'Failed to sync calendar events',
+      details: error.message 
+    });
+  }
+});
+
+// Schedule a single task using auto-scheduling logic
+router.post('/schedule-task', requireAuth, async (req, res) => {
+  try {
+    const { taskId } = req.body;
+    
+    if (!taskId) {
+      return res.status(400).json({ error: 'Task ID is required' });
+    }
+
+    console.log(`Scheduling single task ${taskId} for user ${req.user.id}`);
+    
+    // Get the JWT token from the Authorization header
+    const token = req.headers.authorization?.split(' ')[1];
+    
+    const result = await scheduleSingleTask(req.user.id, taskId, token);
+    
+    res.json({
+      success: true,
+      message: 'Task scheduled successfully',
+      data: result
+    });
+  } catch (error) {
+    console.error('Error scheduling single task:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to schedule task',
       details: error.message 
     });
   }

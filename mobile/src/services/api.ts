@@ -3,6 +3,13 @@
 // For physical device, use your computer's IP address (e.g., 192.168.1.100)
 const API_BASE_URL = 'http://192.168.1.66:5000/api'; // Backend runs on port 5000
 
+import {
+  SchedulingPreferences,
+  TaskSchedulingStatus,
+  AutoSchedulingResult,
+  TimeSlot,
+} from '../types/autoScheduling';
+
 interface GoalBreakdownRequest {
   title: string;
   description?: string;
@@ -202,6 +209,387 @@ export const goalsAPI = {
       return data;
     } catch (error) {
       console.error('🔍 API: Error updating goal:', error);
+      throw error;
+    }
+  },
+};
+
+interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  priority: 'low' | 'medium' | 'high';
+  status: 'not_started' | 'in_progress' | 'completed';
+  due_date?: string;
+  category?: string;
+  goal_id?: string;
+  estimated_duration_minutes?: number;
+  created_at?: string;
+  updated_at?: string;
+  goal?: {
+    id: string;
+    title: string;
+    description?: string;
+  };
+}
+
+export const tasksAPI = {
+  // Get all tasks for the user
+  getTasks: async (): Promise<Task[]> => {
+    try {
+      const token = await getAuthToken();
+      
+      const response = await fetch(`${API_BASE_URL}/tasks`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('🔍 API: Error response body:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('🔍 API: Error fetching tasks:', error);
+      throw error;
+    }
+  },
+
+  // Get a single task by ID
+  getTaskById: async (taskId: string): Promise<Task> => {
+    try {
+      const token = await getAuthToken();
+      const response = await fetch(`${API_BASE_URL}/tasks/${taskId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('🔍 API: Error response body:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('🔍 API: Error fetching task by ID:', error);
+      throw error;
+    }
+  },
+
+  // Create a new task
+  createTask: async (taskData: Partial<Task>): Promise<Task> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/tasks`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${await getAuthToken()}`,
+        },
+        body: JSON.stringify(taskData),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error creating task:', error);
+      throw error;
+    }
+  },
+
+  // Update an existing task
+  updateTask: async (taskId: string, taskData: Partial<Task>): Promise<Task> => {
+    try {
+      const token = await getAuthToken();
+      const response = await fetch(`${API_BASE_URL}/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(taskData),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('🔍 API: Error updating task:', error);
+      throw error;
+    }
+  },
+
+  // Delete a task
+  deleteTask: async (taskId: string): Promise<void> => {
+    try {
+      const token = await getAuthToken();
+      const response = await fetch(`${API_BASE_URL}/tasks/${taskId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
+      }
+    } catch (error) {
+      console.error('🔍 API: Error deleting task:', error);
+      throw error;
+    }
+  },
+};
+
+// Calendar API
+export const calendarAPI = {
+  // Add a task to calendar using auto-scheduling
+  addTaskToCalendar: async (taskId: string): Promise<any> => {
+    try {
+      const token = await getAuthToken();
+      const response = await fetch(`${API_BASE_URL}/calendar/schedule-task`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ taskId }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('🔍 API: Error response body:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('🔍 API: Error adding task to calendar:', error);
+      throw error;
+    }
+  },
+
+  // Get calendar events
+  getEvents: async (maxResults: number = 10): Promise<any> => {
+    try {
+      const token = await getAuthToken();
+      const response = await fetch(`${API_BASE_URL}/calendar/events?maxResults=${maxResults}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('🔍 API: Error response body:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return { data };
+    } catch (error) {
+      console.error('🔍 API: Error fetching calendar events:', error);
+      throw error;
+    }
+  },
+
+  // Get calendar status
+  getStatus: async (): Promise<any> => {
+    try {
+      const token = await getAuthToken();
+      const response = await fetch(`${API_BASE_URL}/calendar/status`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('🔍 API: Error response body:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return { data };
+    } catch (error) {
+      console.error('🔍 API: Error fetching calendar status:', error);
+      throw error;
+    }
+  },
+};
+
+// Auto-scheduling API
+export const autoSchedulingAPI = {
+  // Bulk auto-schedule all eligible tasks
+  autoScheduleTasks: async (): Promise<AutoSchedulingResult> => {
+    try {
+      const token = await getAuthToken();
+      const response = await fetch(`${API_BASE_URL}/ai/auto-schedule-tasks`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('🔍 API: Error response body:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('🔍 API: Error auto-scheduling tasks:', error);
+      throw error;
+    }
+  },
+
+  // Get user scheduling preferences
+  getPreferences: async (): Promise<SchedulingPreferences> => {
+    try {
+      const token = await getAuthToken();
+      const response = await fetch(`${API_BASE_URL}/ai/scheduling-preferences`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('🔍 API: Error response body:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('🔍 API: Error fetching scheduling preferences:', error);
+      throw error;
+    }
+  },
+
+  // Update user scheduling preferences
+  updatePreferences: async (preferences: Partial<SchedulingPreferences>): Promise<SchedulingPreferences> => {
+    try {
+      const token = await getAuthToken();
+      const response = await fetch(`${API_BASE_URL}/ai/scheduling-preferences`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(preferences),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('🔍 API: Error response body:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('🔍 API: Error updating scheduling preferences:', error);
+      throw error;
+    }
+  },
+
+  // Get auto-scheduling status for a specific task
+  getTaskSchedulingStatus: async (taskId: string): Promise<TaskSchedulingStatus> => {
+    try {
+      const token = await getAuthToken();
+      const response = await fetch(`${API_BASE_URL}/tasks/${taskId}/scheduling-status`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('🔍 API: Error response body:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('🔍 API: Error fetching task scheduling status:', error);
+      throw error;
+    }
+  },
+
+  // Toggle auto-scheduling for a specific task
+  toggleTaskAutoScheduling: async (taskId: string, enabled: boolean): Promise<void> => {
+    try {
+      const token = await getAuthToken();
+      const response = await fetch(`${API_BASE_URL}/tasks/${taskId}/auto-schedule`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ auto_schedule_enabled: enabled }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('🔍 API: Error response body:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
+      }
+    } catch (error) {
+      console.error('🔍 API: Error toggling task auto-scheduling:', error);
+      throw error;
+    }
+  },
+
+  // Get available time slots for a task
+  getAvailableTimeSlots: async (taskId: string): Promise<TimeSlot[]> => {
+    try {
+      const token = await getAuthToken();
+      const response = await fetch(`${API_BASE_URL}/ai/available-time-slots?taskId=${taskId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('🔍 API: Error response body:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data.map((slot: any) => ({
+        ...slot,
+        start_time: new Date(slot.start_time),
+        end_time: new Date(slot.end_time),
+      }));
+    } catch (error) {
+      console.error('🔍 API: Error fetching available time slots:', error);
       throw error;
     }
   },

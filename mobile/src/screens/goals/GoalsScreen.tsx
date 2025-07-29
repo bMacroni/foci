@@ -70,18 +70,14 @@ export default function GoalsScreen({ navigation }: any) {
 
   // Subscribe to auth state changes
   useEffect(() => {
-    console.log('🎯 GoalsScreen: Setting up auth subscription');
     const unsubscribe = authService.subscribe((state) => {
-      console.log('🎯 GoalsScreen: Auth state changed:', state);
       setAuthState(state);
       
       // If user becomes authenticated, load goals
       if (state.isAuthenticated && !state.isLoading) {
-        console.log('🎯 GoalsScreen: User authenticated, loading goals');
         loadGoals();
       } else if (!state.isAuthenticated && !state.isLoading) {
         // User is not authenticated, clear goals and stop loading
-        console.log('🎯 GoalsScreen: User not authenticated, clearing goals');
         setGoals([]);
         setGoalsLoading(false);
       }
@@ -92,12 +88,9 @@ export default function GoalsScreen({ navigation }: any) {
 
   // Load goals from backend on component mount (only if authenticated)
   useEffect(() => {
-    console.log('🎯 GoalsScreen: Auth state effect triggered:', authState);
     if (authState.isAuthenticated && !authState.isLoading) {
-      console.log('🎯 GoalsScreen: User authenticated, loading goals');
       loadGoals();
     } else if (!authState.isAuthenticated && !authState.isLoading) {
-      console.log('🎯 GoalsScreen: User not authenticated, stopping loading');
       setGoalsLoading(false);
     }
   }, [authState.isAuthenticated, authState.isLoading]);

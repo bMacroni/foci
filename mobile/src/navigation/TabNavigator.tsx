@@ -4,6 +4,7 @@ import { TouchableOpacity, Text, StyleSheet, View, Platform } from 'react-native
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AIChatScreen from '../screens/ai/AIChatScreen';
 import GoalsScreen from '../screens/goals/GoalsScreen';
+import { TasksScreen } from '../screens/tasks/TasksScreen';
 import { CustomTabBar } from '../components/common/CustomTabBar';
 import { colors } from '../themes/colors';
 import { typography } from '../themes/typography';
@@ -12,9 +13,6 @@ import { MainTabParamList } from './types';
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
 // Placeholder screens for now
-const TasksScreen = () => (
-  <Text style={styles.placeholderText}>Tasks Screen - Coming Soon</Text>
-);
 
 const CalendarScreen = () => (
   <Text style={styles.placeholderText}>Calendar Screen - Coming Soon</Text>
