@@ -5,18 +5,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AIChatScreen from '../screens/ai/AIChatScreen';
 import GoalsScreen from '../screens/goals/GoalsScreen';
 import { TasksScreen } from '../screens/tasks/TasksScreen';
+import CalendarScreen from '../screens/calendar/CalendarScreen';
 import { CustomTabBar } from '../components/common/CustomTabBar';
 import { colors } from '../themes/colors';
 import { typography } from '../themes/typography';
 import { MainTabParamList } from './types';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
-
-// Placeholder screens for now
-
-const CalendarScreen = () => (
-  <Text style={styles.placeholderText}>Calendar Screen - Coming Soon</Text>
-);
 
 export default function TabNavigator() {
   return (

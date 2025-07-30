@@ -1,68 +1,125 @@
-export const dateUtils = {
-    // Format date to readable string
-    formatDate: (date: Date | string): string => {
-      const d = new Date(date);
-      return d.toLocaleDateString();
-    },
-  
-    // Format date to relative time (e.g., "2 days ago")
-    formatRelativeTime: (date: Date | string): string => {
-      const now = new Date();
-      const target = new Date(date);
-      const diffInMs = now.getTime() - target.getTime();
-      const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
-      const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
-      const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
-  
-      if (diffInMinutes < 1) return 'Just now';
-      if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
-      if (diffInHours < 24) return `${diffInHours}h ago`;
-      if (diffInDays === 1) return 'Yesterday';
-      if (diffInDays < 7) return `${diffInDays} days ago`;
-      if (diffInDays < 30) {
-        const weeks = Math.floor(diffInDays / 7);
-        return `${weeks} week${weeks > 1 ? 's' : ''} ago`;
-      }
-      if (diffInDays < 365) {
-        const months = Math.floor(diffInDays / 30);
-        return `${months} month${months > 1 ? 's' : ''} ago`;
-      }
-      
-      return target.toLocaleDateString();
-    },
-  
-    // Check if date is today
-    isToday: (date: Date | string): boolean => {
-      const today = new Date();
-      const target = new Date(date);
-      return today.toDateString() === target.toDateString();
-    },
-  
-    // Check if date is in the past
-    isPast: (date: Date | string): boolean => {
-      const now = new Date();
-      const target = new Date(date);
-      return target < now;
-    },
-  
-    // Add days to date
-    addDays: (date: Date, days: number): Date => {
-      const result = new Date(date);
-      result.setDate(result.getDate() + days);
-      return result;
-    },
-  
-    // Get start of day
-    startOfDay: (date: Date): Date => {
-      const result = new Date(date);
-      result.setHours(0, 0, 0, 0);
-      return result;
-    },
-  
-    // Get end of day
-    endOfDay: (date: Date): Date => {
-      const result = new Date(date);
-      result.setHours(23, 59, 59, 999);
-      return result;
-    },
-  };
+// Date utility functions for calendar functionality
+
+/**
+ * Format a date to YYYY-MM-DD format
+ */
+export const formatDateToYYYYMMDD = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+/**
+ * Get the start of a week (Sunday) for a given date
+ */
+export const getWeekStart = (date: Date): Date => {
+  const weekStart = new Date(date);
+  weekStart.setDate(date.getDate() - date.getDay());
+  return weekStart;
+};
+
+/**
+ * Get the end of a week (Saturday) for a given date
+ */
+export const getWeekEnd = (date: Date): Date => {
+  const weekEnd = new Date(date);
+  weekEnd.setDate(date.getDate() + (6 - date.getDay()));
+  return weekEnd;
+};
+
+/**
+ * Check if two dates are the same day
+ */
+export const isSameDay = (date1: Date, date2: Date): boolean => {
+  return formatDateToYYYYMMDD(date1) === formatDateToYYYYMMDD(date2);
+};
+
+/**
+ * Get the time difference in minutes between two dates
+ */
+export const getTimeDifferenceInMinutes = (date1: Date, date2: Date): number => {
+  return Math.abs(date2.getTime() - date1.getTime()) / (1000 * 60);
+};
+
+/**
+ * Format a date to a readable string
+ */
+export const formatDateReadable = (date: Date): string => {
+  return date.toLocaleDateString([], {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+};
+
+/**
+ * Format a time to HH:MM format
+ */
+export const formatTime = (date: Date): string => {
+  return date.toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+/**
+ * Get the current timezone offset in minutes
+ */
+export const getTimezoneOffset = (): number => {
+  return new Date().getTimezoneOffset();
+};
+
+/**
+ * Convert a date to the user's local timezone
+ */
+export const toLocalTimezone = (date: Date): Date => {
+  const offset = getTimezoneOffset();
+  return new Date(date.getTime() - offset * 60 * 1000);
+};
+
+/**
+ * Check if a date is today
+ */
+export const isToday = (date: Date): boolean => {
+  return isSameDay(date, new Date());
+};
+
+/**
+ * Check if a date is in the past
+ */
+export const isPast = (date: Date): boolean => {
+  return date < new Date();
+};
+
+/**
+ * Check if a date is in the future
+ */
+export const isFuture = (date: Date): boolean => {
+  return date > new Date();
+};
+
+/**
+ * Get the number of days between two dates
+ */
+export const getDaysDifference = (date1: Date, date2: Date): number => {
+  const timeDiff = date2.getTime() - date1.getTime();
+  return Math.ceil(timeDiff / (1000 * 3600 * 24));
+};
+
+/**
+ * Add days to a date
+ */
+export const addDays = (date: Date, days: number): Date => {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+};
+
+/**
+ * Subtract days from a date
+ */
+export const subtractDays = (date: Date, days: number): Date => {
+  return addDays(date, -days);
+};

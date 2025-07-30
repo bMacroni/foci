@@ -9,7 +9,9 @@ import {
   Switch,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
+import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { colors } from '../../themes/colors';
 import { spacing, borderRadius } from '../../themes/spacing';
 import { typography } from '../../themes/typography';
@@ -53,6 +55,8 @@ export const AutoSchedulingPreferencesModal: React.FC<AutoSchedulingPreferencesM
   const [preferences, setPreferences] = useState<SchedulingPreferences>(defaultPreferences);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -120,24 +124,46 @@ export const AutoSchedulingPreferencesModal: React.FC<AutoSchedulingPreferencesM
   const renderTimeInput = (
     label: string,
     value: string,
-    onValueChange: (value: string) => void
-  ) => (
-    <View style={styles.inputGroup}>
-      <Text style={styles.inputLabel}>{label}</Text>
-      <View style={styles.timeInputContainer}>
-        <TouchableOpacity
-          style={styles.timeInput}
-          onPress={() => {
-            // TODO: Implement time picker
-            Alert.alert('Time Picker', 'Time picker will be implemented');
+    onValueChange: (value: string) => void,
+    isStartTime: boolean = false
+  ) => {
+    const [hours, minutes] = value.split(':');
+    const timeDate = new Date();
+    timeDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+    
+    const showPicker = isStartTime ? showStartTimePicker : showEndTimePicker;
+    const setShowPicker = isStartTime ? setShowStartTimePicker : setShowEndTimePicker;
+    
+
+    
+    return (
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>{label}</Text>
+        <View style={styles.timeInputContainer}>
+          <TouchableOpacity
+            style={styles.timeInput}
+            onPress={() => setShowPicker(true)}
+          >
+            <Icon name="clock" size={16} color={colors.text.secondary} />
+            <Text style={styles.timeInputText}>{formatTime(value)}</Text>
+          </TouchableOpacity>
+        </View>
+        <DateTimePickerModal
+          isVisible={showPicker}
+          mode="time"
+          onConfirm={(selectedTime) => {
+            const hours = selectedTime.getHours().toString().padStart(2, '0');
+            const minutes = selectedTime.getMinutes().toString().padStart(2, '0');
+            const timeString = `${hours}:${minutes}:00`;
+            onValueChange(timeString);
+            setShowPicker(false);
           }}
-        >
-          <Icon name="clock" size={16} color={colors.text.secondary} />
-          <Text style={styles.timeInputText}>{formatTime(value)}</Text>
-        </TouchableOpacity>
+          onCancel={() => setShowPicker(false)}
+          date={timeDate}
+        />
       </View>
-    </View>
-  );
+    );
+  };
 
   const renderNumberInput = (
     label: string,
@@ -259,12 +285,14 @@ export const AutoSchedulingPreferencesModal: React.FC<AutoSchedulingPreferencesM
             {renderTimeInput(
               'Start Time',
               preferences.preferred_start_time,
-              (value) => updatePreference('preferred_start_time', parseTime(value))
+              (value) => updatePreference('preferred_start_time', parseTime(value)),
+              true
             )}
             {renderTimeInput(
               'End Time',
               preferences.preferred_end_time,
-              (value) => updatePreference('preferred_end_time', parseTime(value))
+              (value) => updatePreference('preferred_end_time', parseTime(value)),
+              false
             )}
           </View>
 

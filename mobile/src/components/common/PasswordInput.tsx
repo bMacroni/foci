@@ -1,0 +1,71 @@
+import React, { useState } from 'react';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import Icon from 'react-native-vector-icons/Octicons';
+import { Input } from './Input';
+import { colors } from '../../themes/colors';
+import { spacing } from '../../themes/spacing';
+
+interface PasswordInputProps {
+  value: string;
+  onChangeText: (text: string) => void;
+  placeholder?: string;
+  error?: boolean;
+  style?: any;
+  [key: string]: any; // Allow other TextInput props
+}
+
+export const PasswordInput: React.FC<PasswordInputProps> = ({
+  value,
+  onChangeText,
+  placeholder = 'Password',
+  error,
+  style,
+  ...props
+}) => {
+  const [showPassword, setShowPassword] = useState(false);
+
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
+  };
+
+  return (
+    <View style={styles.container}>
+      <Input
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        secureTextEntry={!showPassword}
+        error={error}
+        style={[styles.input, style]}
+        {...props}
+      />
+      <TouchableOpacity
+        style={styles.eyeIcon}
+        onPress={togglePasswordVisibility}
+        activeOpacity={0.7}
+      >
+        <Icon
+          name={showPassword ? 'eye-closed' : 'eye'}
+          size={20}
+          color={colors.text.secondary}
+        />
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    position: 'relative',
+    width: '100%',
+  },
+  input: {
+    paddingRight: 50, // Make room for the eye icon
+  },
+  eyeIcon: {
+    position: 'absolute',
+    right: spacing.md,
+    top: 14, // Center vertically (48px height - 20px icon) / 2
+    zIndex: 1,
+  },
+}); 

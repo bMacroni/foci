@@ -10,8 +10,58 @@ import {
 } from '../utils/calendarService.js';
 import { getCalendarEventsFromDB, syncGoogleCalendarEvents } from '../utils/syncService.js';
 import { scheduleSingleTask } from '../controllers/autoSchedulingController.js';
+import { createClient } from '@supabase/supabase-js';
 
 const router = express.Router();
+
+// Initialize Supabase client for direct database operations
+const supabase = createClient(
+  process.env.SUPABASE_URL, 
+  process.env.SUPABASE_SERVICE_ROLE_KEY // Use service role key to bypass RLS
+);
+
+// Test Supabase connection
+router.get('/test-supabase', requireAuth, async (req, res) => {
+  try {
+    console.log('Testing Supabase connection...');
+    console.log('SUPABASE_URL:', process.env.SUPABASE_URL ? 'Set' : 'Not set');
+    console.log('SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'Set' : 'Not set');
+    
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return res.status(500).json({ 
+        error: 'SUPABASE_SERVICE_ROLE_KEY not configured',
+        message: 'Please add SUPABASE_SERVICE_ROLE_KEY to your backend .env file'
+      });
+    }
+    
+    // Test basic connection with service role
+    const { data, error } = await supabase
+      .from('calendar_events')
+      .select('count')
+      .limit(1);
+
+    if (error) {
+      console.error('Supabase test error:', error);
+      return res.status(500).json({ 
+        error: 'Supabase connection failed',
+        details: error.message 
+      });
+    }
+
+    console.log('Supabase connection successful with service role');
+    res.json({ 
+      success: true, 
+      message: 'Supabase connection working with service role',
+      tableExists: true 
+    });
+  } catch (error) {
+    console.error('Error testing Supabase:', error);
+    res.status(500).json({ 
+      error: 'Failed to test Supabase',
+      details: error.message 
+    });
+  }
+});
 
 // Get user's calendar list
 router.get('/list', requireAuth, async (req, res) => {
@@ -27,12 +77,18 @@ router.get('/list', requireAuth, async (req, res) => {
 // Get upcoming calendar events from local database
 router.get('/events', requireAuth, async (req, res) => {
   try {
-    const maxResults = parseInt(req.query.maxResults) || 100;
+    const maxResults = parseInt(req.query.maxResults) || 200;
+    
+    // Calculate time range: 7 days prior to 30 days from now
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
+    const thirtyDaysFromNow = new Date(now.getTime() + (30 * 24 * 60 * 60 * 1000));
     
     console.log(`[Calendar API] Getting events for user ${req.user.id}, maxResults: ${maxResults}`);
+    console.log(`[Calendar API] Time range: ${sevenDaysAgo.toISOString()} to ${thirtyDaysFromNow.toISOString()}`);
     
-    // Get events from local database instead of Google Calendar API
-    const events = await getCalendarEventsFromDB(req.user.id, maxResults);
+    // Get events from local database with time range
+    const events = await getCalendarEventsFromDB(req.user.id, maxResults, sevenDaysAgo, thirtyDaysFromNow);
     
     console.log(`[Calendar API] Returning ${events.length} events`);
     
@@ -64,10 +120,12 @@ router.get('/events/date', requireAuth, async (req, res) => {
   }
 });
 
-// Create a new calendar event
+// Create a new calendar event (supports both Google Calendar and direct Supabase)
 router.post('/events', requireAuth, async (req, res) => {
   try {
-    const { summary, description, startTime, endTime, timeZone } = req.body;
+    const { summary, description, startTime, endTime, timeZone, location, useSupabase = false } = req.body;
+
+    console.log('Creating calendar event:', { summary, startTime, endTime, useSupabase });
 
     if (!summary || !startTime || !endTime) {
       return res.status(400).json({ 
@@ -75,31 +133,72 @@ router.post('/events', requireAuth, async (req, res) => {
       });
     }
 
-    const eventData = {
-      summary,
-      description: description || '',
-      startTime,
-      endTime,
-      timeZone: timeZone || 'UTC'
-    };
+    if (useSupabase) {
+      // Check if Supabase is properly configured
+      if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+        console.error('Supabase environment variables not configured');
+        return res.status(500).json({ error: 'Supabase not configured' });
+      }
 
-    const event = await createCalendarEvent(req.user.id, eventData);
-    res.status(201).json(event);
+      console.log('Attempting to create event in Supabase...');
+      
+      // Create event directly in Supabase
+      const { data, error } = await supabase
+        .from('calendar_events')
+        .insert({
+          user_id: req.user.id,
+          title: summary,
+          description: description || '',
+          start_time: startTime,
+          end_time: endTime,
+          location: location || '',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Supabase error creating calendar event:', error);
+        return res.status(500).json({ 
+          error: 'Failed to create calendar event',
+          details: error.message 
+        });
+      }
+
+      console.log('Successfully created event in Supabase:', data);
+      return res.status(201).json(data);
+    } else {
+      // Use existing Google Calendar integration
+      const eventData = {
+        summary,
+        description: description || '',
+        startTime,
+        endTime,
+        timeZone: timeZone || 'UTC'
+      };
+
+      const event = await createCalendarEvent(req.user.id, eventData);
+      res.status(201).json(event);
+    }
   } catch (error) {
     console.error('Error creating calendar event:', error);
     if (error.message.includes('No Google tokens found')) {
       res.status(401).json({ error: 'Google Calendar not connected. Please connect your Google account first.' });
     } else {
-      res.status(500).json({ error: 'Failed to create calendar event' });
+      res.status(500).json({ 
+        error: 'Failed to create calendar event',
+        details: error.message 
+      });
     }
   }
 });
 
-// Update a calendar event
+// Update a calendar event (supports both Google Calendar and direct Supabase)
 router.put('/events/:eventId', requireAuth, async (req, res) => {
   try {
     const { eventId } = req.params;
-    const { summary, description, startTime, endTime, timeZone } = req.body;
+    const { summary, description, startTime, endTime, timeZone, location, useSupabase = false } = req.body;
 
     if (!summary || !startTime || !endTime) {
       return res.status(400).json({ 
@@ -107,16 +206,42 @@ router.put('/events/:eventId', requireAuth, async (req, res) => {
       });
     }
 
-    const eventData = {
-      summary,
-      description: description || '',
-      startTime,
-      endTime,
-      timeZone: timeZone || 'UTC'
-    };
+    if (useSupabase) {
+      // Update event directly in Supabase
+      const { data, error } = await supabase
+        .from('calendar_events')
+        .update({
+          title: summary,
+          description: description || '',
+          start_time: startTime,
+          end_time: endTime,
+          location: location || '',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', eventId)
+        .eq('user_id', req.user.id) // Ensure user owns the event
+        .select()
+        .single();
 
-    const event = await updateCalendarEvent(req.user.id, eventId, eventData);
-    res.json(event);
+      if (error) {
+        console.error('Supabase error updating calendar event:', error);
+        return res.status(500).json({ error: 'Failed to update calendar event' });
+      }
+
+      return res.json(data);
+    } else {
+      // Use existing Google Calendar integration
+      const eventData = {
+        summary,
+        description: description || '',
+        startTime,
+        endTime,
+        timeZone: timeZone || 'UTC'
+      };
+
+      const event = await updateCalendarEvent(req.user.id, eventId, eventData);
+      res.json(event);
+    }
   } catch (error) {
     console.error('Error updating calendar event:', error);
     if (error.message.includes('No Google tokens found')) {
@@ -127,12 +252,31 @@ router.put('/events/:eventId', requireAuth, async (req, res) => {
   }
 });
 
-// Delete a calendar event
+// Delete a calendar event (supports both Google Calendar and direct Supabase)
 router.delete('/events/:eventId', requireAuth, async (req, res) => {
   try {
     const { eventId } = req.params;
-    await deleteCalendarEvent(req.user.id, eventId);
-    res.json({ message: 'Event deleted successfully' });
+    const { useSupabase = false } = req.query;
+
+    if (useSupabase) {
+      // Delete event directly from Supabase
+      const { error } = await supabase
+        .from('calendar_events')
+        .delete()
+        .eq('id', eventId)
+        .eq('user_id', req.user.id); // Ensure user owns the event
+
+      if (error) {
+        console.error('Supabase error deleting calendar event:', error);
+        return res.status(500).json({ error: 'Failed to delete calendar event' });
+      }
+
+      return res.json({ message: 'Event deleted successfully' });
+    } else {
+      // Use existing Google Calendar integration
+      await deleteCalendarEvent(req.user.id, eventId);
+      res.json({ message: 'Event deleted successfully' });
+    }
   } catch (error) {
     console.error('Error deleting calendar event:', error);
     if (error.message.includes('No Google tokens found')) {

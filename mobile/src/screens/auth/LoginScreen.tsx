@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../../themes/colors';
 import { typography } from '../../themes/typography';
 import { spacing, borderRadius } from '../../themes/spacing';
-import { Input, Button } from '../../components/common';
+import { Input, PasswordInput, Button } from '../../components/common';
 
 export default function LoginScreen({ navigation }: any) {
   const [email, setEmail] = useState('');
@@ -63,11 +63,10 @@ export default function LoginScreen({ navigation }: any) {
           autoCapitalize="none"
         />
         
-        <Input
+        <PasswordInput
           placeholder="Password"
           value={password}
           onChangeText={setPassword}
-          secureTextEntry
         />
         
         {error ? <Text style={styles.error}>{error}</Text> : null}

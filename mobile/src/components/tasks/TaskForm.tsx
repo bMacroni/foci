@@ -13,7 +13,7 @@ import {
   FlatList,
   Dimensions,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { colors } from '../../themes/colors';
 import { spacing, borderRadius } from '../../themes/spacing';
 import { typography } from '../../themes/typography';
@@ -115,13 +115,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleDateChange = (event: any, date?: Date) => {
-    setShowDatePicker(Platform.OS === 'ios');
-    if (date) {
-      setSelectedDate(date);
-      handleInputChange('due_date', date.toISOString());
-    }
-  };
+
 
   const handleSave = () => {
     if (!formData.title?.trim()) {
@@ -390,15 +384,18 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                 </TouchableOpacity>
               )}
             </View>
-            {showDatePicker && (
-              <DateTimePicker
-                value={selectedDate || new Date()}
-                mode="date"
-                display="default"
-                onChange={handleDateChange}
-                minimumDate={new Date()}
-              />
-            )}
+            <DateTimePickerModal
+              isVisible={showDatePicker}
+              mode="date"
+              onConfirm={(date) => {
+                setSelectedDate(date);
+                handleInputChange('due_date', date.toISOString());
+                setShowDatePicker(false);
+              }}
+              onCancel={() => setShowDatePicker(false)}
+              date={selectedDate || new Date()}
+              minimumDate={new Date()}
+            />
           </View>
 
           {/* Category */}

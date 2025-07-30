@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {useNavigate} from 'react-router-dom'
+import PasswordInput from './PasswordInput';
 
 const Login = ({ onLogin, onSwitchToSignup }) => {
   const [email, setEmail] = useState('');
@@ -135,13 +136,10 @@ const Login = ({ onLogin, onSwitchToSignup }) => {
                 <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
                   Password
                 </label>
-                <input
-                  type="password"
-                  id="password"
+                <PasswordInput
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/80 backdrop-blur-sm shadow-sm transition-all duration-200"
                   placeholder="Enter your password"
                 />
               </div>

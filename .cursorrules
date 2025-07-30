@@ -57,3 +57,6 @@
 - Use consistent file naming (PascalCase for components)
 - Group related functionality together
 - Maintain clear separation of concerns
+
+## Terminal
+- write all terminal commands for powershell

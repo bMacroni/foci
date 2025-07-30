@@ -32,7 +32,7 @@ interface GoalBreakdownResponse {
   milestones: Milestone[];
 }
 
-interface Goal {
+export interface Goal {
   id: string;
   title: string;
   description: string;
@@ -358,35 +358,8 @@ export const tasksAPI = {
 
 // Calendar API
 export const calendarAPI = {
-  // Add a task to calendar using auto-scheduling
-  addTaskToCalendar: async (taskId: string): Promise<any> => {
-    try {
-      const token = await getAuthToken();
-      const response = await fetch(`${API_BASE_URL}/calendar/schedule-task`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ taskId }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('🔍 API: Error response body:', errorText);
-        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error('🔍 API: Error adding task to calendar:', error);
-      throw error;
-    }
-  },
-
-  // Get calendar events
-  getEvents: async (maxResults: number = 10): Promise<any> => {
+  // Get all events from backend database
+  getEvents: async (maxResults: number = 100): Promise<any> => {
     try {
       const token = await getAuthToken();
       const response = await fetch(`${API_BASE_URL}/calendar/events?maxResults=${maxResults}`, {
@@ -397,24 +370,21 @@ export const calendarAPI = {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('🔍 API: Error response body:', errorText);
-        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data = await response.json();
-      return { data };
+      return await response.json();
     } catch (error) {
-      console.error('🔍 API: Error fetching calendar events:', error);
+      console.error('Error fetching calendar events:', error);
       throw error;
     }
   },
 
-  // Get calendar status
-  getStatus: async (): Promise<any> => {
+  // Get events for a specific date from backend database
+  getEventsForDate: async (date: string): Promise<any> => {
     try {
       const token = await getAuthToken();
-      const response = await fetch(`${API_BASE_URL}/calendar/status`, {
+      const response = await fetch(`${API_BASE_URL}/calendar/events/date?date=${date}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -422,15 +392,122 @@ export const calendarAPI = {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('🔍 API: Error response body:', errorText);
-        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data = await response.json();
-      return { data };
+      return await response.json();
     } catch (error) {
-      console.error('🔍 API: Error fetching calendar status:', error);
+      console.error('Error fetching events for date:', error);
+      throw error;
+    }
+  },
+
+  // Create a new event (uses backend proxy)
+  createEvent: async (eventData: {
+    summary: string;
+    description?: string;
+    startTime: string;
+    endTime: string;
+    timeZone?: string;
+    location?: string;
+  }): Promise<any> => {
+    try {
+      const token = await getAuthToken();
+      const response = await fetch(`${API_BASE_URL}/calendar/events`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          ...eventData,
+          useSupabase: true, // Use direct Supabase storage
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error creating calendar event:', error);
+      throw error;
+    }
+  },
+
+  // Update an existing event (uses backend proxy)
+  updateEvent: async (eventId: string, eventData: {
+    summary: string;
+    description?: string;
+    startTime: string;
+    endTime: string;
+    timeZone?: string;
+    location?: string;
+  }): Promise<any> => {
+    try {
+      const token = await getAuthToken();
+      const response = await fetch(`${API_BASE_URL}/calendar/events/${eventId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          ...eventData,
+          useSupabase: true, // Use direct Supabase storage
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error updating calendar event:', error);
+      throw error;
+    }
+  },
+
+  // Delete an event (uses backend proxy)
+  deleteEvent: async (eventId: string): Promise<void> => {
+    try {
+      const token = await getAuthToken();
+      const response = await fetch(`${API_BASE_URL}/calendar/events/${eventId}?useSupabase=true`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+    } catch (error) {
+      console.error('Error deleting calendar event:', error);
+      throw error;
+    }
+  },
+
+  // Sync calendar (existing functionality)
+  syncCalendar: async (): Promise<any> => {
+    try {
+      const token = await getAuthToken();
+      const response = await fetch(`${API_BASE_URL}/calendar/sync`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error syncing calendar:', error);
       throw error;
     }
   },
