@@ -109,9 +109,25 @@ export const goalsAPI = {
       }
 
       const data = await response.json();
+      
+      // Cache the goals for offline use
+      const { offlineService } = await import('./offline');
+      await offlineService.cacheGoals(data);
+      
       return data;
     } catch (error) {
       console.error('🔍 API: Error fetching goals:', error);
+      
+      // Try to get cached goals if offline
+      const { offlineService } = await import('./offline');
+      if (offlineService.shouldUseCache()) {
+        const cachedGoals = await offlineService.getCachedGoals();
+        if (cachedGoals) {
+          console.log('Using cached goals due to offline status');
+          return cachedGoals;
+        }
+      }
+      
       throw error;
     }
   },
@@ -253,9 +269,25 @@ export const tasksAPI = {
       }
 
       const data = await response.json();
+      
+      // Cache the tasks for offline use
+      const { offlineService } = await import('./offline');
+      await offlineService.cacheTasks(data);
+      
       return data;
     } catch (error) {
       console.error('🔍 API: Error fetching tasks:', error);
+      
+      // Try to get cached tasks if offline
+      const { offlineService } = await import('./offline');
+      if (offlineService.shouldUseCache()) {
+        const cachedTasks = await offlineService.getCachedTasks();
+        if (cachedTasks) {
+          console.log('Using cached tasks due to offline status');
+          return cachedTasks;
+        }
+      }
+      
       throw error;
     }
   },
@@ -304,6 +336,19 @@ export const tasksAPI = {
       return await response.json();
     } catch (error) {
       console.error('Error creating task:', error);
+      
+      // Add to offline queue if network error
+      const { offlineService } = await import('./offline');
+      if (!offlineService.getNetworkStatus()) {
+        const actionId = await offlineService.addToOfflineQueue({
+          type: 'CREATE_TASK',
+          data: taskData,
+          id: `temp_${Date.now()}`,
+        });
+        console.log('Added task creation to offline queue:', actionId);
+        return { id: actionId, offline: true, ...taskData } as Task;
+      }
+      
       throw error;
     }
   },
@@ -330,6 +375,19 @@ export const tasksAPI = {
       return data;
     } catch (error) {
       console.error('🔍 API: Error updating task:', error);
+      
+      // Add to offline queue if network error
+      const { offlineService } = await import('./offline');
+      if (!offlineService.getNetworkStatus()) {
+        const actionId = await offlineService.addToOfflineQueue({
+          type: 'UPDATE_TASK',
+          data: taskData,
+          id: taskId,
+        });
+        console.log('Added task update to offline queue:', actionId);
+        return { id: taskId, offline: true, ...taskData } as Task;
+      }
+      
       throw error;
     }
   },
@@ -351,6 +409,18 @@ export const tasksAPI = {
       }
     } catch (error) {
       console.error('🔍 API: Error deleting task:', error);
+      
+      // Add to offline queue if network error
+      const { offlineService } = await import('./offline');
+      if (!offlineService.getNetworkStatus()) {
+        const actionId = await offlineService.addToOfflineQueue({
+          type: 'DELETE_TASK',
+          id: taskId,
+        });
+        console.log('Added task deletion to offline queue:', actionId);
+        return;
+      }
+      
       throw error;
     }
   },
@@ -373,9 +443,26 @@ export const calendarAPI = {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      return await response.json();
+      const events = await response.json();
+      
+      // Cache the events for offline use
+      const { offlineService } = await import('./offline');
+      await offlineService.cacheEvents(events);
+      
+      return events;
     } catch (error) {
       console.error('Error fetching calendar events:', error);
+      
+      // Try to get cached events if offline
+      const { offlineService } = await import('./offline');
+      if (offlineService.shouldUseCache()) {
+        const cachedEvents = await offlineService.getCachedEvents();
+        if (cachedEvents) {
+          console.log('Using cached events due to offline status');
+          return cachedEvents;
+        }
+      }
+      
       throw error;
     }
   },
@@ -432,6 +519,19 @@ export const calendarAPI = {
       return await response.json();
     } catch (error) {
       console.error('Error creating calendar event:', error);
+      
+      // Add to offline queue if network error
+      const { offlineService } = await import('./offline');
+      if (!offlineService.getNetworkStatus()) {
+        const actionId = await offlineService.addToOfflineQueue({
+          type: 'CREATE_EVENT',
+          data: eventData,
+          id: `temp_${Date.now()}`,
+        });
+        console.log('Added event creation to offline queue:', actionId);
+        return { id: actionId, offline: true };
+      }
+      
       throw error;
     }
   },
@@ -466,6 +566,19 @@ export const calendarAPI = {
       return await response.json();
     } catch (error) {
       console.error('Error updating calendar event:', error);
+      
+      // Add to offline queue if network error
+      const { offlineService } = await import('./offline');
+      if (!offlineService.getNetworkStatus()) {
+        const actionId = await offlineService.addToOfflineQueue({
+          type: 'UPDATE_EVENT',
+          data: eventData,
+          id: eventId,
+        });
+        console.log('Added event update to offline queue:', actionId);
+        return { id: actionId, offline: true };
+      }
+      
       throw error;
     }
   },
@@ -486,6 +599,18 @@ export const calendarAPI = {
       }
     } catch (error) {
       console.error('Error deleting calendar event:', error);
+      
+      // Add to offline queue if network error
+      const { offlineService } = await import('./offline');
+      if (!offlineService.getNetworkStatus()) {
+        const actionId = await offlineService.addToOfflineQueue({
+          type: 'DELETE_EVENT',
+          id: eventId,
+        });
+        console.log('Added event deletion to offline queue:', actionId);
+        return;
+      }
+      
       throw error;
     }
   },

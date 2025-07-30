@@ -68,9 +68,13 @@ export const EventFormModal: React.FC<EventFormModalProps> = ({
       let endTime: Date;
       
       if ('start_time' in event) {
-        // It's a CalendarEvent
+        // It's a CalendarEvent with database format
         startTime = new Date(event.start_time || Date.now());
         endTime = new Date(event.end_time || Date.now());
+      } else if ('start' in event && typeof event.start === 'object' && event.start?.dateTime) {
+        // It's a CalendarEvent with Google Calendar API format
+        startTime = new Date(event.start.dateTime);
+        endTime = new Date(event.end?.dateTime || event.start.dateTime);
       } else {
         // It's a Task
         const task = event as Task;
@@ -79,7 +83,7 @@ export const EventFormModal: React.FC<EventFormModalProps> = ({
       }
       
       setFormData({
-        title: event.title || '',
+        title: event.title || event.summary || '',
         description: event.description || '',
         startTime,
         endTime,

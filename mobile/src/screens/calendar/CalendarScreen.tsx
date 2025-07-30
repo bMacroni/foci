@@ -19,6 +19,7 @@ import { Button } from '../../components/common/Button';
 import { EventCard } from '../../components/calendar/EventCard';
 import { EventFormModal } from '../../components/calendar/EventFormModal';
 import { VirtualizedEventList } from '../../components/calendar/VirtualizedEventList';
+import { OfflineIndicator } from '../../components/common/OfflineIndicator';
 import { calendarAPI, tasksAPI, goalsAPI } from '../../services/api';
 import {
   CalendarEvent,
@@ -96,6 +97,32 @@ export default function CalendarScreen() {
       setLoadingMore(false);
     } catch (error) {
       console.error('Error loading calendar data:', error);
+      
+      // Check if we're offline and have cached data
+      const { offlineService } = await import('../../services/offline');
+      const offlineState = await offlineService.getOfflineState();
+      
+      if (!offlineState.isOnline) {
+        // Try to load cached data
+        const cachedEvents = await offlineService.getCachedEvents();
+        const cachedTasks = await offlineService.getCachedTasks();
+        const cachedGoals = await offlineService.getCachedGoals();
+        
+        if (cachedEvents || cachedTasks || cachedGoals) {
+          console.log('Using cached data due to offline status');
+          setState(prev => ({
+            ...prev,
+            events: cachedEvents || [],
+            tasks: cachedTasks || [],
+            goals: cachedGoals || [],
+            loading: false,
+            error: 'Offline - showing cached data',
+          }));
+          setLoadingMore(false);
+          return;
+        }
+      }
+      
       setState(prev => ({
         ...prev,
         loading: false,
@@ -933,6 +960,9 @@ export default function CalendarScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
+      {/* Offline Indicator */}
+      <OfflineIndicator />
+      
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Calendar</Text>
