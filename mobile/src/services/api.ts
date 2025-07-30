@@ -228,6 +228,27 @@ export const goalsAPI = {
       throw error;
     }
   },
+
+  // Delete a goal by ID
+  deleteGoal: async (goalId: string): Promise<void> => {
+    try {
+      const token = await getAuthToken();
+      const response = await fetch(`${API_BASE_URL}/goals/${goalId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
+      }
+    } catch (error) {
+      console.error('🔍 API: Error deleting goal:', error);
+      throw error;
+    }
+  },
 };
 
 interface Task {

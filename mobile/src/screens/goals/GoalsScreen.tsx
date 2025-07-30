@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Icon from 'react-native-vector-icons/Octicons';
 import { colors } from '../../themes/colors';
 import { typography } from '../../themes/typography';
 import { spacing, borderRadius } from '../../themes/spacing';
@@ -313,7 +314,6 @@ export default function GoalsScreen({ navigation }: any) {
 
   const handleGoalDelete = async (goalId: string) => {
     try {
-      // TODO: Implement goal deletion API call
       Alert.alert(
         'Delete Goal',
         'Are you sure you want to delete this goal? This action cannot be undone.',
@@ -326,9 +326,14 @@ export default function GoalsScreen({ navigation }: any) {
             text: 'Delete',
             style: 'destructive',
             onPress: async () => {
-              // await goalsAPI.deleteGoal(goalId);
-              // await loadGoals();
-              Alert.alert('Success', 'Goal deleted successfully');
+              try {
+                await goalsAPI.deleteGoal(goalId);
+                await loadGoals();
+                Alert.alert('Success', 'Goal deleted successfully');
+              } catch (error) {
+                console.error('Error deleting goal:', error);
+                Alert.alert('Error', 'Failed to delete goal. Please try again.');
+              }
             },
           },
         ]
@@ -365,10 +370,21 @@ export default function GoalsScreen({ navigation }: any) {
       >
         <View style={styles.goalHeader}>
           <Text style={styles.goalTitle}>{goal.title}</Text>
-          <View style={[
-            styles.statusIndicator,
-            { backgroundColor: goal.status === 'active' ? colors.success : colors.warning }
-          ]} />
+          <View style={styles.goalHeaderActions}>
+            <View style={[
+              styles.statusIndicator,
+              { backgroundColor: goal.status === 'active' ? colors.success : colors.warning }
+            ]} />
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleGoalDelete(goal.id);
+              }}
+            >
+              <Icon name="trash" size={16} color={colors.text.secondary} />
+            </TouchableOpacity>
+          </View>
         </View>
         
         <Text style={styles.goalDescription}>{goal.description}</Text>
@@ -917,10 +933,19 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     flex: 1,
   },
+  goalHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   statusIndicator: {
     width: 8,
     height: 8,
     borderRadius: 4,
+  },
+  deleteButton: {
+    padding: spacing.xs,
+    borderRadius: borderRadius.sm,
   },
   goalDescription: {
     fontSize: typography.fontSize.sm,
