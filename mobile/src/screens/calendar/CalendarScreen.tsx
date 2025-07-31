@@ -9,6 +9,7 @@ import {
   Alert,
   ActivityIndicator,
   Dimensions,
+  Animated,
 } from 'react-native';
 import { Calendar, DateData } from 'react-native-calendars';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,7 +21,10 @@ import { EventCard } from '../../components/calendar/EventCard';
 import { EventFormModal } from '../../components/calendar/EventFormModal';
 import { VirtualizedEventList } from '../../components/calendar/VirtualizedEventList';
 import { OfflineIndicator } from '../../components/common/OfflineIndicator';
-import { calendarAPI, tasksAPI, goalsAPI } from '../../services/api';
+import { ErrorDisplay, ErrorBanner } from '../../components/common/ErrorDisplay';
+import { SearchAndFilter } from '../../components/calendar/SearchAndFilter';
+import { enhancedAPI } from '../../services/enhancedApi';
+import { errorHandlingService, ErrorCategory, UserFriendlyError } from '../../services/errorHandling';
 import {
   CalendarEvent,
   Task,
@@ -33,12 +37,29 @@ import {
 import { Goal } from '../../services/api';
 import { formatDateToYYYYMMDD } from '../../utils/dateUtils';
 import { hapticFeedback } from '../../utils/hapticFeedback';
+import { LoadingSkeleton } from '../../components/common/LoadingSkeleton';
+import { 
+  useFadeAnimation, 
+  useScaleAnimation, 
+  staggerAnimation,
+  fadeIn,
+  ANIMATION_CONFIG 
+} from '../../utils/animations';
 
 const { width } = Dimensions.get('window');
 
 export default function CalendarScreen() {
   const insets = useSafeAreaInsets();
   const dayViewScrollRef = useRef<ScrollView>(null);
+  
+  // Animation hooks
+  const { opacity: contentOpacity, fadeIn: contentFadeIn, fadeOut: contentFadeOut } = useFadeAnimation(1); // Start visible
+  const { scale: buttonScale, scaleIn: buttonScaleIn, scaleOut: buttonScaleOut } = useScaleAnimation(1);
+  const { scale: cardScale, scaleIn: cardScaleIn, scaleOut: cardScaleOut } = useScaleAnimation(1);
+  
+  // Stagger animation for event cards
+  const eventAnimations = useRef<Animated.Value[]>([]).current;
+  
   const [state, setState] = useState<CalendarState>({
     selectedDate: new Date(),
     viewType: 'month',
@@ -54,15 +75,39 @@ export default function CalendarScreen() {
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | Task | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   
+  // Enhanced error handling state
+  const [currentError, setCurrentError] = useState<UserFriendlyError | null>(null);
+  const [errorVisible, setErrorVisible] = useState(false);
+  
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMoreEvents, setHasMoreEvents] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  // Load calendar data
+  // Filtered state for search and filtering
+  const [filteredEvents, setFilteredEvents] = useState<CalendarEvent[]>([]);
+  const [filteredTasks, setFilteredTasks] = useState<Task[]>([]);
+
+  // Handle filter changes
+  const handleFilterChange = useCallback((filteredEvents: CalendarEvent[], filteredTasks: Task[]) => {
+    console.log('CalendarScreen handleFilterChange:', {
+      filteredEvents: filteredEvents.length,
+      filteredTasks: filteredTasks.length
+    });
+    setFilteredEvents(filteredEvents);
+    setFilteredTasks(filteredTasks);
+  }, []);
+
+  // Load calendar data with enhanced error handling
   const loadCalendarData = useCallback(async (page = 1, append = false) => {
     if (page === 1) {
       setState(prev => ({ ...prev, loading: true, error: null }));
+      setCurrentError(null);
+      // Only fade out content if we're not in initial load
+      // Temporarily disabled animations for debugging
+      // if (!append) {
+      //   contentFadeOut(); // Fade out content while loading
+      // }
     } else {
       setLoadingMore(true);
     }
@@ -70,17 +115,19 @@ export default function CalendarScreen() {
     try {
       console.log(`Loading calendar data page ${page}...`);
       
-      // Load events from backend with pagination
-      const eventsPerPage = 50;
-      const events = await calendarAPI.getEvents(eventsPerPage * page);
-      console.log(`Loaded ${events?.length || 0} events from backend`);
+      // Load events from backend with proper pagination using enhanced API
+      // For initial load, request a larger number to get all upcoming events
+      const initialMaxResults = 500; // Increased from 50 to get more events initially
+      const maxResults = page === 1 ? initialMaxResults : 50 * page;
+      const events = await enhancedAPI.getEvents(maxResults);
+      console.log(`Loaded ${events?.length || 0} events from backend (maxResults: ${maxResults})`);
       
-      // Load tasks from backend
-      const tasks = await tasksAPI.getTasks();
+      // Load tasks from backend using enhanced API
+      const tasks = await enhancedAPI.getTasks();
       console.log(`Loaded ${tasks?.length || 0} tasks from backend`);
       
-      // Load goals from backend
-      const goals = await goalsAPI.getGoals();
+      // Load goals from backend using enhanced API
+      const goals = await enhancedAPI.getGoals();
       console.log(`Loaded ${goals?.length || 0} goals from backend`);
       
       setState(prev => ({
@@ -89,38 +136,71 @@ export default function CalendarScreen() {
         tasks: tasks || [],
         goals: goals || [],
         loading: false,
+        error: null,
       }));
+      
+      // Initialize filtered state with all data
+      if (!append) {
+        setFilteredEvents(events || []);
+        setFilteredTasks(tasks || []);
+        console.log('Calendar data loaded:', {
+          events: events?.length || 0,
+          tasks: tasks?.length || 0,
+          goals: goals?.length || 0
+        });
+      }
+      
+      // Animate content in for initial load
+      if (page === 1) {
+        // Temporarily disabled animations for debugging
+        // contentFadeIn();
+        // // Initialize event animations for stagger effect
+        // const totalEvents = (events?.length || 0) + (tasks?.length || 0);
+        // eventAnimations.length = 0; // Clear existing animations
+        // for (let i = 0; i < totalEvents; i++) {
+        //   eventAnimations.push(new Animated.Value(0));
+        // }
+        
+        // // Stagger animation for event cards
+        // setTimeout(() => {
+        //   const animations = eventAnimations.map((anim, index) => 
+        //     Animated.timing(anim, {
+        //       toValue: 1,
+        //       duration: 300,
+        //       delay: index * 50,
+        //       useNativeDriver: true,
+        //     })
+        //   );
+        //   Animated.parallel(animations).start();
+        // }, 100);
+      }
       
       // Update pagination state
       setCurrentPage(page);
-      setHasMoreEvents((events?.length || 0) >= eventsPerPage);
+      setHasMoreEvents((events?.length || 0) >= 50); // Check if we got a full page
       setLoadingMore(false);
     } catch (error) {
       console.error('Error loading calendar data:', error);
       
-      // Check if we're offline and have cached data
-      const { offlineService } = await import('../../services/offline');
-      const offlineState = await offlineService.getOfflineState();
-      
-      if (!offlineState.isOnline) {
-        // Try to load cached data
-        const cachedEvents = await offlineService.getCachedEvents();
-        const cachedTasks = await offlineService.getCachedTasks();
-        const cachedGoals = await offlineService.getCachedGoals();
-        
-        if (cachedEvents || cachedTasks || cachedGoals) {
-          console.log('Using cached data due to offline status');
-          setState(prev => ({
-            ...prev,
-            events: cachedEvents || [],
-            tasks: cachedTasks || [],
-            goals: cachedGoals || [],
-            loading: false,
-            error: 'Offline - showing cached data',
-          }));
-          setLoadingMore(false);
-          return;
-        }
+      // Handle error with enhanced error handling service
+      if (error && typeof error === 'object' && 'title' in error) {
+        // This is a UserFriendlyError from our enhanced API
+        setCurrentError(error as UserFriendlyError);
+        setErrorVisible(true);
+      } else {
+        // Fallback error handling
+        const userError = await errorHandlingService.handleError(
+          error,
+          ErrorCategory.CALENDAR,
+          {
+            operation: 'loadCalendarData',
+            endpoint: 'calendar/events',
+            timestamp: Date.now(),
+            retryCount: 0,
+          }
+        );
+        setCurrentError(userError);
+        setErrorVisible(true);
       }
       
       setState(prev => ({
@@ -129,6 +209,8 @@ export default function CalendarScreen() {
         error: 'Failed to load calendar data',
       }));
       setLoadingMore(false);
+      // Ensure content is visible even on error
+      // contentFadeIn();
     }
   }, []);
 
@@ -184,30 +266,53 @@ export default function CalendarScreen() {
     setFormModalVisible(true);
   }, []);
 
-  // Handle event delete
+  // Handle event delete with enhanced error handling
   const handleEventDelete = useCallback(async (eventId: string) => {
+    let event: CalendarEvent | undefined;
+    let task: Task | undefined;
+    
     try {
       // Determine if it's an event or task based on the ID
-      const event = state.events.find(e => e.id === eventId);
-      const task = state.tasks.find(t => t.id === eventId);
+      event = state.events.find(e => e.id === eventId);
+      task = state.tasks.find(t => t.id === eventId);
       
       if (event) {
-        await calendarAPI.deleteEvent(eventId);
+        await enhancedAPI.deleteEvent(eventId);
       } else if (task) {
-        await tasksAPI.deleteTask(eventId);
+        await enhancedAPI.deleteTask(eventId);
+      } else {
+        throw new Error('Event or task not found');
       }
       
-      // Refresh data
+      // Reload data to reflect changes
       await loadCalendarData();
       hapticFeedback.success();
     } catch (error) {
       console.error('Error deleting event:', error);
       hapticFeedback.error();
-      throw error;
+      
+      // Handle error with enhanced error handling
+      if (error && typeof error === 'object' && 'title' in error) {
+        setCurrentError(error as UserFriendlyError);
+        setErrorVisible(true);
+      } else {
+        const userError = await errorHandlingService.handleError(
+          error,
+          event ? ErrorCategory.CALENDAR : ErrorCategory.TASKS,
+          {
+            operation: 'deleteEvent',
+            endpoint: event ? `calendar/events/${eventId}` : `tasks/${eventId}`,
+            timestamp: Date.now(),
+            retryCount: 0,
+          }
+        );
+        setCurrentError(userError);
+        setErrorVisible(true);
+      }
     }
   }, [state.events, state.tasks, loadCalendarData]);
 
-  // Handle task completion
+  // Handle task completion with enhanced error handling
   const handleTaskComplete = useCallback(async (taskId: string) => {
     // Find the task in the current state
     const taskIndex = state.tasks.findIndex(t => t.id === taskId);
@@ -230,8 +335,8 @@ export default function CalendarScreen() {
         )
       }));
 
-      // Update the backend
-      await tasksAPI.updateTask(taskId, { status: newStatus });
+      // Update the backend using enhanced API
+      await enhancedAPI.updateTask(taskId, { status: newStatus });
       
       // Success - no need to reload, UI is already updated
       hapticFeedback.success();
@@ -249,16 +354,36 @@ export default function CalendarScreen() {
         )
       }));
       
-      throw error;
+      // Handle error with enhanced error handling
+      if (error && typeof error === 'object' && 'title' in error) {
+        setCurrentError(error as UserFriendlyError);
+        setErrorVisible(true);
+      } else {
+        const userError = await errorHandlingService.handleError(
+          error,
+          ErrorCategory.TASKS,
+          {
+            operation: 'completeTask',
+            endpoint: `tasks/${taskId}`,
+            timestamp: Date.now(),
+            retryCount: 0,
+          }
+        );
+        setCurrentError(userError);
+        setErrorVisible(true);
+      }
     }
   }, [state.tasks]);
 
-  // Handle event/task rescheduling
+  // Handle event/task rescheduling with enhanced error handling
   const handleReschedule = useCallback(async (eventId: string, newDate: Date) => {
+    let event: CalendarEvent | undefined;
+    let task: Task | undefined;
+    
     try {
       // Determine if it's an event or task based on the ID
-      const event = state.events.find(e => e.id === eventId);
-      const task = state.tasks.find(t => t.id === eventId);
+      event = state.events.find(e => e.id === eventId);
+      task = state.tasks.find(t => t.id === eventId);
       
       if (event) {
         // Reschedule calendar event
@@ -272,11 +397,9 @@ export default function CalendarScreen() {
           
           // Calculate new start and end times
           const newStartTime = new Date(newDate);
-          newStartTime.setHours(startDate.getHours(), startDate.getMinutes(), 0, 0);
-          
           const newEndTime = new Date(newStartTime.getTime() + duration);
           
-          await calendarAPI.updateEvent(eventId, {
+          await enhancedAPI.updateEvent(eventId, {
             summary: event.summary || event.title || 'Untitled Event',
             description: event.description,
             startTime: newStartTime.toISOString(),
@@ -292,7 +415,7 @@ export default function CalendarScreen() {
           newDueDate.setHours(originalDate.getHours(), originalDate.getMinutes(), 0, 0);
         }
         
-        await tasksAPI.updateTask(eventId, {
+        await enhancedAPI.updateTask(eventId, {
           due_date: newDueDate.toISOString(),
         });
       }
@@ -303,7 +426,25 @@ export default function CalendarScreen() {
     } catch (error) {
       console.error('Error rescheduling event:', error);
       hapticFeedback.error();
-      throw error;
+      
+      // Handle error with enhanced error handling
+      if (error && typeof error === 'object' && 'title' in error) {
+        setCurrentError(error as UserFriendlyError);
+        setErrorVisible(true);
+      } else {
+        const userError = await errorHandlingService.handleError(
+          error,
+          event ? ErrorCategory.CALENDAR : ErrorCategory.TASKS,
+          {
+            operation: 'rescheduleEvent',
+            endpoint: event ? `calendar/events/${eventId}` : `tasks/${eventId}`,
+            timestamp: Date.now(),
+            retryCount: 0,
+          }
+        );
+        setCurrentError(userError);
+        setErrorVisible(true);
+      }
     }
   }, [state.events, state.tasks, loadCalendarData]);
 
@@ -322,7 +463,7 @@ export default function CalendarScreen() {
         // Update existing event
         if ('start_time' in editingEvent) {
           // It's a calendar event
-          await calendarAPI.updateEvent(editingEvent.id, {
+          await enhancedAPI.updateEvent(editingEvent.id, {
             summary: formData.title,
             description: formData.description,
             startTime: formData.startTime.toISOString(),
@@ -331,7 +472,7 @@ export default function CalendarScreen() {
           });
         } else {
           // It's a task
-          await tasksAPI.updateTask(editingEvent.id, {
+          await enhancedAPI.updateTask(editingEvent.id, {
             title: formData.title,
             description: formData.description,
             due_date: formData.startTime.toISOString(),
@@ -340,7 +481,7 @@ export default function CalendarScreen() {
         }
       } else {
         // Create new event
-        await calendarAPI.createEvent({
+        await enhancedAPI.createEvent({
           summary: formData.title,
           description: formData.description,
           startTime: formData.startTime.toISOString(),
@@ -378,9 +519,11 @@ export default function CalendarScreen() {
     }));
   }, []);
 
-  // Handle retry button press
+  // Handle retry button press with enhanced error handling
   const handleRetryPress = useCallback(() => {
     hapticFeedback.medium();
+    setCurrentError(null);
+    setErrorVisible(false);
     loadCalendarData(1, false);
   }, [loadCalendarData]);
 
@@ -390,7 +533,7 @@ export default function CalendarScreen() {
     const dayEvents: DayViewEvent[] = [];
 
     // Add calendar events
-    state.events.forEach((event, index) => {
+    filteredEvents.forEach((event, index) => {
       try {
         // Handle both database format and Google Calendar API format
         let eventStartTime: string;
@@ -432,7 +575,7 @@ export default function CalendarScreen() {
     });
 
     // Add tasks
-    state.tasks.forEach(task => {
+    filteredTasks.forEach(task => {
       if (task.due_date) {
         try {
           const taskDate = new Date(task.due_date);
@@ -454,7 +597,7 @@ export default function CalendarScreen() {
     });
 
     return dayEvents.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
-  }, [state.selectedDate, state.events, state.tasks]);
+  }, [filteredEvents, filteredTasks, state.selectedDate]);
 
   // Get goals due in the current month
   const getGoalsForCurrentMonth = useCallback(() => {
@@ -487,7 +630,7 @@ export default function CalendarScreen() {
     const marked: any = {};
     
     // Mark dates with events
-    state.events.forEach(event => {
+    filteredEvents.forEach(event => {
       try {
         // Handle both database format and Google Calendar API format
         let eventStartTime: string;
@@ -513,7 +656,7 @@ export default function CalendarScreen() {
     });
 
     // Mark dates with tasks
-    state.tasks.forEach(task => {
+    filteredTasks.forEach(task => {
       if (task.due_date) {
         try {
           const date = formatDateToYYYYMMDD(new Date(task.due_date));
@@ -565,36 +708,74 @@ export default function CalendarScreen() {
     });
 
     return marked;
-  }, [state.events, state.tasks, state.goals]);
+  }, [filteredEvents, filteredTasks, state.goals]);
 
-  // Render day view with list-based layout
+  // Render day view with time blocks
   const renderDayView = useCallback(() => {
-    const dayEvents = getEventsForSelectedDate();
+    const selectedDateStr = formatDateToYYYYMMDD(state.selectedDate);
     
-    // Group events by time blocks
+    // Get events for the selected date
+    const dayEvents = getEventsForSelectedDate();
+    console.log('Day view rendering:', {
+      selectedDate: selectedDateStr,
+      dayEvents: dayEvents.length,
+      filteredEvents: filteredEvents.length,
+      filteredTasks: filteredTasks.length
+    });
+    
+    // Group events by time blocks (6-hour segments)
     const timeBlocks: Array<{
       name: string;
       start: number;
       end: number;
       events: DayViewEvent[];
     }> = [
-      { name: 'Early Morning', start: 0, end: 6, events: [] },
-      { name: 'Morning', start: 6, end: 12, events: [] },
-      { name: 'Afternoon', start: 12, end: 18, events: [] },
-      { name: 'Evening', start: 18, end: 24, events: [] },
+      {
+        name: 'Early Morning',
+        start: 0,
+        end: 6,
+        events: [],
+      },
+      {
+        name: 'Morning',
+        start: 6,
+        end: 12,
+        events: [],
+      },
+      {
+        name: 'Afternoon',
+        start: 12,
+        end: 18,
+        events: [],
+      },
+      {
+        name: 'Evening',
+        start: 18,
+        end: 24,
+        events: [],
+      },
     ];
-
+    
     // Distribute events into time blocks
     dayEvents.forEach(event => {
       const eventHour = event.startTime.getHours();
-      const block = timeBlocks.find(block => 
-        eventHour >= block.start && eventHour < block.end
-      );
-      if (block) {
-        block.events.push(event);
+      let blockIndex = -1;
+      
+      if (eventHour >= 0 && eventHour < 6) {
+        blockIndex = 0; // Early Morning
+      } else if (eventHour >= 6 && eventHour < 12) {
+        blockIndex = 1; // Morning
+      } else if (eventHour >= 12 && eventHour < 18) {
+        blockIndex = 2; // Afternoon
+      } else if (eventHour >= 18 && eventHour < 24) {
+        blockIndex = 3; // Evening
+      }
+      
+      if (blockIndex >= 0 && blockIndex < timeBlocks.length) {
+        timeBlocks[blockIndex].events.push(event);
       }
     });
-
+    
     // Sort events within each block by start time
     timeBlocks.forEach(block => {
       block.events.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
@@ -639,7 +820,7 @@ export default function CalendarScreen() {
               <View style={styles.timeBlockHeader}>
                 <Text style={styles.timeBlockTitle}>{block.name}</Text>
                 <Text style={styles.timeBlockTime}>
-                  {block.start === 0 ? '12:00 AM' : `${block.start}:00`} - {block.end === 24 ? '12:00 AM' : `${block.end}:00`}
+                  {block.start === 0 ? '12:00 AM' : block.start === 12 ? '12:00 PM' : block.start > 12 ? `${block.start - 12}:00 PM` : `${block.start}:00 AM`} - {block.end === 24 ? '12:00 AM' : block.end === 12 ? '12:00 PM' : block.end > 12 ? `${block.end - 12}:00 PM` : `${block.end}:00 AM`}
                 </Text>
               </View>
               
@@ -669,12 +850,17 @@ export default function CalendarScreen() {
         )}
       </ScrollView>
     );
-  }, [state.selectedDate, state.events, state.tasks, state.loading, refreshing, onRefresh, handleEventEdit, handleEventDelete, handleTaskComplete, handleReschedule, handleCreateEvent]);
+  }, [state.selectedDate, filteredEvents, filteredTasks, state.loading, refreshing, onRefresh, handleEventEdit, handleEventDelete, handleTaskComplete, handleReschedule, handleCreateEvent]);
 
   // Render week view with list-based layout grouped by date
   const renderWeekView = useCallback(() => {
     const weekStart = new Date(state.selectedDate);
     weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+    console.log('Week view rendering:', {
+      weekStart: weekStart.toISOString(),
+      filteredEvents: filteredEvents.length,
+      filteredTasks: filteredTasks.length
+    });
     
     // Create date groups for the week
     const dateGroups: Array<{
@@ -699,68 +885,52 @@ export default function CalendarScreen() {
     }
     
     // Distribute events into date groups
-    state.events.forEach(event => {
+    filteredEvents.forEach(event => {
       try {
         // Handle both database format and Google Calendar API format
-        let eventStartTime: string;
-        let eventEndTime: string;
-
-        if (event.start_time && event.end_time) {
-          // Database format
-          eventStartTime = event.start_time;
-          eventEndTime = event.end_time;
-        } else if (event.start?.dateTime && event.end?.dateTime) {
-          // Google Calendar API format
-          eventStartTime = event.start.dateTime;
-          eventEndTime = event.end.dateTime;
-        } else {
-          console.warn('Invalid event format for week view:', event);
-          return;
-        }
-
-        const eventDate = new Date(eventStartTime);
+        const eventDate = new Date(event.start_time || event.start?.dateTime || '');
         const eventDateStr = formatDateToYYYYMMDD(eventDate);
         
-        const dateGroup = dateGroups.find(group => group.dateString === eventDateStr);
-        if (dateGroup) {
-          dateGroup.events.push({
+        const group = dateGroups.find(g => g.dateString === eventDateStr);
+        if (group) {
+          group.events.push({
             id: event.id,
-            title: event.summary || event.title || 'Untitled Event',
-            startTime: new Date(eventStartTime),
-            endTime: new Date(eventEndTime),
-            day: dateGroups.indexOf(dateGroup),
-            type: 'event',
+            title: event.title || event.summary || 'Untitled Event',
+            startTime: eventDate,
+            endTime: new Date(event.end_time || event.end?.dateTime || eventDate.getTime() + 60 * 60 * 1000),
+            day: eventDate.getDay(),
+            type: 'event' as const,
             data: event,
             color: colors.primary,
           });
         }
       } catch (error) {
-        console.warn('Invalid event date for week view:', event);
+        console.error('Error processing event:', error);
       }
     });
     
     // Add tasks to date groups
-    state.tasks.forEach(task => {
+    filteredTasks.forEach(task => {
       if (task.due_date) {
         try {
           const taskDate = new Date(task.due_date);
           const taskDateStr = formatDateToYYYYMMDD(taskDate);
           
-          const dateGroup = dateGroups.find(group => group.dateString === taskDateStr);
-          if (dateGroup) {
-            dateGroup.events.push({
+          const group = dateGroups.find(g => g.dateString === taskDateStr);
+          if (group) {
+            group.events.push({
               id: task.id,
               title: task.title,
-              startTime: new Date(task.due_date),
-              endTime: new Date(new Date(task.due_date).getTime() + (task.estimated_duration_minutes || 30) * 60 * 1000),
-              day: dateGroups.indexOf(dateGroup),
-              type: 'task',
+              startTime: taskDate,
+              endTime: new Date(taskDate.getTime() + (task.estimated_duration_minutes || 60) * 60 * 1000),
+              day: taskDate.getDay(),
+              type: 'task' as const,
               data: task,
               color: task.priority === 'high' ? colors.error : task.priority === 'medium' ? colors.warning : colors.success,
             });
           }
         } catch (error) {
-          console.warn('Invalid task date for week view:', task.due_date);
+          console.error('Error processing task:', error);
         }
       }
     });
@@ -838,11 +1008,17 @@ export default function CalendarScreen() {
         )}
       </ScrollView>
     );
-  }, [state.selectedDate, state.events, state.tasks, state.loading, refreshing, onRefresh, handleEventEdit, handleEventDelete, handleTaskComplete, handleReschedule, handleCreateEvent]);
+  }, [state.selectedDate, filteredEvents, filteredTasks, state.loading, refreshing, onRefresh, handleEventEdit, handleEventDelete, handleTaskComplete, handleReschedule, handleCreateEvent]);
 
   // Render month view
   const renderMonthView = () => {
     const monthGoals = getGoalsForCurrentMonth();
+    console.log('Month view rendering:', {
+      selectedDate: state.selectedDate.toISOString(),
+      monthGoals: monthGoals.length,
+      filteredEvents: filteredEvents.length,
+      filteredTasks: filteredTasks.length
+    });
     
     return (
       <ScrollView style={styles.monthViewContainer}>
@@ -867,74 +1043,60 @@ export default function CalendarScreen() {
             textDayFontFamily: typography.fontFamily.regular,
             textMonthFontFamily: typography.fontFamily.bold,
             textDayHeaderFontFamily: typography.fontFamily.medium,
-            textDayFontWeight: typography.fontWeight.medium as any,
-            textMonthFontWeight: typography.fontWeight.bold as any,
-            textDayHeaderFontWeight: typography.fontWeight.semibold as any,
-            textDayFontSize: typography.fontSize.base,
+            textDayFontSize: typography.fontSize.sm,
             textMonthFontSize: typography.fontSize.lg,
             textDayHeaderFontSize: typography.fontSize.sm,
           }}
         />
         
-        {/* Goals Section */}
-        <View style={styles.goalsSection}>
-          <View style={styles.goalsHeader}>
-            <Text style={styles.goalsTitle}>Upcoming Goals</Text>
-            <Text style={styles.goalsSubtitle}>
-              {state.selectedDate.toLocaleDateString([], { month: 'long', year: 'numeric' })}
-            </Text>
+        {/* Month Goals Section */}
+        {monthGoals.length > 0 && (
+          <View style={styles.monthGoalsSection}>
+            <Text style={styles.monthGoalsTitle}>This Month's Goals</Text>
+            {monthGoals.map(goal => (
+              <View key={goal.id} style={styles.goalCard}>
+                <Text style={styles.goalTitle}>{goal.title}</Text>
+                {goal.description && (
+                  <Text style={styles.goalDescription}>{goal.description}</Text>
+                )}
+              </View>
+            ))}
           </View>
-          
-          {monthGoals.length === 0 ? (
-            <View style={styles.emptyGoals}>
-              <Text style={styles.emptyGoalsText}>No goals due this month</Text>
-            </View>
-          ) : (
-            <View style={styles.goalsList}>
-              {monthGoals.map(goal => (
-                <View key={goal.id} style={styles.goalCard}>
-                  <View style={styles.goalHeader}>
-                    <Text style={styles.goalTitle}>{goal.title}</Text>
-                    <Text style={styles.goalDate}>
-                      {goal.target_completion_date ? 
-                        new Date(goal.target_completion_date).toLocaleDateString([], {
-                          month: 'short',
-                          day: 'numeric'
-                        }) : 'No due date'
-                      }
-                    </Text>
-                  </View>
-                  
-                  {goal.description && (
-                    <Text style={styles.goalDescription} numberOfLines={2}>
-                      {goal.description}
-                    </Text>
-                  )}
-                  
-                  {goal.category && (
-                    <View style={styles.goalCategory}>
-                      <Text style={styles.goalCategoryText}>{goal.category}</Text>
-                    </View>
-                  )}
-                  
-                  {goal.milestones && goal.milestones.length > 0 && (
-                    <View style={styles.goalProgress}>
-                      <Text style={styles.goalProgressText}>
-                        {goal.milestones.filter(m => m.completed).length} of {goal.milestones.length} milestones completed
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              ))}
-            </View>
-          )}
+        )}
+        
+        {/* Quick Actions */}
+        <View style={styles.quickActionsSection}>
+          <Text style={styles.quickActionsTitle}>Quick Actions</Text>
+          <View style={styles.quickActionsGrid}>
+            <TouchableOpacity
+              style={styles.quickActionButton}
+              onPress={handleCreateEvent}
+            >
+              <Text style={styles.quickActionButtonText}>Create Event</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.quickActionButton}
+              onPress={() => {
+                // Navigate to tasks screen or create task modal
+                console.log('Create task');
+              }}
+            >
+              <Text style={styles.quickActionButtonText}>Create Task</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
     );
   };
 
-  // Render view content based on view type
+  // Render view content based on selected view type
   const renderViewContent = () => {
+    console.log('Rendering view content:', {
+      viewType: state.viewType,
+      loading: state.loading,
+      error: state.error
+    });
+    
     switch (state.viewType) {
       case 'day':
         return renderDayView();
@@ -943,23 +1105,46 @@ export default function CalendarScreen() {
       case 'month':
         return renderMonthView();
       default:
-        return renderMonthView();
+        return renderDayView();
     }
   };
 
-  if (state.loading) {
+  // Only show loading skeleton for initial load, not for pagination
+  if (state.loading && currentPage === 1) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading calendar...</Text>
+        <View style={styles.header}>
+          <Text style={styles.title}>Calendar</Text>
         </View>
+        <LoadingSkeleton type="event" count={5} />
       </View>
     );
   }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
+      {/* Error Banner for critical errors */}
+      {currentError && currentError.severity === 'CRITICAL' && (
+        <ErrorBanner
+          error={currentError}
+          onRetry={() => {
+            setCurrentError(null);
+            setErrorVisible(false);
+            loadCalendarData();
+          }}
+          onDismiss={() => {
+            setCurrentError(null);
+            setErrorVisible(false);
+          }}
+          onAction={(action) => {
+            if (action === 'signIn') {
+              // Handle sign in action
+              console.log('Navigate to sign in');
+            }
+          }}
+        />
+      )}
+      
       {/* Offline Indicator */}
       <OfflineIndicator />
       
@@ -1002,7 +1187,15 @@ export default function CalendarScreen() {
         <Text style={styles.todayButtonText}>Today</Text>
       </TouchableOpacity>
 
-      {/* Content */}
+      {/* Search and Filter */}
+      <SearchAndFilter
+        events={state.events}
+        tasks={state.tasks}
+        onFilterChange={handleFilterChange}
+        viewType={state.viewType}
+      />
+
+      {/* Content with Animation */}
       <View style={styles.content}>
         {state.error ? (
           <View style={styles.errorContainer}>
@@ -1018,6 +1211,28 @@ export default function CalendarScreen() {
           renderViewContent()
         )}
       </View>
+
+      {/* Error Display for non-critical errors */}
+      {currentError && currentError.severity !== 'CRITICAL' && (
+        <ErrorDisplay
+          error={currentError}
+          onRetry={() => {
+            setCurrentError(null);
+            setErrorVisible(false);
+            loadCalendarData();
+          }}
+          onDismiss={() => {
+            setCurrentError(null);
+            setErrorVisible(false);
+          }}
+          onAction={(action) => {
+            if (action === 'signIn') {
+              // Handle sign in action
+              console.log('Navigate to sign in');
+            }
+          }}
+        />
+      )}
 
       {/* Floating Action Button */}
       <TouchableOpacity
@@ -1372,5 +1587,48 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.xs,
     color: colors.text.secondary,
     fontWeight: typography.fontWeight.medium as any,
+  },
+  monthGoalsSection: {
+    padding: spacing.md,
+    backgroundColor: colors.background,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+  },
+  monthGoalsTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold as any,
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+  },
+  quickActionsSection: {
+    padding: spacing.md,
+    backgroundColor: colors.background,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+  },
+  quickActionsTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold as any,
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+  },
+  quickActionsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    flexWrap: 'wrap',
+  },
+  quickActionButton: {
+    width: '45%', // Adjust as needed for grid layout
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    borderRadius: spacing.sm,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    marginVertical: spacing.xs,
+  },
+  quickActionButtonText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium as any,
+    color: colors.secondary,
   },
 });

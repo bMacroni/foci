@@ -56,7 +56,7 @@ CREATE TABLE public.calendar_events (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
     task_id UUID REFERENCES public.tasks(id) ON DELETE CASCADE,
-    google_calendar_id TEXT NOT NULL,
+    google_calendar_id TEXT, -- Made nullable to allow locally created events
     title TEXT NOT NULL,
     description TEXT,
     start_time TIMESTAMP WITH TIME ZONE NOT NULL,

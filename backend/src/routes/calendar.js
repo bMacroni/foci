@@ -79,16 +79,16 @@ router.get('/events', requireAuth, async (req, res) => {
   try {
     const maxResults = parseInt(req.query.maxResults) || 200;
     
-    // Calculate time range: 7 days prior to 30 days from now
+    // Calculate time range: 90 days prior to 365 days from now (expanded range)
     const now = new Date();
-    const sevenDaysAgo = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
-    const thirtyDaysFromNow = new Date(now.getTime() + (30 * 24 * 60 * 60 * 1000));
+    const ninetyDaysAgo = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000));
+    const oneYearFromNow = new Date(now.getTime() + (365 * 24 * 60 * 60 * 1000));
     
     console.log(`[Calendar API] Getting events for user ${req.user.id}, maxResults: ${maxResults}`);
-    console.log(`[Calendar API] Time range: ${sevenDaysAgo.toISOString()} to ${thirtyDaysFromNow.toISOString()}`);
+    console.log(`[Calendar API] Time range: ${ninetyDaysAgo.toISOString()} to ${oneYearFromNow.toISOString()}`);
     
-    // Get events from local database with time range
-    const events = await getCalendarEventsFromDB(req.user.id, maxResults, sevenDaysAgo, thirtyDaysFromNow);
+    // Get events from local database with expanded time range
+    const events = await getCalendarEventsFromDB(req.user.id, maxResults, ninetyDaysAgo, oneYearFromNow);
     
     console.log(`[Calendar API] Returning ${events.length} events`);
     

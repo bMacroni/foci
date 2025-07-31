@@ -14,15 +14,15 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
  * @returns {Promise<{success: boolean, count: number}>}
  */
 export async function syncGoogleCalendarEvents(userId) {
-  // 1. Fetch events from Google Calendar (30 days back + 30 days forward)
+  // 1. Fetch events from Google Calendar (90 days back + 365 days forward to match backend fetching)
   const maxResults = 2500; // Google API max
   
-  // Calculate date range: 30 days back to 30 days forward
+  // Calculate date range: 90 days back to 365 days forward (expanded to match backend)
   const now = new Date();
-  const thirtyDaysAgo = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
-  const thirtyDaysFromNow = new Date(now.getTime() + (30 * 24 * 60 * 60 * 1000));
+  const ninetyDaysAgo = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000));
+  const oneYearFromNow = new Date(now.getTime() + (365 * 24 * 60 * 60 * 1000));
   
-  const googleEvents = await listCalendarEvents(userId, maxResults, thirtyDaysAgo, thirtyDaysFromNow);
+  const googleEvents = await listCalendarEvents(userId, maxResults, ninetyDaysAgo, oneYearFromNow);
 
   for (const event of googleEvents) {
     // 2. Upsert into calendar_events table
