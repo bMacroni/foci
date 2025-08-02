@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState } from 'react'
 import GoalList from '../components/GoalList'
 import TaskList from '../components/TaskList'
 import TasksPage from '../components/TasksPage'
@@ -6,58 +6,12 @@ import CalendarStatus from '../components/CalendarStatus'
 import CalendarEvents from '../components/CalendarEvents'
 import AIChat from '../components/AIChat'
 import FeedbackModal from '../components/FeedbackModal';
+import SidebarNav from '../components/SidebarNav';
 
 function Dashboard({ showSuccess }) {
-  // Remove draggable nav pill state and drag logic
-  // const [activeTab, setActiveTab] = useState('ai');
   const [activeTab, setActiveTab] = useState('ai');
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
-  const [isHorizontal, setIsHorizontal] = useState(false); // Remove if not needed
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
-
-  // Remove navPos, navRef, dragOffset, dragging, and related useEffect
-
-  // Remove drag handlers
-
-  // Icon-only nav buttons (like CalendarStatus)
-  const navTabs = [
-    {
-      id: 'ai',
-      label: 'Foci.ai',
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-        </svg>
-      )
-    },
-    {
-      id: 'goals',
-      label: 'Goals',
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m4 0h-1V7h-1m-4 0h1v4h1m-4 0h1v4h1" />
-        </svg>
-      )
-    },
-    {
-      id: 'tasks',
-      label: 'Tasks',
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-3-3v6m9 4a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2h10a2 2 0 012 2v10z" />
-        </svg>
-      )
-    },
-    {
-      id: 'calendar',
-      label: 'Calendar',
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
-      )
-    }
-  ];
 
   // Logout handler
   const handleLogout = () => {
@@ -67,94 +21,16 @@ function Dashboard({ showSuccess }) {
 
   return (
     <div className="min-h-screen bg-white flex">
-      {/* Top-Center Horizontal Nav Pill */}
-      <div
-        className="z-50 shadow-2xl flex flex-row items-center fixed left-1/2 top-6 transform -translate-x-1/2 rounded-full px-8 py-3 transition-all duration-200"
-        style={{
-          background: 'rgba(255,255,255,0.7)', // More transparent by default
-          boxShadow: '0 8px 32px 0 rgba(0,0,0,0.18)',
-          minWidth: 0,
-          minHeight: 0,
-          opacity: 0.7, // More transparent by default
-        }}
-        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.97)'; e.currentTarget.style.opacity = 1; }}
-        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.7)'; e.currentTarget.style.opacity = 0.7; }}
-      >
-        {/* Nav Buttons */}
-        {[
-          {
-            id: 'ai',
-            label: 'Foci.ai',
-            icon: (
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-              </svg>
-            )
-          },
-          {
-            id: 'goals',
-            label: 'Goals',
-            icon: (
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m4 0h-1V7h-1m-4 0h1v4h1m-4 0h1v4h1" />
-              </svg>
-            )
-          },
-          {
-            id: 'tasks',
-            label: 'Tasks',
-            icon: (
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-3-3v6m9 4a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2h10a2 2 0 012 2v10z" />
-              </svg>
-            )
-          },
-          {
-            id: 'calendar',
-            label: 'Calendar',
-            icon: (
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            )
-          },
-
-        ].map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-full font-medium transition-colors duration-200 ${activeTab === tab.id ? 'bg-black text-white' : 'bg-white text-black hover:bg-gray-100'}`}
-            style={{ margin: '0 4px' }}
-          >
-            {tab.icon}
-            <span>{tab.label}</span>
-          </button>
-        ))}
-        {/* Help Button */}
-        <button
-          onClick={() => setShowFeedbackModal(true)}
-          className="flex items-center space-x-2 px-4 py-2 rounded-full font-medium transition-colors duration-200 bg-white text-blue-600 hover:bg-blue-100 ml-2"
-          style={{ margin: '0 4px' }}
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 14h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8s-9-3.582-9-8 4.03-8 9-8 9 3.582 9 8z" />
-          </svg>
-          <span>Help</span>
-        </button>
-        {/* Logout Button */}
-        <button
-          onClick={handleLogout}
-          className="flex items-center space-x-2 px-4 py-2 rounded-full font-medium transition-colors duration-200 bg-white text-red-600 hover:bg-red-100 ml-2"
-          style={{ margin: '0 4px' }}
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2h4a2 2 0 012 2v1" />
-          </svg>
-          <span>Logout</span>
-        </button>
-      </div>
+      {/* Sidebar Navigation */}
+      <SidebarNav 
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        onLogout={handleLogout}
+        onShowFeedback={() => setShowFeedbackModal(true)}
+      />
+      
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col relative">
+      <div className="flex-1 flex flex-col relative lg:ml-16">
         {/* Mobile Hamburger (top left) */}
         <button
           className="lg:hidden absolute top-4 left-4 z-20 p-2 rounded-md bg-white/80 shadow border border-gray-200"
@@ -241,6 +117,27 @@ function Dashboard({ showSuccess }) {
                 ))}
               </div>
             </nav>
+            {/* Mobile Help and Logout */}
+            <div className="p-4 border-t border-gray-200 space-y-2">
+              <button
+                onClick={() => {
+                  setShowFeedbackModal(true);
+                  setShowMobileSidebar(false);
+                }}
+                className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-blue-600 hover:bg-blue-100 transition-colors"
+              >
+                <span className="font-medium">Help</span>
+              </button>
+              <button
+                onClick={() => {
+                  handleLogout();
+                  setShowMobileSidebar(false);
+                }}
+                className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-red-600 hover:bg-red-100 transition-colors"
+              >
+                <span className="font-medium">Logout</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
