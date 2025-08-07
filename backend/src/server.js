@@ -15,6 +15,7 @@ import userRouter from './routes/user.js'
 import cron from 'node-cron';
 import { syncGoogleCalendarEvents } from './utils/syncService.js';
 import { autoScheduleTasks } from './controllers/autoSchedulingController.js';
+import logger from './utils/logger.js';
 
 
 const app = express()
@@ -31,15 +32,15 @@ const supabaseKey = process.env.SUPABASE_ANON_KEY
 let supabase
 if (supabaseUrl && supabaseKey) {
   supabase = createClient(supabaseUrl, supabaseKey)
-  console.log('Supabase client initialized')
+  logger.info('Supabase client initialized')
 } else {
-  console.warn('Supabase credentials not found. Some features may not work.')
+  logger.warn('Supabase credentials not found. Some features may not work.')
 }
 
 // Environment check - only log non-sensitive info
-console.log('NODE_ENV:', process.env.NODE_ENV);
-console.log('PORT:', process.env.PORT);
-console.log('Environment variables loaded:', Object.keys(process.env).filter(key => 
+logger.info('NODE_ENV:', process.env.NODE_ENV);
+logger.info('PORT:', process.env.PORT);
+logger.info('Environment variables loaded:', Object.keys(process.env).filter(key => 
   key.includes('URL') || key.includes('GOOGLE') || key.includes('FRONTEND')
 ).length, 'configured');
 
@@ -76,17 +77,17 @@ app.use('/api/tasks', tasksRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/auth/google', googleAuthRoutes);
 
-console.log('Registering calendar router...');
+logger.info('Registering calendar router...');
 app.use('/api/calendar', calendarRouter);
-console.log('Calendar router registered');
+logger.info('Calendar router registered');
 
-console.log('Registering AI router...');
+logger.info('Registering AI router...');
 app.use('/api/ai', aiRouter);
-console.log('AI router registered');
+logger.info('AI router registered');
 
-console.log('Registering conversations router...');
+logger.info('Registering conversations router...');
 app.use('/api/conversations', conversationsRouter);
-console.log('Conversations router registered');
+logger.info('Conversations router registered');
 
 app.use('/api/user', userRouter);
 
@@ -97,7 +98,7 @@ async function getAllUserIds() {
     .select('user_id');
 
   if (error) {
-    console.error('Error fetching user IDs for Google Calendar sync:', error);
+    logger.error('Error fetching user IDs for Google Calendar sync:', error);
     return [];
   }
 
@@ -113,7 +114,7 @@ async function getUsersWithAutoSchedulingEnabled() {
     .eq('auto_scheduling_enabled', true);
 
   if (error) {
-    console.error('Error fetching users with auto-scheduling enabled:', error);
+    logger.error('Error fetching users with auto-scheduling enabled:', error);
     return [];
   }
 
@@ -123,14 +124,14 @@ async function getUsersWithAutoSchedulingEnabled() {
 
 // Schedule sync every day at 4:00 AM CST (America/Chicago)
 cron.schedule('0 4 * * *', async () => {
-  console.log('[CRON] Starting Google Calendar sync for all users at 4:00 AM CST');
+  logger.cron('[CRON] Starting Google Calendar sync for all users at 4:00 AM CST');
   const userIds = await getAllUserIds();
   for (const userId of userIds) {
     try {
       await syncGoogleCalendarEvents(userId);
-      console.log(`[CRON] Synced Google Calendar for user: ${userId}`);
+      logger.cron(`[CRON] Synced Google Calendar for user: ${userId}`);
     } catch (err) {
-      console.error(`[CRON] Error syncing Google Calendar for user: ${userId}`, err);
+      logger.error(`[CRON] Error syncing Google Calendar for user: ${userId}`, err);
     }
   }
 }, {
@@ -139,15 +140,15 @@ cron.schedule('0 4 * * *', async () => {
 
 // Schedule auto-scheduling every day at 5:00 AM CST (after calendar sync)
 cron.schedule('0 5 * * *', async () => {
-  console.log('[CRON] Starting auto-scheduling for all enabled users at 5:00 AM CST');
+  logger.cron('[CRON] Starting auto-scheduling for all enabled users at 5:00 AM CST');
   const userIds = await getUsersWithAutoSchedulingEnabled();
   
   if (userIds.length === 0) {
-    console.log('[CRON] No users with auto-scheduling enabled found');
+    logger.cron('[CRON] No users with auto-scheduling enabled found');
     return;
   }
   
-  console.log(`[CRON] Found ${userIds.length} users with auto-scheduling enabled`);
+  logger.cron(`[CRON] Found ${userIds.length} users with auto-scheduling enabled`);
   
   for (const userId of userIds) {
     try {
@@ -159,7 +160,7 @@ cron.schedule('0 5 * * *', async () => {
         .single();
       
       if (tokenError || !tokenData?.access_token) {
-        console.log(`[CRON] No valid token found for user: ${userId}, skipping auto-scheduling`);
+        logger.cron(`[CRON] No valid token found for user: ${userId}, skipping auto-scheduling`);
         continue;
       }
       
@@ -167,15 +168,15 @@ cron.schedule('0 5 * * *', async () => {
       const result = await autoScheduleTasks(userId, token);
       
       if (result.error) {
-        console.error(`[CRON] Error auto-scheduling for user ${userId}:`, result.error);
+        logger.error(`[CRON] Error auto-scheduling for user ${userId}:`, result.error);
       } else {
-        console.log(`[CRON] Auto-scheduling completed for user: ${userId}`);
+        logger.cron(`[CRON] Auto-scheduling completed for user: ${userId}`);
         if (result.successful > 0) {
-          console.log(`[CRON] Successfully scheduled ${result.successful} tasks for user: ${userId}`);
+          logger.cron(`[CRON] Successfully scheduled ${result.successful} tasks for user: ${userId}`);
         }
       }
     } catch (err) {
-      console.error(`[CRON] Error in auto-scheduling for user: ${userId}`, err);
+      logger.error(`[CRON] Error in auto-scheduling for user: ${userId}`, err);
     }
   }
 }, {
@@ -184,15 +185,15 @@ cron.schedule('0 5 * * *', async () => {
 
 // Schedule auto-scheduling every 6 hours for recurring tasks and new tasks
 cron.schedule('0 */6 * * *', async () => {
-  console.log('[CRON] Starting periodic auto-scheduling check (every 6 hours)');
+  logger.cron('[CRON] Starting periodic auto-scheduling check (every 6 hours)');
   const userIds = await getUsersWithAutoSchedulingEnabled();
   
   if (userIds.length === 0) {
-    console.log('[CRON] No users with auto-scheduling enabled found for periodic check');
+    logger.cron('[CRON] No users with auto-scheduling enabled found for periodic check');
     return;
   }
   
-  console.log(`[CRON] Found ${userIds.length} users for periodic auto-scheduling check`);
+  logger.cron(`[CRON] Found ${userIds.length} users for periodic auto-scheduling check`);
   
   for (const userId of userIds) {
     try {
@@ -204,7 +205,7 @@ cron.schedule('0 */6 * * *', async () => {
         .single();
       
       if (tokenError || !tokenData?.access_token) {
-        console.log(`[CRON] No valid token found for user: ${userId}, skipping periodic auto-scheduling`);
+        logger.cron(`[CRON] No valid token found for user: ${userId}, skipping periodic auto-scheduling`);
         continue;
       }
       
@@ -212,12 +213,12 @@ cron.schedule('0 */6 * * *', async () => {
       const result = await autoScheduleTasks(userId, token);
       
       if (result.error) {
-        console.error(`[CRON] Error in periodic auto-scheduling for user ${userId}:`, result.error);
+        logger.error(`[CRON] Error in periodic auto-scheduling for user ${userId}:`, result.error);
       } else if (result.successful > 0) {
-        console.log(`[CRON] Periodically scheduled ${result.successful} tasks for user: ${userId}`);
+        logger.cron(`[CRON] Periodically scheduled ${result.successful} tasks for user: ${userId}`);
       }
     } catch (err) {
-      console.error(`[CRON] Error in periodic auto-scheduling for user: ${userId}`, err);
+      logger.error(`[CRON] Error in periodic auto-scheduling for user: ${userId}`, err);
     }
   }
 }, {
@@ -227,9 +228,9 @@ cron.schedule('0 */6 * * *', async () => {
 // Start server only if run directly
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Foci API server running on port ${PORT}`);
-    console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
-    console.log(`🌐 Network access: http://192.168.1.66:${PORT}/api/health`);
+    logger.info(`🚀 Foci API server running on port ${PORT}`);
+logger.info(`📊 Health check: http://localhost:${PORT}/api/health`);
+logger.info(`🌐 Network access: http://192.168.1.66:${PORT}/api/health`);
   });
 }
 

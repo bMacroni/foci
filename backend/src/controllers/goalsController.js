@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import logger from '../utils/logger.js';
 
 export async function createGoal(req, res) {
   const { title, description, target_completion_date, category, milestones } = req.body;
@@ -98,6 +99,7 @@ export async function getGoals(req, res) {
   const user_id = req.user.id;
   // Get the JWT from the request
   const token = req.headers.authorization?.split(' ')[1];
+  
   // Create Supabase client with the JWT
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
     global: {
@@ -106,25 +108,54 @@ export async function getGoals(req, res) {
       }
     }
   });
-  // Fetching goals for user
-
-  // Fetch all goals with nested milestones and steps in a single query
-  const { data, error } = await supabase
-    .from('goals')
-    .select(`
-      *,
-      milestones (
+  
+  try {
+    const { data, error } = await supabase
+      .from('goals')
+      .select(`
         *,
-        steps (*)
-      )
-    `)
-    .eq('user_id', user_id)
-    .order('created_at', { ascending: false });
+        milestones (
+          *,
+          steps (*)
+        )
+      `)
+      .eq('user_id', user_id)
+      .order('created_at', { ascending: false });
 
-  if (error) {
-    return res.status(400).json({ error: error.message });
+    if (error) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.json(data);
+  } catch (error) {
+    return res.status(500).json({ error: 'Internal server error' });
   }
-  res.json(data);
+}
+
+export async function getGoalTitles(req, res) {
+  const user_id = req.user.id;
+  const token = req.headers.authorization?.split(' ')[1];
+  
+  // Get query parameters for filtering
+  const { search, category, priority, status, due_date } = req.query;
+  
+  try {
+    const titles = await getGoalTitlesForUser(user_id, token, {
+      search,
+      category,
+      priority,
+      status,
+      due_date
+    });
+
+    if (titles.error) {
+      return res.status(400).json({ error: titles.error });
+    }
+
+    res.json({ titles });
+  } catch (error) {
+    return res.status(500).json({ error: 'Internal server error' });
+  }
 }
 
 export async function getGoalById(req, res) {
@@ -205,7 +236,7 @@ export async function updateGoal(req, res) {
             .eq('goal_id', id);
             
           if (milestoneError) {
-            console.error('Error updating milestone:', milestoneError);
+            logger.error('Error updating milestone:', milestoneError);
           }
 
           // Update steps for this milestone
@@ -223,7 +254,7 @@ export async function updateGoal(req, res) {
                   .eq('milestone_id', milestone.id);
                   
                 if (stepError) {
-                  console.error('Error updating step:', stepError);
+                  logger.error('Error updating step:', stepError);
                 }
               }
             }
@@ -252,7 +283,7 @@ export async function updateGoal(req, res) {
 
     res.json(updatedGoal);
   } catch (error) {
-    console.error('Error updating goal:', error);
+    logger.error('Error updating goal:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 }
@@ -373,6 +404,49 @@ export async function getGoalsForUser(userId, token, args = {}) {
     return { error: error.message };
   }
   return data;
+}
+
+export async function getGoalTitlesForUser(userId, token, args = {}) {
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  });
+
+  let query = supabase
+    .from('goals')
+    .select('title')
+    .eq('user_id', userId);
+
+  // Apply filters
+  if (args.search) {
+    query = query.ilike('title', `%${args.search}%`);
+  }
+  if (args.category) {
+    query = query.eq('category', args.category);
+  }
+  if (args.priority) {
+    query = query.eq('priority', args.priority);
+  }
+  if (args.status) {
+    query = query.eq('status', args.status);
+  }
+  if (args.due_date) {
+    query = query.eq('target_completion_date', args.due_date);
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: false });
+
+  if (error) {
+    return { error: error.message };
+  }
+  
+  // Extract only the titles
+  const titles = data ? data.map(goal => goal.title) : [];
+  
+  return titles;
 }
 
 export async function lookupGoalbyTitle(userId, token) {
@@ -817,7 +891,7 @@ export async function generateGoalBreakdown(req, res) {
     
     res.status(200).json(breakdown);
   } catch (error) {
-    console.error('Error generating goal breakdown:', error);
+    logger.error('Error generating goal breakdown:', error);
     return res.status(500).json({ error: 'Failed to generate goal breakdown' });
   }
 } 
