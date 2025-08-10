@@ -436,66 +436,7 @@ export async function getGoalTitlesForUser(userId, token, args = {}) {
   return data ? data.map(g => g.title) : [];
 }
 
-export async function lookupGoalbyTitle(userId, token) {
-  if (!token) {
-    return { error: 'No authentication token provided' };
-  }
-
-  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
-    global: {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    }
-  });
-
-  let query = supabase
-    .from('goals')
-    .select('title')
-    .eq('user_id', userId);
-
-  if (DEBUG) console.log('🔍 [GOALS DEBUG] Base query created for user_id:', userId);
-
-  // Apply filters
-  if (args.search) {
-    query = query.ilike('title', `%${args.search}%`);
-    if (DEBUG) console.log('🔍 [GOALS DEBUG] Applied search filter:', args.search);
-  }
-  if (args.category) {
-    query = query.eq('category', args.category);
-    if (DEBUG) console.log('🔍 [GOALS DEBUG] Applied category filter:', args.category);
-  }
-  if (args.priority) {
-    query = query.eq('priority', args.priority);
-    if (DEBUG) console.log('🔍 [GOALS DEBUG] Applied priority filter:', args.priority);
-  }
-  if (args.status) {
-    query = query.eq('status', args.status);
-    if (DEBUG) console.log('🔍 [GOALS DEBUG] Applied status filter:', args.status);
-  }
-  if (args.due_date) {
-    query = query.eq('target_completion_date', args.due_date);
-    if (DEBUG) console.log('🔍 [GOALS DEBUG] Applied due_date filter:', args.due_date);
-  }
-
-  if (DEBUG) console.log('🔍 [GOALS DEBUG] Executing database query...');
-  const { data, error } = await query.order('created_at', { ascending: false });
-
-  if (error) {
-    if (DEBUG) console.error('🔍 [GOALS DEBUG] Database error:', error);
-    return { error: error.message };
-  }
-  
-  if (DEBUG) console.log('🔍 [GOALS DEBUG] Database query successful');
-  if (DEBUG) console.log('🔍 [GOALS DEBUG] Raw data count:', data ? data.length : 0);
-  if (DEBUG) console.log('🔍 [GOALS DEBUG] Raw data:', JSON.stringify(data, null, 2));
-  
-  // Extract only the titles
-  const titles = data ? data.map(goal => goal.title) : [];
-  if (DEBUG) console.log('🔍 [GOALS DEBUG] Extracted titles:', titles);
-  
-  return titles;
-}
+// removed duplicate lookupGoalbyTitle definition (older, buggy variant)
 
 // Helper: Create a task from the next unfinished step in a goal
 export async function createTaskFromNextGoalStep(userId, token, args = {}) {
