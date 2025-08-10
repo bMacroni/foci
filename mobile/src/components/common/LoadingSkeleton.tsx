@@ -17,7 +17,7 @@ export const LoadingSkeleton: React.FC<LoadingSkeletonProps> = ({
 
   useEffect(() => {
     skeletonAnimation(opacity).start();
-  }, []);
+  }, [opacity]);
 
   const renderEventSkeleton = () => (
     <View style={styles.eventSkeleton}>

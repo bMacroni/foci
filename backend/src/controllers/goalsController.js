@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import logger from '../utils/logger.js';
+const DEBUG = process.env.DEBUG_LOGS === 'true';
 
 export async function createGoal(req, res) {
   const { title, description, target_completion_date, category, milestones } = req.body;
@@ -135,25 +136,28 @@ export async function getGoals(req, res) {
 export async function getGoalTitles(req, res) {
   const user_id = req.user.id;
   const token = req.headers.authorization?.split(' ')[1];
-  
+
   // Get query parameters for filtering
   const { search, category, priority, status, due_date } = req.query;
-  
+
   try {
     const titles = await getGoalTitlesForUser(user_id, token, {
       search,
       category,
       priority,
       status,
-      due_date
+      due_date,
     });
 
     if (titles.error) {
       return res.status(400).json({ error: titles.error });
     }
 
-    res.json({ titles });
+    return res.json({ titles });
   } catch (error) {
+    if (DEBUG) {
+      try { logger.error('getGoalTitles error', error); } catch {}
+    }
     return res.status(500).json({ error: 'Internal server error' });
   }
 }
@@ -410,9 +414,9 @@ export async function getGoalTitlesForUser(userId, token, args = {}) {
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
     global: {
       headers: {
-        Authorization: `Bearer ${token}`
-      }
-    }
+        Authorization: `Bearer ${token}`,
+      },
+    },
   });
 
   let query = supabase
@@ -421,32 +425,15 @@ export async function getGoalTitlesForUser(userId, token, args = {}) {
     .eq('user_id', userId);
 
   // Apply filters
-  if (args.search) {
-    query = query.ilike('title', `%${args.search}%`);
-  }
-  if (args.category) {
-    query = query.eq('category', args.category);
-  }
-  if (args.priority) {
-    query = query.eq('priority', args.priority);
-  }
-  if (args.status) {
-    query = query.eq('status', args.status);
-  }
-  if (args.due_date) {
-    query = query.eq('target_completion_date', args.due_date);
-  }
+  if (args.search) query = query.ilike('title', `%${args.search}%`);
+  if (args.category) query = query.eq('category', args.category);
+  if (args.priority) query = query.eq('priority', args.priority);
+  if (args.status) query = query.eq('status', args.status);
+  if (args.due_date) query = query.eq('target_completion_date', args.due_date);
 
   const { data, error } = await query.order('created_at', { ascending: false });
-
-  if (error) {
-    return { error: error.message };
-  }
-  
-  // Extract only the titles
-  const titles = data ? data.map(goal => goal.title) : [];
-  
-  return titles;
+  if (error) return { error: error.message };
+  return data ? data.map(g => g.title) : [];
 }
 
 export async function lookupGoalbyTitle(userId, token) {
@@ -462,23 +449,174 @@ export async function lookupGoalbyTitle(userId, token) {
     }
   });
 
-  // Get ALL goals for this user
-  const { data, error } = await supabase
+  let query = supabase
+    .from('goals')
+    .select('title')
+    .eq('user_id', userId);
+
+  if (DEBUG) console.log('🔍 [GOALS DEBUG] Base query created for user_id:', userId);
+
+  // Apply filters
+  if (args.search) {
+    query = query.ilike('title', `%${args.search}%`);
+    if (DEBUG) console.log('🔍 [GOALS DEBUG] Applied search filter:', args.search);
+  }
+  if (args.category) {
+    query = query.eq('category', args.category);
+    if (DEBUG) console.log('🔍 [GOALS DEBUG] Applied category filter:', args.category);
+  }
+  if (args.priority) {
+    query = query.eq('priority', args.priority);
+    if (DEBUG) console.log('🔍 [GOALS DEBUG] Applied priority filter:', args.priority);
+  }
+  if (args.status) {
+    query = query.eq('status', args.status);
+    if (DEBUG) console.log('🔍 [GOALS DEBUG] Applied status filter:', args.status);
+  }
+  if (args.due_date) {
+    query = query.eq('target_completion_date', args.due_date);
+    if (DEBUG) console.log('🔍 [GOALS DEBUG] Applied due_date filter:', args.due_date);
+  }
+
+  if (DEBUG) console.log('🔍 [GOALS DEBUG] Executing database query...');
+  const { data, error } = await query.order('created_at', { ascending: false });
+
+  if (error) {
+    if (DEBUG) console.error('🔍 [GOALS DEBUG] Database error:', error);
+    return { error: error.message };
+  }
+  
+  if (DEBUG) console.log('🔍 [GOALS DEBUG] Database query successful');
+  if (DEBUG) console.log('🔍 [GOALS DEBUG] Raw data count:', data ? data.length : 0);
+  if (DEBUG) console.log('🔍 [GOALS DEBUG] Raw data:', JSON.stringify(data, null, 2));
+  
+  // Extract only the titles
+  const titles = data ? data.map(goal => goal.title) : [];
+  if (DEBUG) console.log('🔍 [GOALS DEBUG] Extracted titles:', titles);
+  
+  return titles;
+}
+
+// Helper: Create a task from the next unfinished step in a goal
+export async function createTaskFromNextGoalStep(userId, token, args = {}) {
+  const { goal_title, due_date, priority } = args || {};
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: `Bearer ${token}` } }
+  });
+
+  if (!goal_title) {
+    return { error: 'goal_title is required' };
+  }
+
+  // 1) Lookup goal by title (partial ilike)
+  const { data: goals, error: goalErr } = await supabase
+    .from('goals')
+    .select('id, title')
+    .eq('user_id', userId)
+    .ilike('title', `%${goal_title}%`)
+    .order('created_at', { ascending: false })
+    .limit(1);
+  if (goalErr) return { error: goalErr.message };
+  const goal = Array.isArray(goals) && goals.length > 0 ? goals[0] : null;
+  if (!goal) return { error: `No goal matched '${goal_title}'` };
+
+  // 2) Fetch milestones and steps for the goal
+  const { data: milestones, error: msErr } = await supabase
+    .from('milestones')
+    .select('id, title, order')
+    .eq('goal_id', goal.id)
+    .order('order', { ascending: true });
+  if (msErr) return { error: msErr.message };
+  if (!Array.isArray(milestones) || milestones.length === 0) return { error: 'Goal has no milestones' };
+
+  // Load steps for each milestone and find first unfinished
+  let selectedStep = null;
+  for (const ms of milestones) {
+    const { data: steps } = await supabase
+      .from('steps')
+      .select('id, text, completed, order')
+      .eq('milestone_id', ms.id)
+      .order('order', { ascending: true });
+    if (Array.isArray(steps) && steps.length > 0) {
+      selectedStep = steps.find(s => !s.completed) || steps[0];
+      if (selectedStep) break;
+    }
+  }
+  if (!selectedStep) return { error: 'No steps found for this goal' };
+
+  // 3) Create the task using tasks table, linking to goal
+  const taskPayload = {
+    user_id: userId,
+    title: selectedStep.text,
+    description: '',
+    due_date: due_date || null,
+    priority: priority || null,
+    goal_id: goal.id,
+    completed: false,
+  };
+  const { data: createdTask, error: taskErr } = await supabase
+    .from('tasks')
+    .insert([taskPayload])
+    .select()
+    .single();
+  if (taskErr) return { error: taskErr.message };
+
+  return {
+    task: createdTask,
+    goal: { id: goal.id, title: goal.title },
+    used_step: { id: selectedStep.id, text: selectedStep.text },
+  };
+}
+
+export async function lookupGoalbyTitle(userId, token, args = {}) {
+  if (!token) {
+    return { error: 'No authentication token provided' };
+  }
+
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: {
+      headers: { Authorization: `Bearer ${token}` }
+    }
+  });
+
+  let query = supabase
     .from('goals')
     .select('id, title')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
 
+  if (args.search) {
+    query = query.ilike('title', `%${args.search}%`);
+  }
+  if (args.category) {
+    query = query.eq('category', args.category);
+  }
+  if (args.priority) {
+    query = query.eq('priority', args.priority);
+  }
+  if (args.status) {
+    query = query.eq('status', args.status);
+  }
+  if (args.due_date) {
+    query = query.eq('target_completion_date', args.due_date);
+  }
+  if (args.limit && Number.isInteger(args.limit) && args.limit > 0) {
+    query = query.limit(args.limit);
+  } else if (args.search) {
+    // default to 1 when doing a targeted lookup
+    query = query.limit(1);
+  }
+
+  const { data, error } = await query;
+
   if (error) {
     return { error: error.message };
   }
-  
-  // Return all goals with their IDs and titles
+
   if (data && data.length > 0) {
     return data;
-  } else {
-    return { error: 'No goals found for this user' };
   }
+  return { error: 'No goals matched your query' };
 }
 
 export async function createGoalFromAI(args, userId, userContext) {

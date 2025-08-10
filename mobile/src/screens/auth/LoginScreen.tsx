@@ -22,7 +22,7 @@ export default function LoginScreen({ navigation }: any) {
         email,
         password,
       });
-      const { token, user } = response.data;
+      const { token } = response.data;
       await AsyncStorage.setItem('authToken', token);
       setLoading(false);
       navigation.replace('Main');
@@ -92,7 +92,7 @@ export default function LoginScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.background.primary,
   },
   content: {
     flex: 1,

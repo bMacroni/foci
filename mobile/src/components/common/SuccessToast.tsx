@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -31,6 +31,23 @@ export const SuccessToast: React.FC<SuccessToastProps> = ({
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(-100)).current;
 
+  const hideToast = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: -100,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      onClose();
+    });
+  }, [fadeAnim, slideAnim, onClose]);
+
   useEffect(() => {
     if (visible) {
       // Slide in and fade in
@@ -54,24 +71,7 @@ export const SuccessToast: React.FC<SuccessToastProps> = ({
 
       return () => clearTimeout(timer);
     }
-  }, [visible, duration]);
-
-  const hideToast = () => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: -100,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      onClose();
-    });
-  };
+  }, [visible, duration, hideToast, fadeAnim, slideAnim]);
 
   const formatScheduledTime = (timeString: string) => {
     const date = new Date(timeString);
@@ -144,7 +144,7 @@ const styles = StyleSheet.create({
     zIndex: 1000,
   },
   toast: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.background.primary,
     borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: colors.border.light,

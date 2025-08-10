@@ -38,11 +38,19 @@ if (supabaseUrl && supabaseKey) {
 }
 
 // Environment check - only log non-sensitive info
-logger.info('NODE_ENV:', process.env.NODE_ENV);
-logger.info('PORT:', process.env.PORT);
-logger.info('Environment variables loaded:', Object.keys(process.env).filter(key => 
-  key.includes('URL') || key.includes('GOOGLE') || key.includes('FRONTEND')
-).length, 'configured');
+if (process.env.DEBUG_LOGS === 'true') {
+  console.log('NODE_ENV:', process.env.NODE_ENV);
+  console.log('PORT:', process.env.PORT);
+  console.log('Environment variables loaded:', Object.keys(process.env).filter(key =>
+    key.includes('URL') || key.includes('GOOGLE') || key.includes('FRONTEND')
+  ).length, 'configured');
+} else {
+  logger.info('NODE_ENV:', process.env.NODE_ENV);
+  logger.info('PORT:', process.env.PORT);
+  logger.info('Environment variables loaded:', Object.keys(process.env).filter(key =>
+    key.includes('URL') || key.includes('GOOGLE') || key.includes('FRONTEND')
+  ).length, 'configured');
+}
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -77,17 +85,17 @@ app.use('/api/tasks', tasksRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/auth/google', googleAuthRoutes);
 
-logger.info('Registering calendar router...');
+if (process.env.DEBUG_LOGS === 'true') console.log('Registering calendar router...');
 app.use('/api/calendar', calendarRouter);
-logger.info('Calendar router registered');
+if (process.env.DEBUG_LOGS === 'true') console.log('Calendar router registered');
 
-logger.info('Registering AI router...');
+if (process.env.DEBUG_LOGS === 'true') console.log('Registering AI router...');
 app.use('/api/ai', aiRouter);
-logger.info('AI router registered');
+if (process.env.DEBUG_LOGS === 'true') console.log('AI router registered');
 
-logger.info('Registering conversations router...');
+if (process.env.DEBUG_LOGS === 'true') console.log('Registering conversations router...');
 app.use('/api/conversations', conversationsRouter);
-logger.info('Conversations router registered');
+if (process.env.DEBUG_LOGS === 'true') console.log('Conversations router registered');
 
 app.use('/api/user', userRouter);
 

@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Alert,
   ActivityIndicator,
 } from 'react-native';
@@ -48,11 +47,7 @@ export const TaskDetailScreen: React.FC<TaskDetailScreenProps> = ({
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
 
-  useEffect(() => {
-    loadTask();
-  }, [taskId]);
-
-  const loadTask = async () => {
+  const loadTask = useCallback(async () => {
     try {
       setLoading(true);
       const taskData = await tasksAPI.getTaskById(taskId);
@@ -63,7 +58,11 @@ export const TaskDetailScreen: React.FC<TaskDetailScreenProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [taskId]);
+
+  useEffect(() => {
+    loadTask();
+  }, [taskId, loadTask]);
 
   const handleToggleStatus = async () => {
     if (!task) return;
@@ -271,7 +270,7 @@ export const TaskDetailScreen: React.FC<TaskDetailScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.background.primary,
   },
   content: {
     padding: spacing.md,
@@ -280,7 +279,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: colors.background.primary,
   },
   loadingText: {
     marginTop: spacing.md,
@@ -291,7 +290,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: colors.background.primary,
   },
   errorText: {
     fontSize: typography.fontSize.lg,

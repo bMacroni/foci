@@ -2,6 +2,19 @@ import { createClient } from '@supabase/supabase-js';
 import { dateParser } from '../utils/dateParser.js';
 import { autoScheduleTasks, processRecurringTask } from './autoSchedulingController.js';
 
+// Normalize user-provided search text (e.g., strip trailing words like "task")
+function normalizeSearchText(input) {
+  if (!input || typeof input !== 'string') return input;
+  let q = input.trim();
+  // Remove wrapping quotes and trailing punctuation
+  q = q.replace(/^['"\s]+|['"\s]+$/g, '').replace(/[.!?]+$/g, '').trim();
+  // Remove leading fillers
+  q = q.replace(/^\b(my|the)\s+/i, '').trim();
+  // Drop generic suffix nouns commonly spoken with titles
+  q = q.replace(/\b(task|tasks|goal|goals|event|events|meeting|appointment|reminder)s?\b\s*$/i, '').trim();
+  return q;
+}
+
 export async function createTask(req, res) {
   const { 
     title, 
@@ -379,7 +392,7 @@ export async function createTaskFromAI(args, userId, userContext) {
 }
 
 export async function updateTaskFromAI(args, userId, userContext) {
-  const { id, title, description, due_date, priority, related_goal, completed, preferred_time_of_day, deadline_type, travel_time_minutes } = args;
+  const { id, title, description, due_date, priority, related_goal, completed, status, preferred_time_of_day, deadline_type, travel_time_minutes } = args;
   const token = userContext?.token;
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
     global: {
@@ -391,14 +404,18 @@ export async function updateTaskFromAI(args, userId, userContext) {
 
   let taskId = id;
   if (!taskId && title) {
-    // Fetch all tasks for the user and find by title
-    const { data: tasks, error: fetchError } = await supabase
+    const cleaned = normalizeSearchText(title);
+    // Partial, case-insensitive match on title using ilike
+    const { data: matches, error: fetchError } = await supabase
       .from('tasks')
       .select('id, title')
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .ilike('title', `%${cleaned}%`)
+      .order('created_at', { ascending: false })
+      .limit(1);
     if (fetchError) return { error: fetchError.message };
-    const match = tasks.find(t => t.title && t.title.trim().toLowerCase() === title.trim().toLowerCase());
-    if (!match) return { error: `No task found with title '${title}'` };
+    const match = Array.isArray(matches) && matches.length > 0 ? matches[0] : null;
+    if (!match) return { error: `No task found matching '${cleaned}'` };
     taskId = match.id;
   }
   if (!taskId) {
@@ -425,7 +442,19 @@ export async function updateTaskFromAI(args, userId, userContext) {
   }
   if (priority !== undefined) updateData.priority = priority;
   if (related_goal !== undefined) updateData.goal_id = goalId;
-  if (completed !== undefined) updateData.completed = completed;
+  // Normalize completed/status to keep fields in sync
+  if (status !== undefined) {
+    updateData.status = status;
+    if (completed === undefined) {
+      updateData.completed = String(status).toLowerCase() === 'completed';
+    }
+  }
+  if (completed !== undefined) {
+    updateData.completed = completed;
+    if (status === undefined) {
+      updateData.status = completed ? 'completed' : 'not_started';
+    }
+  }
   if (preferred_time_of_day !== undefined) updateData.preferred_time_of_day = preferred_time_of_day;
   if (deadline_type !== undefined) updateData.deadline_type = deadline_type;
   if (travel_time_minutes !== undefined) updateData.travel_time_minutes = travel_time_minutes;
@@ -457,14 +486,18 @@ export async function deleteTaskFromAI(args, userId, userContext) {
 
   let taskId = id;
   if (!taskId && title) {
-    // Fetch all tasks for the user and find by title
-    const { data: tasks, error: fetchError } = await supabase
+    const cleaned = normalizeSearchText(title);
+    // Partial, case-insensitive match
+    const { data: matches, error: fetchError } = await supabase
       .from('tasks')
       .select('id, title')
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .ilike('title', `%${cleaned}%`)
+      .order('created_at', { ascending: false })
+      .limit(1);
     if (fetchError) return { error: fetchError.message };
-    const match = tasks.find(t => t.title && t.title.trim().toLowerCase() === title.trim().toLowerCase());
-    if (!match) return { error: `No task found with title '${title}'` };
+    const match = Array.isArray(matches) && matches.length > 0 ? matches[0] : null;
+    if (!match) return { error: `No task found matching '${cleaned}'` };
     taskId = match.id;
   }
   if (!taskId) {
@@ -560,8 +593,9 @@ export async function readTaskFromAI(args, userId, userContext) {
     query = query.eq('category', args.category);
   }
   if (args.search) {
+    const cleanedSearch = normalizeSearchText(args.search);
     // Case-insensitive partial match for title or description
-    query = query.or(`title.ilike.%${args.search}%,description.ilike.%${args.search}%`);
+    query = query.or(`title.ilike.%${cleanedSearch}%,description.ilike.%${cleanedSearch}%`);
   }
   if (args.preferred_time_of_day) {
     query = query.eq('preferred_time_of_day', args.preferred_time_of_day);

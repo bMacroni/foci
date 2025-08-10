@@ -8,8 +8,6 @@ import {
   ScrollView,
   TextInput,
   Alert,
-  ActivityIndicator,
-  Platform,
 } from 'react-native';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { colors } from '../../themes/colors';
@@ -82,8 +80,9 @@ export const EventFormModal: React.FC<EventFormModalProps> = ({
         endTime = new Date(task.due_date || Date.now());
       }
       
+      const computedTitle = 'summary' in event ? (event.title || (event as any).summary || '') : (event.title || '');
       setFormData({
-        title: event.title || event.summary || '',
+        title: computedTitle,
         description: event.description || '',
         startTime,
         endTime,
@@ -159,13 +158,7 @@ export const EventFormModal: React.FC<EventFormModalProps> = ({
     setShowEndPicker(false);
   };
 
-  const handleStartPickerCancel = () => {
-    setShowStartPicker(false);
-  };
-
-  const handleEndPickerCancel = () => {
-    setShowEndPicker(false);
-  };
+  // removed unused cancel handlers
 
   const formatDateTime = (date: Date) => {
     return date.toLocaleString([], {
@@ -382,7 +375,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContainer: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.background.primary,
     borderRadius: spacing.md,
     width: '90%',
     height: '85%',
@@ -491,7 +484,7 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: colors.background,
+    backgroundColor: colors.secondary,
   },
   toggleThumbActive: {
     transform: [{ translateX: 20 }],

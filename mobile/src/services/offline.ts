@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
-import { CalendarEvent, Task, Goal } from '../types/calendar';
+import { CalendarEvent, Task } from '../types/calendar';
+import { Goal } from '../services/api';
 
 // Storage keys
 const STORAGE_KEYS = {
@@ -317,7 +318,7 @@ class OfflineService {
   async getOfflineState(): Promise<OfflineState> {
     const queue = await this.getOfflineQueue();
     const lastSyncStr = await AsyncStorage.getItem(STORAGE_KEYS.LAST_SYNC);
-    const lastSyncTime = lastSyncStr ? parseInt(lastSyncStr) : null;
+    const lastSyncTime = lastSyncStr ? parseInt(lastSyncStr, 10) : null;
 
     return {
       isOnline: this.isOnline,

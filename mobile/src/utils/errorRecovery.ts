@@ -1,5 +1,4 @@
 import { errorHandlingService, ErrorCategory, ErrorType, UserFriendlyError } from '../services/errorHandling';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Circuit breaker states
 export enum CircuitBreakerState {
@@ -183,7 +182,7 @@ class ErrorRecoveryService {
   }
 
   // Check if error is retryable
-  private isRetryableError(error: any, category: ErrorCategory): boolean {
+  private isRetryableError(error: any, _category: ErrorCategory): boolean {
     // Don't retry authentication errors
     if (error && typeof error === 'object' && 'title' in error) {
       const userError = error as UserFriendlyError;
@@ -342,4 +341,4 @@ class ErrorRecoveryService {
 export const errorRecoveryService = new ErrorRecoveryService();
 
 // Export types for use in other files
-export type { CircuitBreakerConfig, RetryStrategy, ErrorRecoveryContext }; 
+// Types are already exported via interfaces above

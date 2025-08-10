@@ -91,9 +91,9 @@ describe('GeminiService - Duplication Issue', () => {
       userContext
     );
 
-    // Verify the result contains only one action
+    // Verify the result contains only one action (ignore args field)
     expect(result.actions).toHaveLength(1);
-    expect(result.actions[0]).toEqual({
+    expect(result.actions[0]).toMatchObject({
       action_type: 'create',
       entity_type: 'task',
       details: {

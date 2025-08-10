@@ -63,6 +63,7 @@ const AIChat = ({ onNavigateToTab, initialMessages }) => {
   };
   const handleCloseToast = () => setToast({ ...toast, isVisible: false });
   const [showLoadingScreen, setShowLoadingScreen] = useState(false);
+  const [mood, setMood] = useState(null); // 'low', 'okay', 'energized'
   
   // New state for conversation improvements
   const [searchQuery, setSearchQuery] = useState('');
@@ -99,76 +100,141 @@ const AIChat = ({ onNavigateToTab, initialMessages }) => {
     loadUserData();
   }, []);
 
-  // Initialize welcome message based on user data
+  // Apply mood to API headers so backend receives it per request
+  useEffect(() => {
+    aiAPI.setMood(mood);
+  }, [mood]);
+
+  // Initialize welcome message based on user data (more personal + quick actions)
   useEffect(() => {
     if (hasLoadedData && messages.length === 0) {
       const hasGoals = Array.isArray(userData.goals) ? userData.goals.length > 0 : false;
       const hasTasks = Array.isArray(userData.tasks) ? userData.tasks.length > 0 : false;
       
       let welcomeMessage = '';
+      let quickActions = [];
       
       if (!hasGoals && !hasTasks) {
-        // New user - comprehensive onboarding
-        welcomeMessage = `🎯 **Welcome to Foci!** I'm your AI-powered productivity assistant, and I'm here to help you build a focused, organized life.
+        // New user - personal onboarding
+        welcomeMessage = `👋 **Welcome to Foci!** I'm here to help you build a focused, organized life.
 
-**Let's get started!** I can help you:
+**How are you feeling today?** I'd love to know what's on your mind before we dive in.
 
-• **Set meaningful goals** - Create clear, achievable objectives
-• **Organize tasks** - Break down goals into actionable steps  
-• **Manage your calendar** - Schedule and track important events
-• **Stay focused** - Get personalized productivity advice
+I can help you with:
+• Setting meaningful goals that align with your values
+• Breaking down big dreams into manageable steps
+• Creating a system that works for your unique style
+• Building sustainable habits that stick
 
-**What would you like to work on today?** You can start by telling me about a goal you have, or I can help you get organized!`;
+**What's one thing you'd like to focus on or improve in your life right now?**`;
+        
+        quickActions = [
+          'I want to set my first goal',
+          'Help me get organized',
+          "I'm feeling overwhelmed",
+          'Show me how this works'
+        ];
       } else if (hasGoals && !hasTasks) {
-        // Has goals but no tasks
+        // Has goals but no tasks - help them take action
         const goalsCount = Array.isArray(userData.goals) ? userData.goals.length : 0;
-        welcomeMessage = `🎯 **Welcome back!** I see you have ${goalsCount} goal${goalsCount !== 1 ? 's' : ''} set up. 
+        const recentGoal = Array.isArray(userData.goals) && userData.goals.length > 0 ? userData.goals[0] : null;
+        
+        welcomeMessage = `👋 **Welcome back!** I see you have ${goalsCount} goal${goalsCount !== 1 ? 's' : ''} set up.
 
-**Let's make progress!** I can help you:
+**How are you feeling about your progress?** 
 
-• **Break down your goals** into actionable tasks
-• **Create tasks** to move toward your objectives
-• **Review and refine** your existing goals
-• **Plan your week** around your priorities
+I noticed your most recent goal is "${recentGoal?.title || 'your goal'}" - how's that going? 
+
+I'm here to help you:
+• Break down your goals into actionable steps
+• Create tasks that move you forward
+• Stay motivated when things get tough
+• Celebrate your wins along the way
 
 **What would you like to focus on today?**`;
+        
+        quickActions = [
+          'Break down my goals into tasks',
+          'Review my progress',
+          'I need motivation',
+          'Create a plan for today'
+        ];
       } else if (hasGoals && hasTasks) {
-        // Has both goals and tasks
+        // Has both goals and tasks - focus on momentum
         const goalsCount = Array.isArray(userData.goals) ? userData.goals.length : 0;
         const tasksArray = Array.isArray(userData.tasks) ? userData.tasks : [];
         const completedTasks = tasksArray.filter(task => task.completed).length;
         const totalTasks = tasksArray.length;
+        const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
         
-        welcomeMessage = `🎯 **Welcome back!** Great progress - you have ${goalsCount} goal${goalsCount !== 1 ? 's' : ''} and ${totalTasks} task${totalTasks !== 1 ? 's' : ''} (${completedTasks} completed).
+        // Insights
+        const overdueTasks = tasksArray.filter(task =>
+          task.due_date && new Date(task.due_date) < new Date() && !task.completed
+        ).length;
+        
+        const highPriorityTasks = tasksArray.filter(task =>
+          task.priority === 'high' && !task.completed
+        ).length;
+        
+        welcomeMessage = `👋 **Welcome back!** 
 
-**Let's keep the momentum going!** I can help you:
+**How are you feeling today?** 
 
-• **Review your progress** and celebrate wins
-• **Create new tasks** for your goals
-• **Prioritize what's next** for today
-• **Adjust your goals** if needed
+I see you have ${goalsCount} goal${goalsCount !== 1 ? 's' : ''} and ${totalTasks} task${totalTasks !== 1 ? 's' : ''} with ${completionRate}% completion rate - that's great momentum!
 
-**What's your focus for today?**`;
+${overdueTasks > 0 ? `⚠️ You have ${overdueTasks} overdue task${overdueTasks !== 1 ? 's' : ''} - let's get those handled!` : ''}
+${highPriorityTasks > 0 ? `🎯 You have ${highPriorityTasks} high-priority task${highPriorityTasks !== 1 ? 's' : ''} to focus on.` : ''}
+
+I'm here to help you:
+• Celebrate your progress and wins
+• Tackle what's most important today
+• Stay motivated and focused
+• Adjust your approach if needed
+
+**What's your energy level and focus area for today?**`;
+        
+        quickActions = [
+          "Show me today's priorities",
+          'Celebrate my wins',
+          'Help me with overdue tasks',
+          'I need a low-energy task'
+        ];
       } else {
-        // Has tasks but no goals
-        const tasksCount = Array.isArray(userData.tasks) ? userData.tasks.length : 0;
-        welcomeMessage = `📝 **Welcome back!** I see you have ${tasksCount} task${tasksCount !== 1 ? 's' : ''} to work on.
+        // Has tasks but no goals - help them find direction
+        const tasksArray = Array.isArray(userData.tasks) ? userData.tasks : [];
+        const tasksCount = tasksArray.length;
+        const completedTasks = tasksArray.filter(task => task.completed).length;
+        
+        welcomeMessage = `👋 **Welcome back!** 
 
-**Let's get organized!** I can help you:
+**How are you feeling today?** 
 
-• **Create goals** to give your tasks direction
-• **Prioritize your tasks** for today
-• **Review and organize** your task list
-• **Plan your week** effectively
+I see you have ${tasksCount} task${tasksCount !== 1 ? 's' : ''} (${completedTasks} completed) - you're getting things done!
 
-**What would you like to work on?**`;
+But I notice you don't have any goals set up yet. Goals can help give your tasks direction and meaning.
+
+I'm here to help you:
+• Connect your tasks to bigger objectives
+• Create goals that inspire you
+• Organize your tasks more effectively
+• Build a system that works for you
+
+**What's one area of your life you'd like to improve or focus on?**`;
+        
+        quickActions = [
+          'Help me set my first goal',
+          'Organize my tasks better',
+          'Show me my progress',
+          'I need motivation'
+        ];
       }
 
       setMessages([{
         id: 1,
         type: 'ai',
         content: welcomeMessage,
-        timestamp: new Date()
+        timestamp: new Date(),
+        quickActions
       }]);
     }
   }, [hasLoadedData, userData, messages.length]);
@@ -709,13 +775,43 @@ You’re making great strides!
     return () => clearTimeout(timer);
   }, [hasLoadedData]);
 
-  const examplePrompts = [
-    "Add a new goal",
-    "Show my tasks for today",
-    "Schedule a meeting for tomorrow at 2pm",
-    "What’s on my calendar this week?",
-    "Mark my ‘Buy groceries’ task as done"
-  ];
+  // Dynamic example prompts based on user state
+  const getExamplePrompts = () => {
+    const hasGoals = Array.isArray(userData.goals) ? userData.goals.length > 0 : false;
+    const hasTasks = Array.isArray(userData.tasks) ? userData.tasks.length > 0 : false;
+    
+    if (!hasGoals && !hasTasks) {
+      return [
+        'Help me set my first goal',
+        'I want to get organized',
+        "I'm feeling overwhelmed",
+        'Show me how this works'
+      ];
+    } else if (hasGoals && !hasTasks) {
+      return [
+        'Break down my goals into tasks',
+        'Create a plan for today',
+        'Review my progress',
+        'I need motivation'
+      ];
+    } else if (hasGoals && hasTasks) {
+      return [
+        "Show me today's priorities",
+        'Help me with overdue tasks',
+        'Celebrate my wins',
+        'I need a low-energy task'
+      ];
+    } else {
+      return [
+        'Help me set my first goal',
+        'Organize my tasks better',
+        'Show me my progress',
+        'I need motivation'
+      ];
+    }
+  };
+
+  const examplePrompts = getExamplePrompts();
 
   return (
     <div className="bg-white h-full flex overflow-hidden relative">
@@ -997,7 +1093,15 @@ You’re making great strides!
             const isPending = message.type === 'user' && message.id === pendingUserMessageId;
             return (
               <React.Fragment key={message.id}>
-                <MessageBubble message={message} />
+                <MessageBubble
+                  message={message}
+                  onQuickAction={(action) => {
+                    setInputMessage(action);
+                    setTimeout(() => {
+                      handleSubmit({ preventDefault: () => {} }, action);
+                    }, 100);
+                  }}
+                />
                 {isPending && (
                   <div className="flex justify-end mt-1" key={message.id + '-pending'}>
                     
@@ -1025,21 +1129,50 @@ You’re making great strides!
           )}
           <div ref={messagesEndRef} />
         </div>
-        {/* Sticky Example Prompts and Input Area */}
+        {/* Sticky Example Prompts, Mood Selector, and Input Area */}
         <div className="sticky bottom-0 bg-white border-t border-black/10 z-10 w-full">
-          <div className="flex flex-wrap gap-2 p-4 bg-gray-50 border-b border-black/10 w-full">
-            <span className="font-semibold text-gray-700 mr-2">Try asking:</span>
-            {examplePrompts.map((prompt, idx) => (
-              <button
-                key={idx}
-                type="button"
-                className="px-3 py-1 bg-black text-white rounded-full text-sm hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-black/30 transition-colors"
-                onClick={() => setInputMessage(prompt)}
-                aria-label={`Use example prompt: ${prompt}`}
-              >
-                {prompt}
-              </button>
-            ))}
+          <div className="flex flex-col gap-3 p-4 bg-gray-50 border-b border-black/10 w-full">
+            <div className="flex items-center justify-between w-full gap-3 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-semibold text-gray-700 mr-1">Try asking:</span>
+                {examplePrompts.map((prompt, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    className="px-3 py-1 bg-black text-white rounded-full text-sm hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-black/30 transition-colors"
+                    onClick={() => setInputMessage(prompt)}
+                    aria-label={`Use example prompt: ${prompt}`}
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+              {/* Mood Selector */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">Mood:</span>
+                <div className="flex gap-2">
+                  {[
+                    { key: 'low', label: 'Low' },
+                    { key: 'okay', label: 'Okay' },
+                    { key: 'energized', label: 'Energized' }
+                  ].map(opt => (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={() => setMood(opt.key)}
+                      className={`px-2.5 py-1 rounded-full text-sm border transition-colors ${
+                        mood === opt.key
+                          ? 'bg-black text-white border-black'
+                          : 'bg-white text-gray-800 border-gray-300 hover:bg-gray-100'
+                      }`}
+                      aria-pressed={mood === opt.key}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
           <div className="border-t border-black/10 p-4 w-full">
             <form onSubmit={handleSubmit} className="flex space-x-4 w-full">
@@ -1091,7 +1224,7 @@ You’re making great strides!
   );
 };
 
-const MessageBubble = ({ message }) => {
+const MessageBubble = ({ message, onQuickAction }) => {
   // Helper to detect and parse Markdown JSON code blocks - now handles multiple JSON objects
   const extractJsonFromCodeBlock = (content) => {
     const codeBlockMatches = content.match(/```json\s*([\s\S]*?)\s*```/gi);
@@ -1118,13 +1251,28 @@ const MessageBubble = ({ message }) => {
   const [saving, setSaving] = React.useState(false);
   const [tasksState, setTasksState] = React.useState(null); // For local UI update
 
+  // Initialize tasksState when tasks are first passed
+  React.useEffect(() => {
+    const jsonObjects = extractJsonFromCodeBlock(message.content);
+    if (jsonObjects && jsonObjects.length > 0) {
+      const readTask = jsonObjects.find(json => json.action_type === 'read' && json.entity_type === 'task');
+      if (readTask && !tasksState) {
+        const tasks = readTask.details && (Array.isArray(readTask.details.tasks) ? readTask.details.tasks : readTask.details);
+        if (Array.isArray(tasks)) {
+          setTasksState(tasks);
+        }
+      }
+    }
+  }, [message.content, tasksState]);
+
   // Helper to update task in local state
   const updateTaskInState = (taskId, field, value) => {
-    setTasksState((prev) =>
-      prev.map((task) =>
+    setTasksState((prev) => {
+      if (!prev) return prev; // Return null if prev is null
+      return prev.map((task) =>
         task.id === taskId ? { ...task, [field]: value } : task
-      )
-    );
+      );
+    });
   };
 
   // Save handler
@@ -1175,11 +1323,13 @@ const MessageBubble = ({ message }) => {
                 <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Task</th>
                 <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Due Date</th>
                 <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Status</th>
+                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Energy</th>
+                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700"></th>
               </tr>
             </thead>
             <tbody>
               {displayTasks.map((task) => (
-                <tr key={task.id} className="border-t border-gray-100 hover:bg-gray-50">
+                <tr key={task.id} className={`border-t border-gray-100 hover:bg-gray-50 ${task.priority === 'low' ? 'bg-green-50/40' : ''}`}>
                   <td className="px-4 py-2 font-medium text-gray-900">{task.title}</td>
                   {/* Due Date Cell */}
                   <td className="px-4 py-2 text-gray-700">
@@ -1256,6 +1406,40 @@ const MessageBubble = ({ message }) => {
                       </span>
                     )}
                   </td>
+                  {/* Energy indicator */}
+                  <td className="px-4 py-2">
+                    {task.priority ? (
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                        task.priority === 'low'
+                          ? 'bg-green-100 text-green-700'
+                          : task.priority === 'medium'
+                          ? 'bg-yellow-100 text-yellow-700'
+                          : 'bg-red-100 text-red-700'
+                      }`}>
+                        {task.priority}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-gray-400">—</span>
+                    )}
+                  </td>
+                  {/* Schedule button */}
+                  <td className="px-4 py-2 text-right">
+                    {!task.completed && (
+                      <button
+                        className="px-3 py-1.5 text-sm bg-black text-white rounded-md hover:bg-gray-800"
+                        onClick={async () => {
+                          try {
+                            const res = await calendarAPI.scheduleTask(task.id);
+                            alert('Task scheduled successfully');
+                          } catch (e) {
+                            alert('Failed to schedule task');
+                          }
+                        }}
+                      >
+                        Schedule
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -1264,10 +1448,41 @@ const MessageBubble = ({ message }) => {
         {/* Mobile Card/List */}
         <div className="sm:hidden space-y-3 mt-2">
           {displayTasks.map((task) => (
-            <div key={task.id} className="bg-white border border-gray-200 rounded-lg shadow-sm p-3 flex flex-col">
+            <div key={task.id} className={`bg-white border border-gray-200 rounded-lg shadow-sm p-3 flex flex-col ${task.priority === 'low' ? 'ring-1 ring-green-200' : ''}`}>
               <div className="font-semibold text-gray-900 text-base mb-1">{task.title}</div>
               <div className="text-sm text-gray-700">Due: {task.due_date ? new Date(task.due_date).toLocaleDateString() : <span className="italic text-gray-400">None</span>}</div>
               <div className="text-sm text-gray-700">Status: <span className="capitalize">{task.status ? task.status.replace('_', ' ') : '—'}</span></div>
+              <div className="mt-1">
+                <span className="text-xs text-gray-500">Energy: </span>
+                {task.priority ? (
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                    task.priority === 'low'
+                      ? 'bg-green-100 text-green-700'
+                      : task.priority === 'medium'
+                      ? 'bg-yellow-100 text-yellow-700'
+                      : 'bg-red-100 text-red-700'
+                  }`}>
+                    {task.priority}
+                  </span>
+                ) : (
+                  <span className="text-xs text-gray-400">—</span>
+                )}
+              </div>
+              {!task.completed && (
+                <button
+                  className="mt-2 w-full px-3 py-2 text-sm bg-black text-white rounded-md hover:bg-gray-800"
+                  onClick={async () => {
+                    try {
+                      const res = await calendarAPI.scheduleTask(task.id);
+                      alert('Task scheduled successfully');
+                    } catch (e) {
+                      alert('Failed to schedule task');
+                    }
+                  }}
+                >
+                  Schedule
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -1280,20 +1495,209 @@ const MessageBubble = ({ message }) => {
     if (jsonObjects && jsonObjects.length > 0) {
       // Check for read actions first
       const readTask = jsonObjects.find(json => json.action_type === 'read' && json.entity_type === 'task');
+      const taskCategory = jsonObjects.find(json => json.category === 'task');
       const readGoal = jsonObjects.find(json => json.action_type === 'read' && json.entity_type === 'goal');
       
-      if (readTask) {
+      if (readTask || taskCategory) {
         // Render the task list responsively
-        const tasks = readTask.details && (Array.isArray(readTask.details.tasks) ? readTask.details.tasks : readTask.details);
+        const tasks = readTask
+          ? (readTask.details && (Array.isArray(readTask.details.tasks) ? readTask.details.tasks : readTask.details))
+          : (Array.isArray(taskCategory.tasks) ? taskCategory.tasks : []);
         return (
-          <div>
-            <div className="font-semibold mb-2">Here are your tasks:</div>
-            {renderTaskList(tasks)}
+          <div className="relative bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="absolute left-0 top-0 h-full w-1.5 bg-green-500 rounded-l-xl" aria-hidden="true"></div>
+            <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-green-50 to-emerald-50">
+              <h3 className="text-lg font-semibold text-gray-900">Your Tasks</h3>
+              <p className="text-sm text-gray-600">{Array.isArray(tasks) ? `${tasks.length} task${tasks.length === 1 ? '' : 's'}` : ''}</p>
+            </div>
+            <div className="p-4">
+              {renderTaskList(tasks)}
+            </div>
           </div>
         );
       }
       if (readGoal) {
-        return '<strong>Here are your goals:</strong>';
+        // Normalize goals payload
+        const goalsPayload = readGoal.details && (Array.isArray(readGoal.details.goals) ? readGoal.details.goals : readGoal.details);
+        const goalsArray = Array.isArray(goalsPayload) ? goalsPayload : [goalsPayload];
+        const firstGoal = goalsArray && goalsArray.length > 0 ? goalsArray[0] : null;
+        if (!firstGoal) return '<strong>No goal found.</strong>';
+        const goal = firstGoal;
+
+        const milestones = Array.isArray(goal.milestones) ? goal.milestones : [];
+        // Determine the active milestone: first one that isn't fully complete; if all complete, use last
+        const getActiveMilestoneIndex = () => {
+          for (let i = 0; i < milestones.length; i++) {
+            const msSteps = Array.isArray(milestones[i].steps) ? milestones[i].steps : [];
+            const allCompleted = msSteps.length > 0 && msSteps.every(s => s.completed);
+            if (!allCompleted) return i;
+          }
+          return milestones.length > 0 ? milestones.length - 1 : -1;
+        };
+        const activeIndex = getActiveMilestoneIndex();
+        const activeMilestone = activeIndex >= 0 ? milestones[activeIndex] : null;
+        const steps = activeMilestone ? (activeMilestone.steps || []) : [];
+        const remainingMilestones = activeIndex >= 0 ? Math.max(0, milestones.length - (activeIndex + 1)) : 0;
+
+        return (
+          <div className="relative bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="absolute left-0 top-0 h-full w-1.5 bg-amber-400 rounded-l-xl" aria-hidden="true"></div>
+            <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">{goal.title}</h3>
+                  {goal.description && (
+                    <p className="text-sm text-gray-600 mt-1">{goal.description}</p>
+                  )}
+                </div>
+                {goal.target_completion_date && (
+                  <div className="text-xs text-gray-500 bg-gray-200 px-2 py-1 rounded-full">
+                    Due {new Date(goal.target_completion_date).toLocaleDateString()}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {milestones.length > 0 && (
+                <div>
+                  <div className="text-sm font-medium text-gray-700 mb-2">Milestones</div>
+                  <ol className="list-decimal pl-5 space-y-1 text-sm text-gray-800">
+                    {milestones.map((ms, idx) => {
+                      const isActive = idx === activeIndex;
+                      return (
+                        <li
+                          key={ms.id || ms.title}
+                          className={`${isActive ? 'bg-amber-50 -mx-2 px-2 py-1 rounded' : 'opacity-50 italic'} transition-opacity`}
+                        >
+                          <span className="font-medium">{ms.title}</span>{' '}
+                          <span className="text-gray-500">({(ms.steps || []).length} step{(ms.steps || []).length === 1 ? '' : 's'})</span>
+                          {isActive && (
+                            <span className="ml-2 text-xs text-white bg-black px-2 py-0.5 rounded-full">Active</span>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                  {/* Removed remaining milestones line for focused view */}
+                </div>
+              )}
+
+              {steps.length > 0 && (
+                <div>
+                  <div className="text-sm font-medium text-gray-700 mb-2">Next steps — {activeMilestone?.title}</div>
+                  <ul className="space-y-2">
+                    {steps.slice(0, 5).map(step => (
+                      <li key={step.id || step.text} className="flex items-start justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
+                        <div className="text-sm text-gray-800 pr-3">{step.text}</div>
+                        <div className="flex gap-2">
+                          <button
+                            className="px-3 py-1.5 text-xs bg-black text-white rounded-md hover:bg-gray-800"
+                            onClick={() => {
+                              // pre-fill input with create_task prompt for this step
+                              const prompt = `Create a task: ${step.text} (related_goal: ${goal.title})`;
+                              const textarea = document.querySelector('textarea');
+                              if (textarea) {
+                                textarea.value = prompt;
+                                textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                              }
+                            }}
+                          >
+                            Add as task
+                          </button>
+                          <button
+                            className="px-3 py-1.5 text-xs bg-white border border-gray-300 text-gray-900 rounded-md hover:bg-gray-100"
+                            onClick={() => {
+                              const prompt = `Schedule: ${step.text} for tomorrow at 10am (related_goal: ${goal.title})`;
+                              const textarea = document.querySelector('textarea');
+                              if (textarea) {
+                                textarea.value = prompt;
+                                textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                              }
+                            }}
+                          >
+                            Schedule
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
+      // Render schedule card when a schedule JSON block is present
+      const readCal = jsonObjects.find(json => json.action_type === 'read' && json.entity_type === 'calendar_event');
+      const scheduleBlock = jsonObjects.find(json => json.category === 'schedule' && Array.isArray(json.events));
+      if (readCal || scheduleBlock) {
+        // Prefer explicit schedule block, otherwise use read_calendar_event details
+        const events = scheduleBlock
+          ? (scheduleBlock.events || [])
+          : (readCal?.details && (Array.isArray(readCal.details.events) ? readCal.details.events : readCal.details)) || [];
+        const title = scheduleBlock?.title || 'Your Schedule';
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+        const formatLocalTime = (value) => {
+          if (!value) return '';
+          // If already a human label like "12:00 PM", keep it
+          if (typeof value === 'string' && /(AM|PM)/i.test(value)) return value;
+          const iso = typeof value === 'string' ? value : (value.dateTime || value.date);
+          const d = new Date(iso);
+          if (isNaN(d)) return '';
+          return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: tz });
+        };
+        return (
+          <div className="relative bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="absolute left-0 top-0 h-full w-1.5 bg-blue-500 rounded-l-xl" aria-hidden="true"></div>
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-gray-200">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+                  <p className="text-sm text-gray-600">{events.length > 0 ? `${events.length} event${events.length === 1 ? '' : 's'}` : 'No events found'}</p>
+                </div>
+              </div>
+            </div>
+            <div className="divide-y divide-gray-100">
+              {events.length > 0 ? (
+                events.map((event, idx) => {
+                  const startLabel = formatLocalTime(event.startTime || event.start || event.start_time);
+                  const endLabel = formatLocalTime(event.endTime || event.end || event.end_time);
+                  const titleText = event.title || event.summary || 'Untitled Event';
+                  return (
+                  <div key={idx} className="flex items-start space-x-4 p-4 bg-gray-50/60">
+                    <div className="flex-shrink-0 w-20 text-right">
+                      <div className="text-sm font-semibold text-gray-900">{startLabel}</div>
+                      <div className="text-xs text-gray-500">{endLabel}</div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h5 className="text-base font-medium text-gray-900 truncate">{titleText}</h5>
+                      {event.location && (
+                        <div className="text-sm text-gray-500 mt-1">{event.location}</div>
+                      )}
+                    </div>
+                  </div>
+                  );
+                })
+              ) : (
+                <div className="p-8 text-center">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No events found</h3>
+                  <p className="text-gray-500">You don't have any events scheduled for this time period.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        );
       }
       // For create/update/delete actions, show a summary
       const createActions = jsonObjects.filter(json => json.action_type === 'create');
@@ -1500,6 +1904,12 @@ const MessageBubble = ({ message }) => {
   // AI message: left-justified, full-width, no bubble
   const jsonObjects = extractJsonFromCodeBlock(message.content);
   const readTask = jsonObjects && jsonObjects.find(json => json.action_type === 'read' && json.entity_type === 'task');
+  const readGoal = jsonObjects && jsonObjects.find(json => json.action_type === 'read' && json.entity_type === 'goal');
+  const hasScheduleJson = jsonObjects && (
+    jsonObjects.find(json => json.action_type === 'read' && json.entity_type === 'calendar_event') ||
+    jsonObjects.find(json => json.category === 'schedule' && Array.isArray(json.events))
+  );
+  const hasTaskCategory = jsonObjects && jsonObjects.find(json => json.category === 'task' && Array.isArray(json.tasks));
   if (readTask) {
     const tasks = readTask.details && (Array.isArray(readTask.details.tasks) ? readTask.details.tasks : readTask.details);
     return (
@@ -1510,27 +1920,98 @@ const MessageBubble = ({ message }) => {
       </div>
     );
   }
-  // Only render goal titles from backend/AI response */}
-  const readGoal = jsonObjects && jsonObjects.find(json => json.action_type === 'read' && json.entity_type === 'goal');
-  let goalTitles = [];
-  if (readGoal && readGoal.details && Array.isArray(readGoal.details.goals)) {
-    goalTitles = readGoal.details.goals;
+  if (hasTaskCategory) {
+    return (
+      <div className="flex">
+        <div className="w-full text-left">
+          {formatAIContent(message.content)}
+        </div>
+      </div>
+    );
   }
+  if (readGoal) {
+    return (
+      <div className="flex">
+        <div className="w-full text-left">
+          {formatAIContent(message.content)}
+        </div>
+      </div>
+    );
+  }
+  if (hasScheduleJson) {
+    return (
+      <div className="flex">
+        <div className="w-full text-left">
+          {formatAIContent(message.content)}
+        </div>
+      </div>
+    );
+  }
+  
+  // Extract goal titles from the JSON in message content
+  let goalTitles = [];
+  if (jsonObjects && jsonObjects.length > 0) {
+    // Look for goal data in the JSON objects
+    const goalData = jsonObjects.find(json => json.category === 'goal' && json.goals && Array.isArray(json.goals));
+    if (goalData) {
+      goalTitles = goalData.goals;
+    }
+  }
+  
+  // Split content into JSON and conversational parts
+  const parts = message.content.split(/```json\s*[\s\S]*?```/);
+  const jsonPart = parts.length > 1 ? parts[0] : '';
+  const conversationalPart = parts.length > 1 ? parts.slice(1).join('') : message.content;
+  
   return (
     <div className="flex">
       <div className="w-full text-left">
-        <div
-          className="prose prose-sm max-w-none text-black text-left"
-          style={{ background: 'none', borderRadius: 0, padding: 0, marginLeft: 0, marginRight: 0 }}
-          dangerouslySetInnerHTML={{ __html: formatAIContent(message.content) }}
-        />
-        {/* Only render goal titles from backend/AI response */}
+        {/* Render the JSON part with goal titles */}
+        {jsonObjects && jsonObjects.length > 0 && (
+          <div
+            className="prose prose-sm max-w-none text-black text-left"
+            style={{ background: 'none', borderRadius: 0, padding: 0, marginLeft: 0, marginRight: 0 }}
+            dangerouslySetInnerHTML={{ __html: formatAIContent(jsonPart) }}
+          />
+        )}
+        
+        {/* Render goal titles if present */}
         {goalTitles.length > 0 && (
-          <ul className="list-disc pl-5 text-sm mt-1">
-            {goalTitles.map((title, idx) => (
-              <li key={idx}><strong>{title}</strong></li>
-            ))}
-          </ul>
+          <div className="mt-1 mb-3">
+            <h4 className="text-base font-medium text-gray-900 mb-2">Here are your current goals:</h4>
+            <ul className="list-disc pl-5 text-sm">
+              {goalTitles.map((title, idx) => (
+                <li key={idx}><strong>{title}</strong></li>
+              ))}
+            </ul>
+          </div>
+        )}
+        
+        {/* Render the conversational part */}
+        {conversationalPart && conversationalPart.trim() && (
+          <div
+            className="prose prose-sm max-w-none text-black text-left mt-3"
+            style={{ background: 'none', borderRadius: 0, padding: 0, marginLeft: 0, marginRight: 0 }}
+            dangerouslySetInnerHTML={{ __html: formatAIContent(conversationalPart) }}
+          />
+        )}
+
+        {/* Quick Actions for AI messages */}
+        {message.type === 'ai' && Array.isArray(message.quickActions) && message.quickActions.length > 0 && (
+          <div className="mt-4 space-y-2">
+            <div className="text-sm text-gray-600 mb-2">Quick actions:</div>
+            <div className="flex flex-wrap gap-2">
+              {message.quickActions.map((action, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => onQuickAction && onQuickAction(action)}
+                  className="px-3 py-1.5 bg-black text-white rounded-full text-sm hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-black/30 transition-colors"
+                >
+                  {action}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </div>

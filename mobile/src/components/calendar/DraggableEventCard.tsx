@@ -36,8 +36,8 @@ export const EventCard: React.FC<EventCardProps> = ({
   compact = false,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [completing, setCompleting] = useState(false);
+  const [_deleting, setDeleting] = useState(false);
+  const [_completing, setCompleting] = useState(false);
 
   const isTask = type === 'task';
   const task = isTask ? (event as Task) : null;
@@ -120,17 +120,7 @@ export const EventCard: React.FC<EventCardProps> = ({
     return null;
   };
 
-  const formatDateTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleString([], {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
+  // removed unused formatDateTime helper
 
   const getPriorityText = () => {
     if (isTask && task?.priority) {
@@ -180,12 +170,11 @@ export const EventCard: React.FC<EventCardProps> = ({
       );
     } else {
       // Android implementation
-      const optionLabels = options.map(opt => opt.label);
       Alert.alert(
         'Reschedule Event',
         'Choose when to reschedule this event',
         [
-          ...options.map((option, index) => ({
+          ...options.map((option, _index) => ({
             text: option.label,
             onPress: () => {
               hapticFeedback.selection();
@@ -330,22 +319,22 @@ export const EventCard: React.FC<EventCardProps> = ({
                    style={styles.actionButton}
                  />
                )}
-               {isTask && onCompleteTask && task?.status !== 'completed' && (
+                {isTask && onCompleteTask && task?.status !== 'completed' && (
                  <Button
-                   title={completing ? 'Completing...' : 'Complete'}
+                    title={_completing ? 'Completing...' : 'Complete'}
                    onPress={handleCompleteTask}
                    variant="outline"
                    style={styles.actionButton}
-                   disabled={completing}
+                    disabled={_completing}
                  />
                )}
                {onDelete && (
                  <Button
-                   title={deleting ? 'Deleting...' : 'Delete'}
+                    title={_deleting ? 'Deleting...' : 'Delete'}
                    onPress={handleDelete}
                    variant="outline"
-                   style={[styles.actionButton, styles.deleteButton]}
-                   disabled={deleting}
+                    style={styles.actionButton}
+                    disabled={_deleting}
                  />
                )}
              </View>

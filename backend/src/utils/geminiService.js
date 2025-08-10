@@ -10,8 +10,9 @@ import * as calendarService from './calendarService.js';
 export class GeminiService {
   constructor() {
     this.conversationHistory = new Map();
+    this.DEBUG = process.env.DEBUG_LOGS === 'true';
     if (!process.env.GOOGLE_AI_API_KEY) {
-      console.warn('GOOGLE_AI_API_KEY not found. Gemini AI features will be disabled.');
+      if (this.DEBUG) console.warn('GOOGLE_AI_API_KEY not found. Gemini AI features will be disabled.');
       this.enabled = false;
       return;
     }
@@ -22,11 +23,49 @@ export class GeminiService {
   }
 
   /**
+   * Wrapper around model.generateContent with retries and model fallback.
+   */
+  async _generateContentWithRetry(request, attempt = 1) {
+    const maxAttempts = 3;
+    const baseDelayMs = 400;
+    try {
+      const result = await this.model.generateContent(request);
+      return await result.response;
+    } catch (err) {
+      const isServerError = err && (err.status === 500 || err.status === 502 || err.status === 503 || err.status === 504);
+      if (attempt < maxAttempts && isServerError) {
+        const delay = baseDelayMs * Math.pow(2, attempt - 1);
+        if (this.DEBUG) console.warn(`Gemini generateContent failed (attempt ${attempt}). Retrying in ${delay}ms...`);
+        await new Promise(res => setTimeout(res, delay));
+        return this._generateContentWithRetry(request, attempt + 1);
+      }
+      // Fallback to a lighter model once before giving up
+      if (attempt === maxAttempts) {
+        try {
+          if (this.DEBUG) console.warn('Primary model failed after retries. Falling back to gemini-1.5-flash');
+          const fallbackModel = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+          const result = await fallbackModel.generateContent(request);
+          return await result.response;
+        } catch (fallbackErr) {
+          if (this.DEBUG) console.error('Fallback model failed:', fallbackErr);
+        }
+      }
+      throw err;
+    }
+  }
+
+  /**
    * Main entry point for processing a user message using Gemini function calling API.
    */
   async processMessage(message, userId, userContext = {}) {
     try {
+      if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Starting processMessage');
+      if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Input message:', message);
+      if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] User ID:', userId);
+      if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] User context:', JSON.stringify(userContext, null, 2));
+
       if (!this.enabled) {
+        if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Gemini disabled, returning basic mode message');
         return {
           message: "I'm currently in basic mode. To enable full AI features, please set up your Gemini API key in the environment variables.",
           actions: []
@@ -39,7 +78,11 @@ export class GeminiService {
       const today = new Date();
       const options = { year: 'numeric', month: 'long', day: 'numeric' };
       const todayString = today.toLocaleDateString('en-US', options);
+      const moodLine = userContext.mood ? `User mood: ${userContext.mood}. Adjust tone accordingly (be concise, supportive, and match energy).` : '';
+      const tz = userContext.timeZone || 'America/Chicago';
       const systemPrompt = `Today's date is ${todayString}.
+
+${moodLine}
 
 You are an AI assistant for a productivity app named Foci. Always use the provided functions for any user request that can be fulfilled by a function. Aside from helping the user with goals, tasks, and calendar events, you can also provide advice and help the user plan goals. If there is any confusion about which function to run, for example, your conversation history consists of multiple requests, confirm with the user what their desired request is.
 When the user asks to review their progress, you can use read_goals and read_tasks to view their information and respond in the form of a progress report.
@@ -50,30 +93,53 @@ General guidelines:
 - When performing a create operation (for tasks, goals, or events), try to gather all pertinent information related to the operation; you can ask the user if they would like you to estimate the values for them.
 - You are allowed to give advice and estimations on user requests. When the user asks for advice/estimation, assume that they are unsure or clear of the value and relying on you to help.
 - Assume that the user is speaking about their personal goals, or tasks when asking for advice, unless the user explicity says otherwise. Example: "What is a good low energy task?" should be assume to say "Which one of my tasks is low energy?"
+- After returning any read operation, always ask the user what they would like to do next, or suggest helpful next steps to keep the conversation flowing naturally.
+- If the user request is a malformed JSON block or anything of that nature, guide the user to user natural language requests, or ask for clarity on what they would like to do.
 
-CALENDAR RESPONSES: When returning calendar events, be conversational and helpful. Instead of just listing events, provide context and insights:
-- When you receive a function response with events, always generate a user-facing summary of the schedule. Never return an empty message.
-- For read_calendar_event function, always use send a long a date to filter the api results
-- For "this week" queries: "Here's what's on your calendar this week:" followed by the events
-- For "today" queries: "Here's your schedule for today:" followed by the events  
-- For "tomorrow" queries: "Here's what you have planned for tomorrow:" followed by the events
-- For specific dates: "Here's your schedule for [date]:" followed by the events
-- If no events found: "You don't have any events scheduled for [time period]. Would you like me to help you schedule something?"
-- Add helpful context like "You have a busy day ahead!" or "Looks like you have some free time" when appropriate
+RESPONSE FORMAT STANDARDIZATION: All responses must include a category key-value pair and structured JSON format for better frontend handling.
+
+CALENDAR RESPONSES: When returning calendar events, use this exact format with category "schedule":
+- Include "category": "schedule" in the response
+- Include "title": "Here's your schedule for [date]:"
+- Include "events" array with each event having "title", "startTime", and "endTime"
+- Convert times to 12-hour format (e.g., "12:00 PM" not "12:00")
+- Use the user's local timezone (${tz}) for interpreting natural-language dates like "today" or "tomorrow", and for formatting times in the title and events.
+- For "today" queries: title should be "Here's your schedule for today:"
+- For "tomorrow" queries: title should be "Here's what you have planned for tomorrow:"
+- For specific dates: title should be "Here's your schedule for [date]:"
+- If no events found: return regular text response
+
+LOOKUP CALENDAR EVENTS:
+- When updating or deleting, call lookup_calendar_event with ONLY the title search string unless the user explicitly gave a date. If the user did not specify a date, DO NOT pass a date.
+
+GOAL RESPONSES: When providing goal breakdowns or goal information, use this exact format with category "goal":
+- Include "category": "goal" in the response
+- Include "title": "Goal Title"
+- Include "description": "Goal description"
+- Include "milestones" array with each milestone having "title" and "steps" array
+- Each step should have "text" property
+- Requests to show goals or list goals should use the get_goal_titles function
+
+TASK RESPONSES: When providing task lists or task information, use this exact format with category "task":
+- Include "category": "task" in the response
+- Include "title": "Your Tasks"
+- Include "tasks" array with each task having "title", "description", "dueDate", and "priority"
+
+IMPORTANT: Always wrap JSON responses in triple backticks (\`\`\`json ... \`\`\`) for proper parsing.
 
 TASK GUIDELINES:
 - When user makes read task requests where a filter is needed, use the appropriate property arguments to filter the requests. Ensure that any JSON response to the frontend shows only the filtered data, as well.
 > IMPORTANT:
 > - When you call a function such as read_task with a filter (e.g., search, title, category, etc.), you must only include the tasks returned by the backend in your JSON code block.
-> - Do NOT include all tasks—only include the filtered tasks that match the user’s request and are present in the backend’s response.
+> - Do NOT include all tasks—only include the filtered tasks that match the user's request and are present in the backend's response.
 > - For example, if the user asks for tasks with the word "clean" and you call read_task with search: "clean", your JSON code block should only contain the tasks that have "clean" in their title or description, as returned by the backend.
 > - Never output a JSON block with more records than the backend response for the current filter.
 
 GOAL Setting guidelines:
 - Goal: The long-term destination or outcome the user wants to achieve.
-  - Each goal is comprised of 2–3 milestones.
+  - Each goal is comprised of several milestones.
 - Milestone: A major achievement or big step toward the goal.
-  - Each milestone is comprised of 2 or more steps.
+  - Each milestone can be comprised of 2 or more steps, to only limit should be how many steps it will take to complete the milestone.
 - Step: A specific, actionable task that helps complete a milestone.
 
 CONVERSATIONAL GOAL CREATION PROCESS:
@@ -141,11 +207,19 @@ IMPORTANT:
 
 RESPONSE GUIDELINES: When responding after executing function calls, use present tense and direct language. Say "I've added..." or "I've created..." or "Task created successfully" rather than "I've already added..." or "I've already created...". Be clear and concise about what action was just performed.
 
+CONVERSATIONAL FLOW: After providing information (especially after read operations), always guide the user toward their next action. Ask what they'd like to do next or suggest helpful next steps to keep the conversation flowing naturally.
+
 Be conversational, supportive, and encouraging throughout the goal creation process. Celebrate their commitment and show enthusiasm for their goals.`;
+
+      if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] System prompt length:', systemPrompt.length);
+
       // Trim conversation history to the last MAX_HISTORY_MESSAGES
       const MAX_HISTORY_MESSAGES = 10;
       const fullHistory = this.conversationHistory.get(userId) || [];
       const trimmedHistory = fullHistory.slice(-MAX_HISTORY_MESSAGES);
+      
+      if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Conversation history length:', trimmedHistory.length);
+      
       const contents = [
         { role: 'user', parts: [{ text: systemPrompt }] },
         ...trimmedHistory.map(msg => ({
@@ -155,36 +229,80 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
         { role: 'user', parts: [{ text: message }] }
       ];
       
-      // Send to Gemini
-      const result = await this.model.generateContent({
+      if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Sending request to Gemini with contents length:', contents.length);
+      if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Function declarations count:', allGeminiFunctionDeclarations.length);
+      
+      // Send to Gemini (with retry/backoff and model fallback)
+      const response = await this._generateContentWithRetry({
         contents,
         tools: [{ functionDeclarations: allGeminiFunctionDeclarations }]
       });
-      const response = await result.response;
+      
+      if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Received response from Gemini');
+      if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Response has function calls:', !!response.functionCalls);
+      
       // Get function calls and text from Gemini response
-      const functionCalls = response.functionCalls ? await response.functionCalls() : [];
+      let functionCalls = response.functionCalls ? await response.functionCalls() : [];
+
+      const functionCallsCount = Array.isArray(functionCalls) ? functionCalls.length : 0;
+      if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Function calls count:', functionCallsCount);
+      if (functionCallsCount > 0) {
+        if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Function calls:', functionCalls.map(fc => ({
+          name: fc.name,
+          args: fc.args
+        })));
+      }
+      
+      // Defensive check to ensure functionCalls is always an array
+      if (!functionCalls || !Array.isArray(functionCalls)) {
+        functionCalls = [];
+        if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Function calls was not an array, set to empty array');
+      }
+      
       // Check for function calls
       let actions = [];
       let functionResults = [];
-      // Track executed function calls to prevent duplication
+      // Track executed function calls to prevent exact-duplicate execution
       const executedFunctionCalls = new Set();
+      // Prevent multiple READs of the same entity in a single turn (e.g., read_task twice)
+      const executedReadEntities = new Set();
       if (functionCalls && functionCalls.length > 0) {
+        console.log('🔍 [GEMINI DEBUG] Processing function calls...');
         for (const functionCall of functionCalls) {
+          console.log('🔍 [GEMINI DEBUG] Executing function call:', functionCall.name);
+          console.log('🔍 [GEMINI DEBUG] Function call args:', JSON.stringify(functionCall.args, null, 2));
+          
           // Create a unique key for the function call (name + args JSON)
           const callKey = `${functionCall.name}:${JSON.stringify(functionCall.args)}`;
           executedFunctionCalls.add(callKey);
+          // Skip second+ read calls for the same entity
+          if (functionCall.name.startsWith('read_')) {
+            const match = functionCall.name.match(/^read_(.*)$/);
+            const entity = match ? match[1] : functionCall.name;
+            if (executedReadEntities.has(entity)) {
+              console.log('🔍 [GEMINI DEBUG] Skipping duplicate read for entity:', entity);
+              continue;
+            }
+            executedReadEntities.add(entity);
+          }
           let execResult = await this._executeFunctionCall(functionCall, userId, userContext);
+          
+          console.log('🔍 [GEMINI DEBUG] Function execution result:', JSON.stringify(execResult, null, 2));
+          
           // Due date normalization for tests (mock mode)
           let details = execResult !== undefined && execResult !== null ? execResult : functionCall.args;
           // Gemini API expects functionResponse.response to be an object, not an array
           if (functionCall.name === 'read_goal' && Array.isArray(details)) {
             details = { goals: details };
+            console.log('🔍 [GEMINI DEBUG] Converted read_goal array to object with goals property');
           }
           if (functionCall.name === 'read_task' && Array.isArray(details)) {
             details = { tasks: details };
+            console.log('🔍 [GEMINI DEBUG] Converted read_task array to object with tasks property');
           }
           if (functionCall.name === 'read_calendar_event' && Array.isArray(details)) {
             details = { events: details };
+            console.log('🔍 [GEMINI DEBUG] Converted read_calendar_event array to object with events property');
           }
           if (details && details.due_date) {
             // Normalize past year to current year
@@ -208,17 +326,27 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
             // Map function call to action object
             let action_type = 'unknown';
             let entity_type = 'unknown';
-            if (functionCall.name.startsWith('create_')) action_type = 'create';
+            
+            // Handle get_goal_titles specifically
+            if (functionCall.name === 'get_goal_titles') {
+              action_type = 'read';
+              entity_type = 'goal';
+            } else if (functionCall.name.startsWith('create_')) action_type = 'create';
             else if (functionCall.name.startsWith('read_')) action_type = 'read';
             else if (functionCall.name.startsWith('update_')) action_type = 'update';
             else if (functionCall.name.startsWith('delete_')) action_type = 'delete';
+            
+            // For standard CRUD operations, extract entity type from function name
             const entityMatch = functionCall.name.match(/^(create|read|update|delete)_(.*)$/);
             if (entityMatch) entity_type = entityMatch[2];
+            
             actions.push({
               action_type,
               entity_type,
-              details
+              details,
+              args: functionCall.args || {}
             });
+            console.log('🔍 [GEMINI DEBUG] Added action:', { action_type, entity_type });
           }
           functionResults.push({ name: functionCall.name, response: details });
         }
@@ -227,6 +355,9 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
           name: fr.name,
           response: fr.response
         }));
+        
+        console.log('🔍 [GEMINI DEBUG] Function responses to send back to Gemini:', JSON.stringify(functionResponses, null, 2));
+        
         const followupContents = [
           ...contents,
           ...functionResponses.map(fr => ({
@@ -242,57 +373,223 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
         
         let message = '';
         if (actions.length > 1) {
-          message = `created ${actions.length} actions`;
-        } else {
-          const finalResult = await this.model.generateContent({
+          // Try to normalize multiple homogeneous READ actions into one category block
+          const allRead = actions.every(a => a.action_type === 'read');
+          const entityTypes = Array.from(new Set(actions.map(a => a.entity_type)));
+          if (allRead && entityTypes.length === 1) {
+            const entity = entityTypes[0];
+            if (entity === 'task') {
+              const mergedTasks = actions.flatMap(a => Array.isArray(a.details?.tasks) ? a.details.tasks : (Array.isArray(a.details) ? a.details : []));
+              const payload = { category: 'task', title: 'Your Tasks', tasks: mergedTasks };
+              const leadIn = this._buildReadLeadIn('task', mergedTasks?.length || 0, userContext);
+              message = `${leadIn}\n\n\`\`\`json\n${JSON.stringify(payload, null, 2)}\n\`\`\``;
+              console.log('🔍 [GEMINI DEBUG] Merged multiple read_task actions into category block');
+            } else if (entity === 'calendar_event') {
+              const mergedEvents = actions.flatMap(a => Array.isArray(a.details?.events) ? a.details.events : (Array.isArray(a.details) ? a.details : []));
+              const payload = { category: 'schedule', title: "Here's your schedule:", events: mergedEvents };
+              const leadIn = this._buildReadLeadIn('calendar_event', mergedEvents?.length || 0, userContext);
+              message = `${leadIn}\n\n\`\`\`json\n${JSON.stringify(payload, null, 2)}\n\`\`\``;
+              console.log('🔍 [GEMINI DEBUG] Merged multiple read_calendar_event actions into category block');
+            } else {
+              message = `created ${actions.length} actions`;
+              console.log('🔍 [GEMINI DEBUG] Multiple actions (unsupported merge), using simple message:', message);
+            }
+          } else {
+            message = `created ${actions.length} actions`;
+            console.log('🔍 [GEMINI DEBUG] Multiple actions (heterogeneous), using simple message:', message);
+          }
+          } else {
+          console.log('🔍 [GEMINI DEBUG] Sending followup request to Gemini for final response');
+          const finalResponse = await this._generateContentWithRetry({
             contents: followupContents,
             tools: [{ functionDeclarations: allGeminiFunctionDeclarations }]
           });
-          const finalResponse = await finalResult.response;
+          
+          console.log('🔍 [GEMINI DEBUG] Received final response from Gemini');
+          console.log('🔍 [GEMINI DEBUG] Final response has function calls:', !!finalResponse.functionCalls);
           
           // Check for additional function calls in the final response
-          const finalFunctionCalls = finalResponse.functionCalls ? await finalResponse.functionCalls() : [];
+          let finalFunctionCalls = finalResponse.functionCalls ? await finalResponse.functionCalls() : [];
+          
+          // Defensive check to ensure finalFunctionCalls is always an array
+          if (!finalFunctionCalls || !Array.isArray(finalFunctionCalls)) {
+            finalFunctionCalls = [];
+            console.log('🔍 [GEMINI DEBUG] Final function calls was not an array, set to empty array');
+          }
+          
+          console.log('🔍 [GEMINI DEBUG] Final function calls count:', finalFunctionCalls.length);
           
           if (finalFunctionCalls && finalFunctionCalls.length > 0) {
+            console.log('🔍 [GEMINI DEBUG] Processing additional function calls in final response...');
             // Process the additional function calls
             for (const functionCall of finalFunctionCalls) {
+              console.log('🔍 [GEMINI DEBUG] Executing additional function call:', functionCall.name);
               // Create a unique key for the function call (name + args JSON)
               const callKey = `${functionCall.name}:${JSON.stringify(functionCall.args)}`;
               if (executedFunctionCalls.has(callKey)) {
                 // Skip duplicate function call
+                console.log('🔍 [GEMINI DEBUG] Skipping duplicate function call:', functionCall.name);
                 continue;
               }
               executedFunctionCalls.add(callKey);
+              // Skip second+ read calls for the same entity
+              if (functionCall.name.startsWith('read_')) {
+                const match = functionCall.name.match(/^read_(.*)$/);
+                const entity = match ? match[1] : functionCall.name;
+                if (executedReadEntities.has(entity)) {
+                  console.log('🔍 [GEMINI DEBUG] Skipping duplicate read for entity (final pass):', entity);
+                  continue;
+                }
+                executedReadEntities.add(entity);
+              }
               const details = await this._executeFunctionCall(functionCall, userId, userContext);
+              
+              console.log('🔍 [GEMINI DEBUG] Additional function execution result:', JSON.stringify(details, null, 2));
               
               // Determine action type and entity type
               let action_type = 'unknown';
               let entity_type = 'unknown';
-              if (functionCall.name.startsWith('create_')) action_type = 'create';
+              
+              // Handle get_goal_titles specifically
+              if (functionCall.name === 'get_goal_titles') {
+                action_type = 'read';
+                entity_type = 'goal';
+              } else if (functionCall.name.startsWith('create_')) action_type = 'create';
               else if (functionCall.name.startsWith('read_')) action_type = 'read';
               else if (functionCall.name.startsWith('update_')) action_type = 'update';
               else if (functionCall.name.startsWith('delete_')) action_type = 'delete';
+              
+              // For standard CRUD operations, extract entity type from function name
               const entityMatch = functionCall.name.match(/^(create|read|update|delete)_(.*)$/);
               if (entityMatch) entity_type = entityMatch[2];
               
               actions.push({
                 action_type,
                 entity_type,
-                details
+                details,
+                args: functionCall.args || {}
               });
+              console.log('🔍 [GEMINI DEBUG] Added additional action:', { action_type, entity_type });
             }
           }
           
           message = finalResponse.text ? await finalResponse.text() : '';
+          console.log('🔍 [GEMINI DEBUG] Final response text:', message);
           
-          // Always inject code block for the first read_task action if present
+          // Standardize READ responses to category blocks for frontend rendering
           const firstReadTask = actions.find(a => a.action_type === 'read' && a.entity_type === 'task');
-          if (firstReadTask) {
-            message = `Here are your tasks:\n\n\`\`\`json\n${JSON.stringify(firstReadTask, null, 2)}\`\`\``;
+          const firstReadGoal = actions.find(a => a.action_type === 'read' && a.entity_type === 'goal');
+          const firstReadCal  = actions.find(a => a.action_type === 'read' && a.entity_type === 'calendar_event');
+
+          if (firstReadCal) {
+            const events = Array.isArray(firstReadCal.details?.events) ? firstReadCal.details.events : (Array.isArray(firstReadCal.details) ? firstReadCal.details : []);
+            const schedulePayload = { category: 'schedule', title: "Here's your schedule:", events };
+            const leadIn = this._buildReadLeadIn('calendar_event', events?.length || 0, userContext);
+            message = `${leadIn}\n\n\`\`\`json\n${JSON.stringify(schedulePayload, null, 2)}\n\`\`\``;
+            console.log('🔍 [GEMINI DEBUG] Injected schedule category block');
+          } else if (firstReadGoal) {
+            const details = firstReadGoal.details ?? {};
+            const rawGoals = details?.goals ?? firstReadGoal.details;
+            // Titles-only list (get_goal_titles): array of strings
+            const titlesArray = Array.isArray(rawGoals) && rawGoals.every(g => typeof g === 'string')
+              ? rawGoals
+              : (Array.isArray(details?.goals) && details.goals.every(g => typeof g === 'string') ? details.goals : null);
+
+            if (titlesArray) {
+              const payload = { category: 'goal', title: 'Your Goals', goals: titlesArray };
+              const leadIn = this._buildReadLeadIn('goal', titlesArray.length, userContext);
+              message = `${leadIn}\n\n\`\`\`json\n${JSON.stringify(payload, null, 2)}\n\`\`\``;
+              console.log('🔍 [GEMINI DEBUG] Injected goal titles category block');
+            } else {
+              // Fallback: focus a single goal object
+              const goalsPayload = details?.goals ?? details;
+              const goalsArray = Array.isArray(goalsPayload) ? goalsPayload : [goalsPayload];
+              const firstGoal = goalsArray && goalsArray.length > 0 ? goalsArray[0] : null;
+              if (firstGoal) {
+                const goalPayload = { category: 'goal', title: firstGoal.title || 'Goal', goal: firstGoal };
+                const leadIn = this._buildReadLeadIn('goal', 1, userContext);
+                message = `${leadIn}\n\n\`\`\`json\n${JSON.stringify(goalPayload, null, 2)}\n\`\`\``;
+                console.log('🔍 [GEMINI DEBUG] Injected goal category block');
+              }
+            }
+          } else if (firstReadTask) {
+            const tasks = Array.isArray(firstReadTask.details?.tasks) ? firstReadTask.details.tasks : (Array.isArray(firstReadTask.details) ? firstReadTask.details : []);
+            const taskPayload = { category: 'task', title: 'Your Tasks', tasks };
+            const leadIn = this._buildReadLeadIn('task', tasks?.length || 0, userContext, firstReadTask.args || {});
+            message = `${leadIn}\n\n\`\`\`json\n${JSON.stringify(taskPayload, null, 2)}\n\`\`\``;
+            console.log('🔍 [GEMINI DEBUG] Injected task category block');
           }
+
+          // If we created or updated a calendar event in this cycle, append a precise confirmation line
+          const createdEventAction = actions.find(a => a.action_type === 'create' && a.entity_type === 'calendar_event');
+          const updatedEventAction = actions.find(a => a.action_type === 'update' && a.entity_type === 'calendar_event');
+          const eventAction = createdEventAction || updatedEventAction;
+          if (eventAction && eventAction.details) {
+            const ev = eventAction.details;
+            const startIso = ev.start_time || ev.start || ev.startTime;
+            const endIso = ev.end_time || ev.end || ev.endTime;
+            const start = startIso ? new Date(startIso) : null;
+            const end = endIso ? new Date(endIso) : null;
+            const tzOpt = userContext?.timeZone || 'America/Chicago';
+            const startStr = start ? start.toLocaleString('en-US', { timeZone: tzOpt, hour: 'numeric', minute: '2-digit', hour12: true, month: 'short', day: 'numeric', year: 'numeric' }) : 'scheduled time';
+            const endStr = end ? end.toLocaleTimeString('en-US', { timeZone: tzOpt, hour: 'numeric', minute: '2-digit', hour12: true }) : '';
+            const whenText = endStr ? `${startStr} - ${endStr}` : startStr;
+            const title = ev.title || ev.summary || (actions.find(a=>a.action_type==='create'&&a.entity_type==='calendar_event')?.details?.title) || 'your event';
+            const verb = createdEventAction ? "scheduled" : "updated";
+            message = `I've ${verb} "${title}" for ${whenText}.\n\n${message}`;
+          }
+
+          // If we deleted calendar events, craft a confirmation line for each
+          const deletedEventActions = actions.filter(a => a.action_type === 'delete' && a.entity_type === 'calendar_event' && a.details && a.details.event);
+          if (deletedEventActions.length > 0) {
+            const confirmations = deletedEventActions.map(a => {
+              const ev = a.details.event;
+              const startIso = ev.start;
+              const endIso = ev.end;
+              const start = startIso ? new Date(startIso) : null;
+              const end = endIso ? new Date(endIso) : null;
+              const tzOpt = userContext?.timeZone || 'America/Chicago';
+              const startStr = start ? start.toLocaleString('en-US', { timeZone: tzOpt, hour: 'numeric', minute: '2-digit', hour12: true, month: 'short', day: 'numeric', year: 'numeric' }) : '';
+              const endStr = end ? end.toLocaleTimeString('en-US', { timeZone: tzOpt, hour: 'numeric', minute: '2-digit', hour12: true }) : '';
+              const whenText = startStr ? (endStr ? `${startStr} - ${endStr}` : startStr) : 'the selected time';
+              const title = ev.title || 'Event';
+              return `Deleted "${title}" (${whenText})${ev.location ? ` • ${ev.location}` : ''}.`;
+            }).join('\n');
+            message = `${confirmations}\n\n${message}`.trim();
+          }
+          
+          // No special confirmation flow for goals; create immediately when requested.
+
+          // Add directional guidance after read actions to keep conversation flowing
+          //const readGoalAction = actions.find(a => a.action_type === 'read' && a.entity_type === 'goal');
+          //const hasReadAction = readGoalAction || actions.some(a => a.action_type === 'read');
+          //if (hasReadAction) {
+            //console.log('🔍 [GEMINI DEBUG] Found read action, adding directional guidance');
+            //let guidancePrompt = '';
+            //if (readGoalAction) {
+              //guidancePrompt = `\n\nWhat would you like to do next?\n• Add one of these steps as a task\n• Schedule time on your calendar for a step\n• Mark a step as complete\n• Update the goal details`;
+            //} else {
+              //guidancePrompt = `\n\nWhat would you like to do next? You can:\n• Add a new task or goal\n• Update an existing item\n• Ask me to help you prioritize or plan\n• Get more details about something specific`;
+            //}
+            //message += guidancePrompt;
+            //console.log('🔍 [GEMINI DEBUG] Added directional guidance to message');
+          //}
         }
         // Add to conversation history
         this._addToHistory(userId, { role: 'model', content: message });
+        
+        // Defensive check to ensure actions is always an array
+        if (!actions || !Array.isArray(actions)) {
+          actions = [];
+          console.log('🔍 [GEMINI DEBUG] Actions was not an array, set to empty array');
+        }
+        
+        console.log('🔍 [GEMINI DEBUG] Final return object:', {
+          message: message.substring(0, 200) + (message.length > 200 ? '...' : ''),
+          actionsCount: actions.length,
+          actions: actions.map(a => ({ action_type: a.action_type, entity_type: a.entity_type }))
+        });
+        
         return {
           message,
           actions
@@ -300,18 +597,29 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
       } else {
         // No function call, just return Gemini's text
         const message = response.text ? await response.text() : '';
+        
         this._addToHistory(userId, { role: 'model', content: message });
+        
+        // Defensive check to ensure actions is always an array
+        if (!actions || !Array.isArray(actions)) {
+          actions = [];
+          console.log('🔍 [GEMINI DEBUG] Actions was not an array, set to empty array');
+        }
+        
+        console.log('🔍 [GEMINI DEBUG] Final return object (text only):', {
+          message: message.substring(0, 200) + (message.length > 200 ? '...' : ''),
+          actionsCount: actions.length
+        });
+        
         return {
           message,
-          actions: []
+          actions
         };
       }
     } catch (error) {
-      console.error('Gemini Service Error:', error);
-      return {
-        message: "I'm sorry, I encountered an error processing your request. Please try again or rephrase your request.",
-        actions: []
-      };
+      console.error('🔍 [GEMINI DEBUG] Error in processMessage:', error);
+      console.error('🔍 [GEMINI DEBUG] Error stack:', error.stack);
+      throw error;
     }
   }
 
@@ -463,47 +771,107 @@ Make the milestones and steps specific to this goal, encouraging, and achievable
    */
   async _executeFunctionCall(functionCall, userId, userContext) {
     const { name, args } = functionCall;
+    
+    console.log('🔍 [GEMINI DEBUG] _executeFunctionCall - Function name:', name);
+    console.log('🔍 [GEMINI DEBUG] _executeFunctionCall - Function args:', JSON.stringify(args, null, 2));
+    console.log('🔍 [GEMINI DEBUG] _executeFunctionCall - User ID:', userId);
+    console.log('🔍 [GEMINI DEBUG] _executeFunctionCall - User context keys:', Object.keys(userContext));
+    
     try {
-      // Processing function call: ${name}
+      let result;
+      
       switch (name) {
         case 'create_task':
-          // args: { title, description, due_date, priority, related_goal }
-          // Map related_goal to goal_id if needed
-          // ...implement mapping logic as needed
-          return await tasksController.createTaskFromAI(args, userId, userContext);
+          console.log('🔍 [GEMINI DEBUG] Executing create_task');
+          result = await tasksController.createTaskFromAI(args, userId, userContext);
+          break;
         case 'update_task':
-          return await tasksController.updateTaskFromAI(args, userId, userContext);
+          console.log('🔍 [GEMINI DEBUG] Executing update_task');
+          result = await tasksController.updateTaskFromAI(args, userId, userContext);
+          break;
         case 'delete_task':
-          return await tasksController.deleteTaskFromAI(args, userId, userContext);
+          console.log('🔍 [GEMINI DEBUG] Executing delete_task');
+          result = await tasksController.deleteTaskFromAI(args, userId, userContext);
+          break;
         case 'read_task':
-          return await tasksController.readTaskFromAI(args, userId, userContext);
+          console.log('🔍 [GEMINI DEBUG] Executing read_task');
+          result = await tasksController.readTaskFromAI(args, userId, userContext);
+          break;
         case 'lookup_task':
-          return await tasksController.lookupTaskbyTitle(userId, userContext.token);
+          console.log('🔍 [GEMINI DEBUG] Executing lookup_task');
+          result = await tasksController.lookupTaskbyTitle(userId, userContext.token);
+          break;
         case 'create_goal':
-          return await goalsController.createGoalFromAI(args, userId, userContext);
+          console.log('🔍 [GEMINI DEBUG] Executing create_goal');
+          result = await goalsController.createGoalFromAI(args, userId, userContext);
+          break;
         case 'update_goal':
-          return await goalsController.updateGoalFromAI(args, userId, userContext);
+          console.log('🔍 [GEMINI DEBUG] Executing update_goal');
+          result = await goalsController.updateGoalFromAI(args, userId, userContext);
+          break;
         case 'delete_goal':
-          return await goalsController.deleteGoalFromAI(args, userId, userContext);
+          console.log('🔍 [GEMINI DEBUG] Executing delete_goal');
+          result = await goalsController.deleteGoalFromAI(args, userId, userContext);
+          break;
         case 'lookup_goal':
-          return await goalsController.lookupGoalbyTitle(userId, userContext.token);
+          console.log('🔍 [GEMINI DEBUG] Executing lookup_goal');
+          result = await goalsController.lookupGoalbyTitle(userId, userContext.token, args);
+          break;
         case 'read_goal':
-          return await goalsController.getGoalsForUser(userId, userContext.token);
+          console.log('🔍 [GEMINI DEBUG] Executing read_goal');
+          // Map search parameter to title for compatibility with getGoalsForUser
+          const readGoalArgs = { ...args };
+          if (args.search) {
+            readGoalArgs.title = args.search;
+            delete readGoalArgs.search;
+          }
+          result = await goalsController.getGoalsForUser(userId, userContext.token, readGoalArgs);
+          break;
+        case 'get_goal_titles':
+          console.log('🔍 [GEMINI DEBUG] Executing get_goal_titles');
+          result = await goalsController.getGoalTitlesForUser(userId, userContext.token, args);
+          break;
+        case 'create_task_from_next_goal_step':
+          console.log('🔍 [GEMINI DEBUG] Executing create_task_from_next_goal_step');
+          result = await goalsController.createTaskFromNextGoalStep(userId, userContext.token, args);
+          break;
         case 'create_calendar_event':
-          return await calendarService.createCalendarEventFromAI(args, userId, userContext);
+          console.log('🔍 [GEMINI DEBUG] Executing create_calendar_event');
+          result = await calendarService.createCalendarEventFromAI(args, userId, userContext);
+          break;
         case 'update_calendar_event':
-          return await calendarService.updateCalendarEventFromAI(args, userId, userContext);
+          console.log('🔍 [GEMINI DEBUG] Executing update_calendar_event');
+          result = await calendarService.updateCalendarEventFromAI(args, userId, userContext);
+          break;
         case 'delete_calendar_event':
-          return await calendarService.deleteCalendarEventFromAI(args, userId, userContext);
+          console.log('🔍 [GEMINI DEBUG] Executing delete_calendar_event');
+          result = await calendarService.deleteCalendarEventFromAI(args, userId, userContext);
+          break;
         case 'read_calendar_event':
-          return await calendarService.readCalendarEventFromAI(args, userId, userContext);
+          console.log('🔍 [GEMINI DEBUG] Executing read_calendar_event');
+          result = await calendarService.readCalendarEventFromAI(args, userId, userContext);
+          break;
         case 'lookup_calendar_event':
-          // args: { search, date }
-          return await calendarService.lookupCalendarEventbyTitle(userId, args.search, args.date);
+          console.log('🔍 [GEMINI DEBUG] Executing lookup_calendar_event');
+          // Ensure a date is always provided; default to 'today'
+          {
+            const safeArgs = { ...args };
+            if (!safeArgs.date) safeArgs.date = 'today';
+            result = await calendarService.lookupCalendarEventbyTitle(userId, safeArgs.search, safeArgs.date);
+          }
+          break;
         default:
-          return { error: `Unknown function call: ${name}` };
+          console.log('🔍 [GEMINI DEBUG] Unknown function call:', name);
+          result = { error: `Unknown function call: ${name}` };
       }
+      
+      console.log('🔍 [GEMINI DEBUG] _executeFunctionCall - Result type:', typeof result);
+      console.log('🔍 [GEMINI DEBUG] _executeFunctionCall - Result:', JSON.stringify(result, null, 2));
+      
+      return result;
     } catch (err) {
+      console.error('🔍 [GEMINI DEBUG] Error in _executeFunctionCall:', err);
+      console.error('🔍 [GEMINI DEBUG] Error stack:', err.stack);
       return { error: err.message || String(err) };
     }
   }
@@ -563,6 +931,47 @@ Make the milestones and steps specific to this goal, encouraging, and achievable
         action.details.due_date = `${yyyy}-${mm}-${dd}`;
       }
     }
+  }
+
+  /**
+   * Build a short conversational lead-in for READ responses.
+   * @param {('task'|'goal'|'calendar_event')} entity
+   * @param {number} count
+   * @param {object} userContext
+   */
+  _buildReadLeadIn(entity, count = 0, userContext = {}, filters = {}) {
+    const mood = userContext?.mood || '';
+    const softPrefix = mood && /tired|low|stressed|anxious/i.test(mood)
+      ? "I'll keep it light. "
+      : '';
+
+    if (entity === 'calendar_event') {
+      if (count === 0) return `${softPrefix}Your calendar looks clear. Want to use the open time for a task or some self‑care?`;
+      return `${softPrefix}Here are your upcoming events. After you review them, want me to slot a task into your day?`;
+    }
+    if (entity === 'goal') {
+      return `${softPrefix}I pulled up a goal to focus on. We can pick a quick step from it if you like.`;
+    }
+    // task
+    if (count === 0) {
+      const pieces = [];
+      const normalize = (s) => (typeof s === 'string' ? s.trim() : '');
+      const priority = normalize(filters.priority);
+      const category = normalize(filters.category);
+      const search = normalize(filters.search);
+      const completed = typeof filters.completed === 'boolean' ? filters.completed : undefined;
+
+      if (priority) pieces.push(`${priority}-priority`);
+      if (completed !== undefined) pieces.push(completed ? 'completed' : 'pending');
+
+      let subject = pieces.length > 0 ? `${pieces.join(' ')} tasks` : 'tasks';
+      if (category) subject += ` in ${category}`;
+      if (search) subject += ` matching "${search}"`;
+
+      return `${softPrefix}I couldn’t find any ${subject}. Want me to add one or broaden the search?`;
+    }
+    if (count === 1) return `${softPrefix}You’ve got one pending task. Does that feel doable today, or should we add something lighter?`;
+    return `${softPrefix}I see ${count} pending tasks. Which one do you have the energy for today?`;
   }
 
   /**

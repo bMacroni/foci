@@ -6,7 +6,8 @@ import {
   getGoalById,
   updateGoal,
   deleteGoal,
-  generateGoalBreakdown
+  generateGoalBreakdown,
+  getGoalTitles
 } from '../controllers/goalsController.js';
 import {
   createMilestone,
@@ -30,6 +31,7 @@ const router = express.Router();
 // Goal endpoints
 router.post('/', requireAuth, createGoal);
 router.get('/', requireAuth, getGoals);
+router.get('/titles', requireAuth, getGoalTitles);
 router.get('/:id', requireAuth, getGoalById);
 router.put('/:id', requireAuth, updateGoal);
 router.delete('/:id', requireAuth, deleteGoal);

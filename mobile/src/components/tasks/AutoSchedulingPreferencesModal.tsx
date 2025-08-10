@@ -9,7 +9,6 @@ import {
   Switch,
   Alert,
   ActivityIndicator,
-  Platform,
 } from 'react-native';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { colors } from '../../themes/colors';
@@ -129,7 +128,7 @@ export const AutoSchedulingPreferencesModal: React.FC<AutoSchedulingPreferencesM
   ) => {
     const [hours, minutes] = value.split(':');
     const timeDate = new Date();
-    timeDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+    timeDate.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
     
     const showPicker = isStartTime ? showStartTimePicker : showEndTimePicker;
     const setShowPicker = isStartTime ? setShowStartTimePicker : setShowEndTimePicker;
@@ -352,7 +351,7 @@ export const AutoSchedulingPreferencesModal: React.FC<AutoSchedulingPreferencesM
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.background.primary,
   },
   header: {
     flexDirection: 'row',
@@ -499,7 +498,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: colors.background.primary,
   },
   loadingText: {
     marginTop: spacing.md,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -45,11 +45,7 @@ export const TaskFormScreen: React.FC<TaskFormScreenProps> = ({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, [taskId]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const [goalsData, taskData] = await Promise.all([
@@ -64,7 +60,11 @@ export const TaskFormScreen: React.FC<TaskFormScreenProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [taskId]);
+
+  useEffect(() => {
+    loadData();
+  }, [taskId, loadData]);
 
   const handleSave = async (taskData: Partial<Task>) => {
     try {
@@ -113,12 +113,12 @@ export const TaskFormScreen: React.FC<TaskFormScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.background.primary,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: colors.background.primary,
   },
 });

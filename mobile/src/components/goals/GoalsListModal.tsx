@@ -75,18 +75,9 @@ export default function GoalsListModal({
     }
   }, [visible, filteredGoals, fadeAnimations]);
 
-  const getProgressPercentage = (completed: number, total: number) => {
-    return total > 0 ? (completed / total) * 100 : 0;
-  };
+  // progress helpers removed (not used)
 
-  const handleSwipe = useCallback((index: number, direction: 'left' | 'right') => {
-    const targetValue = direction === 'left' ? -80 : 0;
-    
-    Animated.spring(swipeAnimations[index], {
-      toValue: targetValue,
-      useNativeDriver: true,
-    }).start();
-  }, [swipeAnimations]);
+  // (swipe helper reserved for future use)
 
   const handleDelete = useCallback((goalId: string, index: number) => {
     // Reset animation
@@ -106,7 +97,6 @@ export default function GoalsListModal({
   }, [swipeAnimations, handleDelete]);
 
   const renderGoalItem = (goal: Goal, index: number) => {
-    const progressPercentage = getProgressPercentage(goal.completedSteps, goal.totalSteps);
     
     return (
       <View key={goal.id} style={styles.goalItemContainer}>
@@ -229,7 +219,7 @@ export default function GoalsListModal({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.background.primary,
   },
   header: {
     flexDirection: 'row',

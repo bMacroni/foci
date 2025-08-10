@@ -108,8 +108,13 @@ android {
             signingConfig signingConfigs.debug
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+            // Workaround prefab packaging errors in Windows release builds for some native libs
+            packagingOptions {
+                exclude "**/prefab/**"
+            }
         }
     }
+
 }
 
 dependencies {
@@ -120,5 +125,10 @@ dependencies {
         implementation("com.facebook.react:hermes-android")
     } else {
         implementation jscFlavor
+    }
+
+    // Exclude react-native-worklets in release to avoid prefab CMake issues on Windows
+    configurations.releaseImplementation {
+        exclude group: 'com.swmansion.worklets', module: 'react-native-worklets'
     }
 }

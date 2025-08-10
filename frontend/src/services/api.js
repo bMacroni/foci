@@ -75,10 +75,18 @@ export const calendarAPI = {
   deleteEvent: (eventId) => api.delete(`/calendar/events/${eventId}`),
   getCalendarList: () => api.get('/calendar/list'),
   syncEvents: () => api.post('/calendar/sync'),
+  scheduleTask: (taskId) => api.post('/calendar/schedule-task', { taskId }),
 };
 
 // AI API
 export const aiAPI = {
+  setMood: (mood) => {
+    if (mood) {
+      api.defaults.headers.common['X-User-Mood'] = mood;
+    } else {
+      delete api.defaults.headers.common['X-User-Mood'];
+    }
+  },
   sendMessage: (message, threadId) => api.post('/ai/chat', { message, threadId }),
   getGoalSuggestions: (goalTitle) => api.post('/ai/goal-suggestions', { goalTitle }),
   getGoalBreakdown: (goalTitle, goalDescription) => api.post('/ai/goal-breakdown', { goalTitle, goalDescription }),

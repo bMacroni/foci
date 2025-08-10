@@ -33,7 +33,7 @@ interface VirtualizedEventListProps {
   showLoadMore?: boolean;
 }
 
-const ITEMS_PER_PAGE = 20;
+// const ITEMS_PER_PAGE = 20; // Unused
 const SKELETON_COUNT = 5;
 
 export const VirtualizedEventList: React.FC<VirtualizedEventListProps> = React.memo(({

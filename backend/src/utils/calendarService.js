@@ -105,19 +105,28 @@ export async function updateCalendarEvent(userId, eventId, eventData) {
   if (!eventId) {
     throw new Error('Event ID is required');
   }
-  
   const { summary, title, description, startTime, endTime, location } = eventData;
-  const eventTitle = title || summary || 'Untitled Event';
+  // Build update object only with provided fields to avoid overwriting existing values
+  const updateFields = { updated_at: new Date().toISOString() };
+  if (title !== undefined || summary !== undefined) {
+    updateFields.title = title || summary; // if provided
+  }
+  if (description !== undefined) {
+    updateFields.description = description;
+  }
+  if (startTime !== undefined) {
+    updateFields.start_time = startTime;
+  }
+  if (endTime !== undefined) {
+    updateFields.end_time = endTime;
+  }
+  if (location !== undefined) {
+    updateFields.location = location;
+  }
+
   let query = supabase
     .from('calendar_events')
-    .update({
-      title: eventTitle,
-      description: description || '',
-      start_time: startTime,
-      end_time: endTime,
-      location: location || '',
-      updated_at: new Date().toISOString()
-    })
+    .update(updateFields)
     .eq('user_id', userId);
   if (validateUUID(eventId)) {
     query = query.eq('id', eventId);
@@ -132,14 +141,76 @@ export async function updateCalendarEvent(userId, eventId, eventData) {
 
 export async function updateCalendarEventFromAI(args, userId, userContext) {
   if (!args.id) throw new Error('Event ID is required to update a calendar event');
-  // Only include fields that are present in args
+  const tz = userContext?.timeZone || 'America/Chicago';
+
+  // Fetch existing event so we can compute new times from a time-only input
+  const { data: current, error: fetchErr } = await supabase
+    .from('calendar_events')
+    .select('id, title, description, start_time, end_time, location')
+    .eq('user_id', userId)
+    .eq('id', args.id)
+    .single();
+  if (fetchErr) throw fetchErr;
+
+  // Helper to get YYYY-MM-DD for a given ISO in a specific timezone
+  const getYmdInTz = (iso) => {
+    const local = new Date(new Date(iso).toLocaleString('en-US', { timeZone: tz }));
+    const yyyy = local.getFullYear();
+    const mm = String(local.getMonth() + 1).padStart(2, '0');
+    const dd = String(local.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
   const eventData = {};
+
+  // Title/description/location only if explicitly provided (avoid overwriting)
   if (args.title !== undefined) eventData.title = args.title;
   if (args.description !== undefined) eventData.description = args.description;
-  if (args.start_time !== undefined) eventData.startTime = args.start_time;
-  if (args.end_time !== undefined) eventData.endTime = args.end_time;
   if (args.location !== undefined) eventData.location = args.location;
-  // Add other fields as needed
+
+  // Compute start/end when a time-only is provided
+  let newStartISO = undefined;
+  let newEndISO = undefined;
+
+  const providedStart = args.start_time;
+  const providedEnd = args.end_time;
+
+  const isTimeOnly = (v) => typeof v === 'string' && /^\d{1,2}(:\d{2})?\s*(AM|PM|am|pm)?$/.test(v.trim());
+  const isIsoLike = (v) => typeof v === 'string' && /\d{4}-\d{2}-\d{2}T/.test(v);
+
+  if (providedStart !== undefined) {
+    if (isTimeOnly(providedStart)) {
+      const dateYmd = getYmdInTz(current.start_time);
+      const timeStr = parseTimeExpression(providedStart);
+      newStartISO = combineDateAndTime(dateYmd, timeStr, tz);
+    } else if (isIsoLike(providedStart)) {
+      newStartISO = providedStart;
+    }
+  }
+
+  if (providedEnd !== undefined) {
+    if (isTimeOnly(providedEnd)) {
+      // If only end time provided, use existing date (or newStart date if also provided)
+      const baseIso = newStartISO || current.start_time;
+      const dateYmd = getYmdInTz(baseIso);
+      const timeStr = parseTimeExpression(providedEnd);
+      newEndISO = combineDateAndTime(dateYmd, timeStr, tz);
+    } else if (isIsoLike(providedEnd)) {
+      newEndISO = providedEnd;
+    }
+  }
+
+  // If only start time given, preserve original duration
+  if (newStartISO && providedEnd === undefined) {
+    const originalDurationMs = new Date(current.end_time).getTime() - new Date(current.start_time).getTime();
+    const end = new Date(newStartISO);
+    end.setTime(end.getTime() + (isNaN(originalDurationMs) ? 60 * 60 * 1000 : originalDurationMs));
+    newEndISO = end.toISOString();
+  }
+
+  if (newStartISO) eventData.startTime = newStartISO;
+  if (newEndISO) eventData.endTime = newEndISO;
+
   return await updateCalendarEvent(userId, args.id, eventData);
 } 
 
@@ -161,6 +232,37 @@ export async function deleteCalendarEvent(userId, eventId) {
   const { error } = await query;
   if (error) throw error;
   return { success: true };
+}
+
+// AI wrapper: accept args shape { id }
+export async function deleteCalendarEventFromAI(args, userId, userContext) {
+  if (!args || !args.id) {
+    throw new Error('Event ID is required to delete a calendar event');
+  }
+  // Fetch event details first so we can confirm to the user after deletion
+  const { data: existing, error: fetchErr } = await supabase
+    .from('calendar_events')
+    .select('id, title, description, start_time, end_time, location')
+    .eq('user_id', userId)
+    .eq('id', args.id)
+    .single();
+  if (fetchErr) {
+    // If fetch fails, still attempt delete but return minimal info
+    await deleteCalendarEvent(userId, args.id);
+    return { success: true };
+  }
+  await deleteCalendarEvent(userId, args.id);
+  return {
+    success: true,
+    event: {
+      id: existing.id,
+      title: existing.title || 'Untitled Event',
+      description: existing.description || '',
+      start: existing.start_time || null,
+      end: existing.end_time || null,
+      location: existing.location || ''
+    }
+  };
 }
 
 export async function getCalendarList(userId) {
@@ -214,23 +316,33 @@ export async function getEventsForDate(userId, date) {
  * @param {string} dateInput - Natural language date (e.g., "tomorrow", "next week", "2024-01-15")
  * @returns {Object} Object with startDate and endDate in YYYY-MM-DD format
  */
-function parseDateRange(dateInput) {
-  // Always use America/Chicago timezone for 'today' and natural language parsing
-  function getChicagoToday() {
-    const chicagoNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' }));
-    const yyyy = chicagoNow.getFullYear();
-    const mm = String(chicagoNow.getMonth() + 1).padStart(2, '0');
-    const dd = String(chicagoNow.getDate()).padStart(2, '0');
-    return { yyyy, mm, dd, dateStr: `${yyyy}-${mm}-${dd}` };
+function parseDateRange(dateInput, timeZone = 'America/Chicago') {
+  const DEBUG = process.env.DEBUG_LOGS === 'true';
+  if (DEBUG) {
+    console.log('=== PARSE DATE RANGE DEBUG ===');
+    console.log('Input dateInput:', dateInput);
+    console.log('Using timeZone:', timeZone);
+  }
+  
+  function getLocalToday() {
+    const localNow = new Date(new Date().toLocaleString('en-US', { timeZone }));
+    const yyyy = localNow.getFullYear();
+    const mm = String(localNow.getMonth() + 1).padStart(2, '0');
+    const dd = String(localNow.getDate()).padStart(2, '0');
+    const result = { yyyy, mm, dd, dateStr: `${yyyy}-${mm}-${dd}`, date: localNow };
+    if (DEBUG) console.log('Local today:', result);
+    return result;
   }
 
   if (!dateInput) {
-    // Default to today in CST/CDT
-    const { dateStr } = getChicagoToday();
-    return {
+    // Default to today in local TZ
+    const { dateStr } = getLocalToday();
+    const result = {
       startDate: dateStr,
       endDate: dateStr
     };
+    if (DEBUG) console.log('No date input, defaulting to today:', result);
+    return result;
   }
 
   // Try to parse as a specific date first (YYYY-MM-DD)
@@ -241,13 +353,12 @@ function parseDateRange(dateInput) {
     };
   }
 
-  // Use DateParser utility to parse natural language, but base it on CST/CDT
+  // Use DateParser utility to parse natural language based on local TZ
   // Patch chrono-node to use CST as the base date
   let parsedDate;
   try {
-    // If dateParser supports passing a base date, use it; otherwise, patch chrono-node directly
-    const chicagoNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' }));
-    parsedDate = dateParser.parseWithChrono ? dateParser.parseWithChrono(dateInput, chicagoNow) : null;
+    const baseNow = new Date(new Date().toLocaleString('en-US', { timeZone }));
+    parsedDate = dateParser.parseWithChrono ? dateParser.parseWithChrono(dateInput, baseNow) : null;
     if (!parsedDate) {
       // Fallback: temporarily override Date for chrono-node
       parsedDate = dateParser.parse(dateInput);
@@ -257,6 +368,38 @@ function parseDateRange(dateInput) {
   }
   const parsed = parsedDate ? new Date(parsedDate) : null;
 
+  // Handle explicit relative keywords first
+  const lower = String(dateInput).toLowerCase();
+  if (['today', 'tomorrow', 'yesterday'].some(k => lower.includes(k))) {
+    const { date } = getLocalToday();
+    const d = new Date(date);
+    if (lower.includes('tomorrow')) d.setDate(d.getDate() + 1);
+    if (lower.includes('yesterday')) d.setDate(d.getDate() - 1);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return { startDate: `${yyyy}-${mm}-${dd}`, endDate: `${yyyy}-${mm}-${dd}` };
+  }
+
+  // Handle "weekend" (Saturday-Sunday) in local week
+  if (lower.includes('weekend')) {
+    const { date } = getLocalToday();
+    const base = parsed && !isNaN(parsed) ? parsed : date;
+    const baseDow = base.getDay();
+    const saturday = new Date(base);
+    const daysUntilSaturday = (6 - baseDow + 7) % 7;
+    saturday.setDate(saturday.getDate() + daysUntilSaturday);
+    const sunday = new Date(saturday);
+    sunday.setDate(sunday.getDate() + 1);
+    const sY = saturday.getFullYear();
+    const sM = String(saturday.getMonth() + 1).padStart(2, '0');
+    const sD = String(saturday.getDate()).padStart(2, '0');
+    const eY = sunday.getFullYear();
+    const eM = String(sunday.getMonth() + 1).padStart(2, '0');
+    const eD = String(sunday.getDate()).padStart(2, '0');
+    return { startDate: `${sY}-${sM}-${sD}`, endDate: `${eY}-${eM}-${eD}` };
+  }
+
   if (parsed && !isNaN(parsed)) {
     const yyyy = parsed.getFullYear();
     const mm = String(parsed.getMonth() + 1).padStart(2, '0');
@@ -264,7 +407,7 @@ function parseDateRange(dateInput) {
     const dateStr = `${yyyy}-${mm}-${dd}`;
 
     // Handle different types of date inputs
-    if (dateInput.toLowerCase().includes('week')) {
+    if (lower.includes('week')) {
       // For "next week", "this week", etc. - get the full week
       const startOfWeek = new Date(parsed);
       startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
@@ -282,32 +425,32 @@ function parseDateRange(dateInput) {
         startDate: `${startYyyy}-${startMm}-${startDd}`,
         endDate: `${endYyyy}-${endMm}-${endDd}`
       };
+    } else if (lower.includes('month')) {
+      // For "next month", "this month", etc. - get the full month
+      const startOfMonth = new Date(parsed.getFullYear(), parsed.getMonth(), 1);
+      const endOfMonth = new Date(parsed.getFullYear(), parsed.getMonth() + 1, 0);
+
+      const startYyyy = startOfMonth.getFullYear();
+      const startMm = String(startOfMonth.getMonth() + 1).padStart(2, '0');
+      const startDd = String(startOfMonth.getDate()).padStart(2, '0');
+      const endYyyy = endOfMonth.getFullYear();
+      const endMm = String(endOfMonth.getMonth() + 1).padStart(2, '0');
+      const endDd = String(endOfMonth.getDate()).padStart(2, '0');
+
+      return {
+        startDate: `${startYyyy}-${startMm}-${startDd}`,
+        endDate: `${endYyyy}-${endMm}-${endDd}`
+      };
     }
-    // For "next month", "this month", etc. - get the full month
-    const startOfMonth = new Date(parsed.getFullYear(), parsed.getMonth(), 1);
-    const endOfMonth = new Date(parsed.getFullYear(), parsed.getMonth() + 1, 0);
-
-    const startYyyy = startOfMonth.getFullYear();
-    const startMm = String(startOfMonth.getMonth() + 1).padStart(2, '0');
-    const startDd = String(startOfMonth.getDate()).padStart(2, '0');
-    const endYyyy = endOfMonth.getFullYear();
-    const endMm = String(endOfMonth.getMonth() + 1).padStart(2, '0');
-    const endDd = String(endOfMonth.getDate()).padStart(2, '0');
-
-    return {
-      startDate: `${startYyyy}-${startMm}-${startDd}`,
-      endDate: `${endYyyy}-${endMm}-${endDd}`
-    };
-  } else if (parsed) {
-    // For specific dates like "tomorrow", "today", "next Friday"
+    // Default: single-day range for inputs like "today", "tomorrow", specific weekdays, or a concrete date
     return {
       startDate: dateStr,
       endDate: dateStr
     };
   }
 
-  // Fallback to today in CST/CDT if parsing fails
-  const { dateStr } = getChicagoToday();
+  // Fallback to today in local TZ if parsing fails
+  const { dateStr } = getLocalToday();
   return {
     startDate: dateStr,
     endDate: dateStr
@@ -323,33 +466,48 @@ function parseDateRange(dateInput) {
  */
 export async function readCalendarEventFromAI(args, userId, userContext) {
   try {
+    const DEBUG = process.env.DEBUG_LOGS === 'true';
+    if (DEBUG) {
+      console.log('=== READ CALENDAR EVENT DEBUG ===');
+      console.log('Args:', args);
+      console.log('UserId:', userId);
+      console.log('Date parameter:', args.date);
+    }
+
     // Read calendar event processing
 
     // Parse the date input (could be natural language like "tomorrow", "next week")
-    const dateRange = parseDateRange(args.date);
+  const dateRange = parseDateRange(args.date, userContext?.timeZone || 'America/Chicago');
+    if (DEBUG) console.log('Parsed date range:', dateRange);
     // Date range parsed
 
     let timeMin, timeMax;
-    // Add CST offset for date range (America/Chicago is UTC-5 or UTC-6, but we'll use -05:00 for now)
-    // If you want to handle daylight saving, consider using a timezone library
-    const CST_OFFSET = '-05:00'; // Adjust if needed for daylight saving
+  // Compute offset for the provided timezone for the start day
+  const baseStartLocal = new Date(dateRange.startDate + 'T00:00:00');
+  const tz = userContext?.timeZone || 'America/Chicago';
+  const offsetStart = new Date(baseStartLocal.toLocaleString('en-US', { timeZone: tz }));
+  const diffMs = offsetStart.getTime() - baseStartLocal.getTime();
+  const offsetHours = Math.round(diffMs / (60 * 60 * 1000));
+  const sign = offsetHours >= 0 ? '+' : '-';
+  const abs = Math.abs(offsetHours);
+  const hh = String(abs).padStart(2, '0');
+  const OFFSET = `${sign}${hh}:00`;
     if (dateRange.startDate && dateRange.endDate) {
-      timeMin = new Date(dateRange.startDate + 'T00:00:00' + CST_OFFSET);
-      timeMax = new Date(dateRange.endDate + 'T23:59:59' + CST_OFFSET);
-      // Using CST date range
+      timeMin = new Date(dateRange.startDate + 'T00:00:00' + OFFSET);
+      timeMax = new Date(dateRange.endDate + 'T23:59:59' + OFFSET);
+      if (DEBUG) console.log('Time range:', { timeMin: timeMin.toISOString(), timeMax: timeMax.toISOString() });
     } else {
-      // If no date specified, get events from now onwards (in CST)
       const now = new Date();
-      // Convert now to CST string (approximate, for robust use a timezone lib)
       const nowCST = new Date(now.toLocaleString('en-US', { timeZone: 'America/Chicago' }));
       timeMin = nowCST;
       timeMax = null;
-      // Using current time onwards
+      if (DEBUG) console.log('No date specified, using current time onwards:', { timeMin: timeMin.toISOString() });
     }
 
-    // Query the local database for events
+    // Query the local database for events (DB stores UTC timestamps)
     let dbEvents = await getCalendarEventsFromDB(userId, 50, timeMin, timeMax);
-    // Database events retrieved
+    if (DEBUG) console.log('Database events found:', dbEvents.length);
+    if (DEBUG) console.log('First few events:', dbEvents.slice(0, 3));
 
     // Additional filters
     if (args.location) {
@@ -401,32 +559,74 @@ export async function readCalendarEventFromAI(args, userId, userContext) {
  * @param {string} searchString - Search string for event title
  * @returns {Promise<Array>} events with IDs and titles
  */
-export async function lookupCalendarEventbyTitle(userId, searchString, date) {
+export async function lookupCalendarEventbyTitle(userId, searchString, date, timeZone = 'America/Chicago') {
   try {
     if (!searchString || typeof searchString !== 'string') {
       return [];
     }
-    // Enhanced logging for debugging
-    let query = supabase
-      .from('calendar_events')
-      .select('id, title, start_time, end_time, location, description')
-      .eq('user_id', userId)
-      .ilike('title', `%${searchString}%`);
-    // Date filtering
-    if (date) {
-      const dateRange = parseDateRange(date);
-      if (dateRange.startDate && dateRange.endDate) {
-        const CST_OFFSET = '-05:00'; // Adjust if needed for daylight saving
-        const timeMin = new Date(dateRange.startDate + 'T00:00:00' + CST_OFFSET);
-        const timeMax = new Date(dateRange.endDate + 'T23:59:59' + CST_OFFSET);
-        query = query.gte('start_time', timeMin.toISOString()).lte('start_time', timeMax.toISOString());
+    // Extract meaningful tokens from the search phrase (drop stopwords)
+    const rawTokens = (searchString.toLowerCase().match(/[a-z0-9]+/g) || []);
+    const stopwords = new Set(['the','a','an','with','at','on','in','for','to','of','and','or','my','meeting','event','appointment']);
+    const tokens = Array.from(new Set(rawTokens.filter(t => t.length >= 3 && !stopwords.has(t))));
+    
+    const runQueryForDate = async (dateLabel, mode = 'and', anyColumn = false) => {
+      let q = supabase
+        .from('calendar_events')
+        .select('id, title, start_time, end_time, location, description')
+        .eq('user_id', userId)
+        .ilike('title', `%${searchString}%`)
+        .order('start_time', { ascending: true });
+      // Replace broad title search with tokenized search strategies
+      if (tokens.length > 0) {
+        // Reset to base query without the broad title search
+        q = supabase
+          .from('calendar_events')
+          .select('id, title, start_time, end_time, location, description')
+          .eq('user_id', userId)
+          .order('start_time', { ascending: true });
+        if (mode === 'and') {
+          // Require every token to appear in title
+          for (const t of tokens) {
+            q = q.ilike('title', `%${t}%`);
+          }
+        } else {
+          // OR across tokens, optionally searching multiple columns
+          const fields = anyColumn ? ['title','description','location'] : ['title'];
+          const ors = [];
+          for (const t of tokens) {
+            for (const f of fields) ors.push(`${f}.ilike.%${t}%`);
+          }
+          if (ors.length > 0) q = q.or(ors.join(','));
+        }
+      }
+      if (dateLabel) {
+        const range = parseDateRange(dateLabel, timeZone);
+        if (range?.startDate && range?.endDate) {
+          const startLocal = new Date(new Date(`${range.startDate}T00:00:00`).toLocaleString('en-US', { timeZone }));
+          const endLocal = new Date(new Date(`${range.endDate}T23:59:59`).toLocaleString('en-US', { timeZone }));
+          q = q.gte('start_time', startLocal.toISOString()).lte('start_time', endLocal.toISOString());
+        }
+      }
+      const { data, error } = await q;
+      if (error) throw error;
+      return data;
+    };
+
+    // First try the provided date (or today)
+    const primaryDate = date || 'today';
+    let data = await runQueryForDate(primaryDate, 'and');
+    if ((!data || data.length === 0) && tokens.length > 0) {
+      data = await runQueryForDate(primaryDate, 'or');
+    }
+
+    // If nothing found for today, try tomorrow automatically (common follow-up flows)
+    if ((!data || data.length === 0) && (!date || /^today$/i.test(date))) {
+      data = await runQueryForDate('tomorrow', 'and');
+      if ((!data || data.length === 0) && tokens.length > 0) {
+        data = await runQueryForDate('tomorrow', 'or', true); // broaden to any column
       }
     }
-    const { data, error } = await query;
-    if (error) {
-      // console.error('Error in lookupCalendarEventbyTitle:', error);
-      throw error;
-    }
+
     // Log only the count of DB results
     // Format events for AI lookup
     return data.map(event => ({
@@ -495,15 +695,36 @@ function parseTimeExpression(timeExpression) {
  */
 function combineDateAndTime(dateStr, timeStr, timeZone = 'UTC') {
   if (!dateStr || !timeStr) return null;
-  
-  // Create a date object in the local timezone
-  const dateTimeStr = `${dateStr}T${timeStr}:00`;
-  
-  // Create the date in local timezone (don't add Z to keep it local)
-  const localDate = new Date(dateTimeStr);
-  
-  // Return ISO string in local timezone
-  return localDate.toISOString();
+
+  // Build components
+  const [yyyy, mm, dd] = dateStr.split('-').map((v) => parseInt(v, 10));
+  const [HH, MM] = timeStr.split(':').map((v) => parseInt(v, 10));
+  if (!yyyy || !mm || !dd || isNaN(HH) || isNaN(MM)) return null;
+
+  // Create a UTC date from the provided wall time
+  const asUtc = new Date(Date.UTC(yyyy, mm - 1, dd, HH, MM, 0));
+
+  // Determine the timezone offset for that instant in the target time zone
+  // Trick: format the UTC instant in the target tz, parse back to Date (system local),
+  // and compute the delta. This yields the tz offset (incl. DST) in ms.
+  const tzView = new Date(asUtc.toLocaleString('en-US', { timeZone }));
+  const offsetMs = tzView.getTime() - asUtc.getTime();
+
+  // We want the UTC instant that shows the requested wall time in the target tz
+  const correctUtc = new Date(asUtc.getTime() - offsetMs);
+  return correctUtc.toISOString();
+}
+
+// Parse relative times like "in 1 hour", "in 30 minutes"
+function parseRelativeTimeToMinutes(input) {
+  if (!input || typeof input !== 'string') return null;
+  const m = input.trim().toLowerCase().match(/^in\s+(\d+)\s*(minute|minutes|min|hour|hours|hr|hrs)$/);
+  if (!m) return null;
+  const amount = parseInt(m[1], 10);
+  const unit = m[2];
+  if (isNaN(amount) || amount <= 0) return null;
+  if (unit.startsWith('hour') || unit.startsWith('hr')) return amount * 60;
+  return amount; // minutes
 }
 
 /**
@@ -529,8 +750,18 @@ export async function createCalendarEventFromAI(args, userId, userContext) {
       // Using direct timestamps
     } else if (args.date || args.time) {
       // Natural language date/time provided
-      const dateStr = args.date ? dateParser.parse(args.date) : dateParser.parse('today');
-      const timeStr = args.time ? parseTimeExpression(args.time) : '09:00'; // Default to 9 AM
+      const tz = userContext?.timeZone || 'America/Chicago';
+      const relativeMinutes = args.time ? parseRelativeTimeToMinutes(args.time) : null;
+      if (relativeMinutes !== null) {
+        // Compute from now in the user's timezone
+        const nowLocal = new Date(new Date().toLocaleString('en-US', { timeZone: tz }));
+        const startLocal = new Date(nowLocal.getTime() + relativeMinutes * 60 * 1000);
+        startDateTime = startLocal.toISOString();
+        const endLocal = new Date(startLocal.getTime() + ((args.duration || 60) * 60 * 1000));
+        endDateTime = endLocal.toISOString();
+      } else {
+        const dateStr = args.date ? dateParser.parse(args.date) : dateParser.parse('today');
+        const timeStr = args.time ? parseTimeExpression(args.time) : '09:00'; // Default to 9 AM
       
       // Date/time parsed
       
@@ -538,13 +769,14 @@ export async function createCalendarEventFromAI(args, userId, userContext) {
         throw new Error('Could not parse the date expression');
       }
       
-      startDateTime = combineDateAndTime(dateStr, timeStr, args.time_zone);
+        startDateTime = combineDateAndTime(dateStr, timeStr, tz);
       
       // Calculate end time (default to 1 hour duration)
-      const duration = args.duration || 60; // minutes
-      const endTime = new Date(startDateTime);
-      endTime.setMinutes(endTime.getMinutes() + duration);
-      endDateTime = endTime.toISOString();
+        const duration = args.duration || 60; // minutes
+        const endTime = new Date(startDateTime);
+        endTime.setMinutes(endTime.getMinutes() + duration);
+        endDateTime = endTime.toISOString();
+      }
       
       // Times calculated
     } else {
@@ -557,7 +789,7 @@ export async function createCalendarEventFromAI(args, userId, userContext) {
       description: args.description || '',
       startTime: startDateTime,
       endTime: endDateTime,
-      timeZone: args.time_zone || 'UTC',
+      timeZone: userContext?.timeZone || 'America/Chicago',
       location: args.location // Always include location, even if undefined
     };
     
@@ -569,12 +801,12 @@ export async function createCalendarEventFromAI(args, userId, userContext) {
       success: true,
       event: {
         id: createdEvent.id,
-        title: createdEvent.summary,
-        description: createdEvent.description,
-        start: createdEvent.start?.dateTime,
-        end: createdEvent.end?.dateTime,
-        location: createdEvent.location, // Always include location
-        timeZone: createdEvent.start?.timeZone
+        title: createdEvent.title || createdEvent.summary || 'Untitled Event',
+        description: createdEvent.description || '',
+        start: createdEvent.start_time || createdEvent.start?.dateTime || createdEvent.start || null,
+        end: createdEvent.end_time || createdEvent.end?.dateTime || createdEvent.end || null,
+        location: createdEvent.location || '',
+        timeZone: userContext?.timeZone || 'America/Chicago'
       }
     };
     

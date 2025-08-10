@@ -7,9 +7,7 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
-  Platform,
   Switch,
-  Modal,
   FlatList,
   Dimensions,
 } from 'react-native';
@@ -447,7 +445,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
               style={styles.textInput}
               value={formData.estimated_duration_minutes?.toString() || ''}
               onChangeText={(text) => {
-                const value = parseInt(text) || undefined;
+                const value = parseInt(text, 10) || undefined;
                 handleInputChange('estimated_duration_minutes', value);
               }}
               placeholder="Enter estimated duration"
@@ -610,7 +608,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.background.primary,
   },
   scrollView: {
     flex: 1,
@@ -641,7 +639,7 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     fontSize: typography.fontSize.base,
     color: colors.text.primary,
-    backgroundColor: colors.background,
+    backgroundColor: colors.background.primary,
   },
   textArea: {
     height: 100,
@@ -681,7 +679,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border.medium,
     borderRadius: borderRadius.md,
     padding: spacing.sm,
-    backgroundColor: colors.background,
+    backgroundColor: colors.background.primary,
   },
   dateButtonText: {
     fontSize: typography.fontSize.base,
@@ -708,7 +706,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border.medium,
     borderRadius: borderRadius.md,
     padding: spacing.sm,
-    backgroundColor: colors.background,
+    backgroundColor: colors.background.primary,
     minHeight: 48,
   },
   dropdownButtonText: {
@@ -721,7 +719,7 @@ const styles = StyleSheet.create({
     top: '100%',
     left: 0,
     right: 0,
-    backgroundColor: colors.background,
+    backgroundColor: colors.background.primary,
     borderWidth: 1,
     borderColor: colors.border.medium,
     borderRadius: borderRadius.md,
@@ -746,7 +744,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.border.light,
-    backgroundColor: colors.background,
+    backgroundColor: colors.background.primary,
   },
   dropdownOptionSelected: {
     backgroundColor: colors.primary,
@@ -764,7 +762,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border.medium,
     borderRadius: borderRadius.md,
-    backgroundColor: colors.background,
+    backgroundColor: colors.background.primary,
   },
   pickerButton: {
     flexDirection: 'row',
@@ -817,7 +815,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border.medium,
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.sm,
-    backgroundColor: colors.background,
+    backgroundColor: colors.background.primary,
   },
   locationInput: {
     flex: 1,
@@ -877,7 +875,7 @@ const styles = StyleSheet.create({
   },
   dropdownOverlayContent: {
     position: 'absolute',
-    backgroundColor: colors.background,
+    backgroundColor: colors.background.primary,
     borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: colors.border.medium,

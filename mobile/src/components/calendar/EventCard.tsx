@@ -12,7 +12,7 @@ import Icon from 'react-native-vector-icons/Octicons';
 import { colors } from '../../themes/colors';
 import { typography } from '../../themes/typography';
 import { spacing } from '../../themes/spacing';
-import { Button } from '../common/Button';
+// import { Button } from '../common/Button';
 import { CalendarEvent, Task } from '../../types/calendar';
 import { hapticFeedback } from '../../utils/hapticFeedback';
 
@@ -36,8 +36,7 @@ export const EventCard = React.memo<EventCardProps>(({
   compact = false,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [completing, setCompleting] = useState(false);
+  const [_deleting, setDeleting] = useState(false);
 
   const isTask = type === 'task';
   const task = isTask ? (event as Task) : null;
@@ -136,17 +135,7 @@ export const EventCard = React.memo<EventCardProps>(({
     return null;
   };
 
-  const formatDateTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleString([], {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
+  // removed unused formatDateTime helper
 
   const getPriorityText = () => {
     if (isTask && task?.priority) {
@@ -198,12 +187,12 @@ export const EventCard = React.memo<EventCardProps>(({
         }
       );
     } else {
-      // Android implementation with improved cancel handling
+      // Android/others implementation with improved cancel handling
       Alert.alert(
         'Reschedule Event',
         'Choose when to reschedule this event or tap Cancel to exit',
         [
-          ...options.map((option, index) => ({
+          ...options.map((option) => ({
             text: option.label,
             onPress: () => {
               hapticFeedback.selection();

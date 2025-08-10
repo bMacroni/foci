@@ -15,6 +15,8 @@ router.post('/chat', requireAuth, async (req, res) => {
   try {
     const { message, threadId } = req.body;
     const userId = req.user.id;
+    const moodHeader = req.headers['x-user-mood'];
+    const timeZoneHeader = req.headers['x-user-timezone'];
 
     if (!message || typeof message !== 'string') {
       return res.status(400).json({ 
@@ -25,23 +27,26 @@ router.post('/chat', requireAuth, async (req, res) => {
     // Extract JWT token from Authorization header
     const token = req.headers.authorization?.split(' ')[1];
 
-    // Process message with Gemini service, passing token in userContext
-    const response = await geminiService.processMessage(message, userId, { token });
+    // Process message with Gemini service, passing token and mood in userContext
+    const response = await geminiService.processMessage(message, userId, { token, mood: moodHeader, timeZone: timeZoneHeader });
 
     // Save conversation to database if threadId is provided
     if (threadId) {
       try {
-        await conversationController.addMessage(threadId, message, 'user', {}, token);
+        await conversationController.addMessage(threadId, message, 'user', { mood: moodHeader }, token);
         await conversationController.addMessage(threadId, response.message, 'assistant', { actions: response.actions }, token);
       } catch (dbError) {
+        console.error('Database save error:', dbError);
         // Continue with response even if database save fails
       }
     }
 
-    res.json({
+    const finalResponse = {
       message: response.message,
       actions: response.actions || []
-    });
+    };
+    
+    res.json(finalResponse);
 
   } catch (error) {
     console.error('AI Chat Error:', error);

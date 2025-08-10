@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Platform, Animated, Dimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAvoidingView } from 'react-native';
@@ -8,6 +8,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../../themes/colors';
 import { typography } from '../../themes/typography';
 import { spacing, borderRadius } from '../../themes/spacing';
+import { OnboardingState, QuickAction } from '../../types/onboarding';
+import { OnboardingService } from '../../services/onboarding';
+import QuickActions from '../../components/ai/QuickActions';
+import ScheduleDisplay from '../../components/ai/ScheduleDisplay';
+import GoalBreakdownDisplay from '../../components/ai/GoalBreakdownDisplay';
+import GoalTitlesDisplay from '../../components/ai/GoalTitlesDisplay';
+import TaskDisplay from '../../components/ai/TaskDisplay';
 
 interface Message {
   id: number;
@@ -36,7 +43,7 @@ export default function AIChatScreen({ navigation, route }: any) {
     {
       id: '1',
       title: 'General Chat',
-      messages: [{ id: 1, text: 'Welcome to Foci! How can I help you today?', sender: 'ai' }],
+      messages: [{ id: 1, text: 'Hi there, and welcome to Foci! I\'m here to help you structure your goals and tasks in a way that feels manageable. What would you like to do first?', sender: 'ai' }],
       isPinned: false,
       createdAt: new Date(),
       lastMessageAt: new Date(),
@@ -48,6 +55,34 @@ export default function AIChatScreen({ navigation, route }: any) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [sidebarVisible, setSidebarVisible] = useState(false);
+
+  // Onboarding state management
+  const [_onboardingState, setOnboardingState] = useState<OnboardingState>({ isCompleted: false });
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingTimer, setOnboardingTimer] = useState<NodeJS.Timeout | null>(null);
+  const [hasUserInteracted, setHasUserInteracted] = useState(false);
+
+  // Quick actions configuration
+  const quickActions: QuickAction[] = [
+    {
+      id: 'create-goal',
+      label: 'Create a Goal',
+      prefillText: 'Create a new goal.',
+      icon: 'milestone'
+    },
+    {
+      id: 'add-task',
+      label: 'Add a Task',
+      prefillText: 'I need to add a new task.',
+      icon: 'check-circle'
+    },
+    {
+      id: 'manage-calendar',
+      label: 'Manage My Calendar',
+      prefillText: 'I need to manage my calendar.',
+      icon: 'calendar'
+    }
+  ];
 
   const currentConversation = conversations.find(c => c.id === currentConversationId);
 
@@ -88,7 +123,7 @@ export default function AIChatScreen({ navigation, route }: any) {
     const newConversation: Conversation = {
       id: Date.now().toString(),
       title: 'New Conversation',
-      messages: [{ id: 1, text: 'Welcome to Foci! How can I help you today?', sender: 'ai' }],
+      messages: [{ id: 1, text: 'Hi there, and welcome to Foci! I\'m here to help you structure your goals and tasks in a way that feels manageable. What would you like to do first?', sender: 'ai' }],
       isPinned: false,
       createdAt: new Date(),
       lastMessageAt: new Date(),
@@ -129,15 +164,191 @@ export default function AIChatScreen({ navigation, route }: any) {
     }
   };
 
-  const updateConversationTitle = (conversationId: string, title: string) => {
-    setConversations(conversations.map(c => 
-      c.id === conversationId ? { ...c, title } : c
-    ));
-  };
+  // Title updates are handled when sending messages
 
-  const handleSignOut = async () => {
+  const sendOnboardingFollowUp = useCallback(() => {
+    const followUpMessage: Message = {
+      id: Date.now(),
+      text: "You can also just tell me what's on your mind. For example, try saying: 'Help me plan to learn to play the guitar' or 'Schedule a dentist appointment for next Tuesday at 3 PM.'",
+      sender: 'ai'
+    };
+    setConversations(prev => prev.map(c => {
+      if (c.id === currentConversationId) {
+        return {
+          ...c,
+          messages: [...c.messages, followUpMessage],
+          lastMessageAt: new Date(),
+        };
+      }
+      return c;
+    }));
+  }, [currentConversationId]);
+
+  // Onboarding flow logic
+  const initializeOnboarding = useCallback(async () => {
+    const state = await OnboardingService.getOnboardingState();
+    setOnboardingState(state);
+    
+    if (!state.isCompleted) {
+      setShowOnboarding(true);
+      const timer = setTimeout(() => {
+        if (!hasUserInteracted && showOnboarding) {
+          sendOnboardingFollowUp();
+        }
+      }, 10000);
+      setOnboardingTimer(timer);
+    }
+  }, [hasUserInteracted, showOnboarding, sendOnboardingFollowUp]);
+
+  
+
+  const handleHelpPress = useCallback(async () => {
+    await OnboardingService.resetOnboarding();
+    setShowOnboarding(true);
+    setHasUserInteracted(false);
+    setOnboardingState({ isCompleted: false });
+    // Reset current conversation to welcome message
+    const resetConversation: Conversation = {
+      id: currentConversationId,
+      title: 'General Chat',
+      messages: [{ id: 1, text: 'Welcome to Foci! How can I help you today?', sender: 'ai' }],
+      isPinned: false,
+      createdAt: new Date(),
+      lastMessageAt: new Date(),
+    };
+    setConversations(prev => prev.map(c => 
+      c.id === currentConversationId ? resetConversation : c
+    ));
+    // Restart timer
+    const timer = setTimeout(() => {
+      if (!hasUserInteracted && showOnboarding) {
+        sendOnboardingFollowUp();
+      }
+    }, 10000);
+    setOnboardingTimer(timer);
+  }, [currentConversationId, hasUserInteracted, showOnboarding, sendOnboardingFollowUp]);
+
+  const handleSignOut = useCallback(async () => {
     await AsyncStorage.removeItem('authToken');
     navigation.replace('Login');
+  }, [navigation]);
+
+  // Detect if a message contains schedule content
+  const isScheduleContent = (text: string): boolean => {
+    // Prefer standardized JSON category detection first
+    const hasJsonScheduleFormat = /"category"\s*:\s*"schedule"/i.test(text)
+      || /"action_type"\s*:\s*"read"[\s\S]*?"entity_type"\s*:\s*"calendar_event"/i.test(text);
+
+    // Look for patterns that indicate actual schedule events (not just mentions of schedule)
+    const schedulePatterns = [
+      // Must contain actual time ranges with "from" and "to"
+      /from.*\d{1,2}:\d{2}\s*(?:AM|PM).*to.*\d{1,2}:\d{2}\s*(?:AM|PM)/i,
+      /•.*from.*\d{1,2}:\d{2}\s*(?:AM|PM).*to.*\d{1,2}:\d{2}\s*(?:AM|PM)/i,
+      /\*.*from.*\d{1,2}:\d{2}\s*(?:AM|PM).*to.*\d{1,2}:\d{2}\s*(?:AM|PM)/i,
+      // Must have bullet points with time ranges
+      /^[•\-\*]\s*.+?\s+from\s+\d{1,2}:\d{2}\s*(?:AM|PM)\s+to\s+\d{1,2}:\d{2}\s*(?:AM|PM)/im,
+      // Check for schedule-related keywords with time patterns
+      /schedule.*today.*\d{1,2}:\d{2}\s*(?:AM|PM)/i,
+      /here.*schedule.*today.*\d{1,2}:\d{2}\s*(?:AM|PM)/i,
+      /your.*schedule.*today.*\d{1,2}:\d{2}\s*(?:AM|PM)/i,
+    ];
+    
+    // Check if the text contains actual schedule events (not just mentions)
+    const hasTimeRanges = schedulePatterns.some(pattern => pattern.test(text));
+    
+    // Also check if it contains bullet points with time information
+    const hasBulletPointsWithTimes = /\n[•\-\*]\s*.+?\s+\d{1,2}:\d{2}\s*(?:AM|PM)/i.test(text);
+    
+    // Check if the text contains multiple time patterns (indicating a schedule)
+    const timePattern = /\d{1,2}:\d{2}\s*(?:AM|PM)/g;
+    const timeMatches = text.match(timePattern);
+    const hasMultipleTimes = timeMatches ? timeMatches.length >= 2 : false;
+    
+    // Check for schedule-related keywords
+    const hasScheduleKeywords = /schedule|calendar|events|appointments/i.test(text);
+    
+    return hasJsonScheduleFormat || hasTimeRanges || hasBulletPointsWithTimes || (hasMultipleTimes && hasScheduleKeywords);
+  };
+
+  // Detect if a message contains goal breakdown content
+  const isGoalBreakdownContent = (text: string): boolean => {
+    // Look for patterns that indicate goal breakdown with milestones and steps
+    const goalBreakdownPatterns = [
+      /\*\*goal\*\*:/i,
+      /\*\*description\*\*:/i,
+      /\*\*milestones\*\*:/i,
+      /milestone\s+\d+/i,
+      /\*\*milestone\s+\d+/i,
+      /break.*down.*into/i,
+      /structured.*plan/i,
+      /milestone.*steps/i,
+    ];
+    
+    // Check if the text contains milestone patterns
+    const hasMilestonePatterns = goalBreakdownPatterns.some(pattern => pattern.test(text));
+    
+    // Check if it contains bullet points (indicating steps)
+    const hasBulletPoints = /\n[•\-\*]\s*.+$/im.test(text);
+    
+    // Check for goal-related keywords
+    const hasGoalKeywords = /goal|milestone|step|breakdown|plan/i.test(text);
+    
+    // Check for the specific format with **Goal:** and **Milestones:**
+    const hasGoalFormat = /\*\*goal\*\*:.*\*\*milestones\*\*:/is.test(text);
+    
+    // Check for standardized JSON format
+    const hasJsonGoalFormat = /"category":\s*"goal"/i.test(text);
+    // Treat titles-only payloads differently so we render a list component
+    const isTitlesOnly = /"category"\s*:\s*"goal"[\s\S]*"goals"\s*:\s*\[\s*"/.test(text);
+    
+    return ((hasMilestonePatterns && hasBulletPoints && hasGoalKeywords) || hasGoalFormat || hasJsonGoalFormat) && !isTitlesOnly;
+  };
+
+  // Detect if message contains a titles-only goal list
+  const isGoalTitlesContent = (text: string): boolean => {
+    return /"category"\s*:\s*"goal"[\s\S]*"goals"\s*:\s*\[\s*"/i.test(text) ||
+           /"action_type"\s*:\s*"read"[\s\S]*"entity_type"\s*:\s*"goal"[\s\S]*"goals"\s*:\s*\[\s*"/i.test(text);
+  };
+
+  // Detect if a message contains task content
+  const isTaskContent = (text: string): boolean => {
+    // Check for standardized JSON format
+    const hasJsonTaskFormat = /"category":\s*"task"/i.test(text);
+    
+    // Check for task-related keywords
+    const hasTaskKeywords = /task|todo|reminder/i.test(text);
+    
+    // Check for task list patterns
+    const hasTaskListPatterns = /\n[•\-\*]\s*.+$/im.test(text);
+    
+    return hasJsonTaskFormat || (hasTaskKeywords && hasTaskListPatterns);
+  };
+
+  // Remove any goal breakdown section from conversational text so we can
+  // render the structured GoalBreakdownDisplay in its place without
+  // duplicating the content.
+  const stripGoalBreakdownFromText = (text: string): string => {
+    // First remove JSON blocks (handled elsewhere too, but keep here for safety)
+    let cleaned = text.replace(/```json[\s\S]*?```/g, '');
+    // Identify the first marker that usually precedes the structured list
+    const patterns = [
+      /goal breakdown/i,
+      /\*\*goal\*\*:/i,
+      /\*\*milestones\*\*:/i,
+      /^milestones:/im,
+      /\bmilestone\s+1\b/i,
+    ];
+    let firstIndex = -1;
+    for (const p of patterns) {
+      const idx = cleaned.search(p);
+      if (idx !== -1 && (firstIndex === -1 || idx < firstIndex)) {
+        firstIndex = idx;
+      }
+    }
+    if (firstIndex !== -1) {
+      cleaned = cleaned.slice(0, firstIndex).trim();
+    }
+    return cleaned.trim();
   };
 
   const generateConversationTitle = (messages: Message[]): string => {
@@ -239,7 +450,7 @@ export default function AIChatScreen({ navigation, route }: any) {
     return 'Conversation';
   };
 
-  const handleSend = async () => {
+  const handleSend = useCallback(async () => {
     if (!input.trim() || loading || !currentConversation) return;
     
     const userMessage = input.trim();
@@ -303,7 +514,23 @@ export default function AIChatScreen({ navigation, route }: any) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [conversations, currentConversation, currentConversationId, input, loading]);
+
+  const handleQuickActionPress = useCallback((action: QuickAction) => {
+    setHasUserInteracted(true);
+    if (onboardingTimer) {
+      clearTimeout(onboardingTimer);
+      setOnboardingTimer(null);
+    }
+    // Pre-fill input and send
+    setInput(action.prefillText);
+    setTimeout(() => {
+      handleSend();
+    }, 100);
+    // Hide onboarding after action
+    setShowOnboarding(false);
+    OnboardingService.setOnboardingCompleted();
+  }, [handleSend, onboardingTimer]);
 
   // Handle initial message from navigation
   useEffect(() => {
@@ -323,7 +550,7 @@ export default function AIChatScreen({ navigation, route }: any) {
         lastMessageAt: new Date(),
       };
       
-      setConversations([newConversation, ...conversations]);
+      setConversations(prev => [newConversation, ...prev]);
       setCurrentConversationId(newConversation.id);
       
       // Clear the route params to prevent re-triggering
@@ -336,19 +563,90 @@ export default function AIChatScreen({ navigation, route }: any) {
         handleSend();
       }, 100);
     }
-  }, [route.params?.initialMessage]);
+  }, [route.params?.initialMessage, handleSend, navigation]);
+
+  // Initialize onboarding on component mount
+  useEffect(() => {
+    initializeOnboarding();
+  }, [initializeOnboarding]);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (onboardingTimer) {
+        clearTimeout(onboardingTimer);
+      }
+    };
+  }, [onboardingTimer]);
 
   const renderMessage = (msg: Message) => {
     if (msg.sender === 'user') {
       return (
         <View key={msg.id} style={styles.userMsg}>
-          <Text style={styles.userMsgText}>{msg.text}</Text>
+          <Text selectable style={styles.userMsgText}>{msg.text}</Text>
         </View>
       );
     }
+    
+    // Check if this is structured content
+    const hasScheduleContent = isScheduleContent(msg.text);
+    const hasGoalBreakdownContent = isGoalBreakdownContent(msg.text);
+    const hasGoalTitlesContent = isGoalTitlesContent(msg.text);
+    const hasTaskContent = isTaskContent(msg.text);
+    
+    // Debug: Log AI messages to see what format they're in
+    if (msg.sender === 'ai' && msg.text.includes('schedule')) {
+      console.log('=== AI SCHEDULE RESPONSE DEBUG ===');
+      console.log('Message text:', msg.text);
+      console.log('Has schedule content:', hasScheduleContent);
+      console.log('Message length:', msg.text.length);
+    }
+    
+    // Remove JSON code blocks and (when present) the goal breakdown section
+    // from AI text for conversational display
+    const conversationalText = hasGoalBreakdownContent
+      ? stripGoalBreakdownFromText(msg.text)
+      : msg.text.replace(/```json[\s\S]*?```/g, '').trim();
+
     return (
-      <View key={msg.id} style={styles.aiMsg}>
-        <Text style={styles.aiMsgText}>{msg.text}</Text>
+      <View key={msg.id} style={[
+        styles.aiMsg,
+        // Remove padding when showing structured content to let the component control its own spacing
+        (hasScheduleContent || hasGoalBreakdownContent || hasGoalTitlesContent || hasTaskContent) && styles.aiMsgNoPadding
+      ]}>
+        {/* Show conversational text even when structured content exists (strip JSON blocks) */}
+        {conversationalText && (
+          <Text selectable style={styles.aiMsgText}>{conversationalText}</Text>
+        )}
+        {hasScheduleContent && (
+          <ScheduleDisplay text={msg.text} />
+        )}
+        {hasGoalBreakdownContent && (
+          <GoalBreakdownDisplay text={msg.text} />
+        )}
+        {hasGoalTitlesContent && (
+          <GoalTitlesDisplay
+            text={msg.text}
+            onAction={(prefill, sendNow) => {
+              setInput(prefill);
+              if (sendNow) {
+                setTimeout(() => {
+                  handleSend();
+                }, 50);
+              }
+            }}
+          />
+        )}
+        {hasTaskContent && (
+          <TaskDisplay text={msg.text} />
+        )}
+        {showOnboarding && msg.text.includes('Hi there, and welcome to Foci') && (
+          <QuickActions
+            actions={quickActions}
+            onActionPress={handleQuickActionPress}
+            visible={true}
+          />
+        )}
       </View>
     );
   };
@@ -404,17 +702,22 @@ export default function AIChatScreen({ navigation, route }: any) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-             <View style={styles.header}>
-         <TouchableOpacity onPress={toggleSidebar} style={styles.menuButton}>
-           <Icon name="three-bars" size={20} color={colors.text.primary} />
-         </TouchableOpacity>
-         <Text style={styles.headerTitle}>
-           {currentConversation?.title || 'Foci AI Chat'}
-         </Text>
-         <TouchableOpacity onPress={handleSignOut} style={styles.signOutBtn}>
-           <Text style={styles.signOutText}>Sign Out</Text>
-         </TouchableOpacity>
-       </View>
+                     <View style={styles.header}>
+          <TouchableOpacity onPress={toggleSidebar} style={styles.menuButton}>
+            <Icon name="three-bars" size={20} color={colors.text.primary} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>
+            {currentConversation?.title || 'Foci AI Chat'}
+          </Text>
+          <View style={styles.headerActions}>
+            <TouchableOpacity style={styles.helpButton} onPress={handleHelpPress}>
+              <Icon name="question" size={20} color={colors.text.primary} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleSignOut} style={styles.signOutBtn}>
+              <Text style={styles.signOutText}>Sign Out</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -442,7 +745,16 @@ export default function AIChatScreen({ navigation, route }: any) {
             style={styles.input}
             placeholder="Type a message..."
             value={input}
-            onChangeText={setInput}
+            onChangeText={(text) => {
+              setInput(text);
+              if (showOnboarding && !hasUserInteracted) {
+                setHasUserInteracted(true);
+                if (onboardingTimer) {
+                  clearTimeout(onboardingTimer);
+                  setOnboardingTimer(null);
+                }
+              }
+            }}
             onSubmitEditing={handleSend}
             returnKeyType="send"
             editable={!loading}
@@ -506,7 +818,7 @@ export default function AIChatScreen({ navigation, route }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.background.surface,
   },
   header: {
     flexDirection: 'row',
@@ -515,6 +827,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.border.light,
+    backgroundColor: colors.secondary,
   },
   menuButton: {
     padding: spacing.sm,
@@ -557,13 +870,16 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: typography.fontSize.base,
   },
+  aiMsgNoPadding: {
+    padding: 0,
+  },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.border.light,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background.surface,
   },
   input: {
     flex: 1,
@@ -577,6 +893,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.secondary,
     marginRight: spacing.sm,
     textAlignVertical: 'top',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  helpButton: {
+    padding: spacing.sm,
+    borderRadius: borderRadius.sm,
+    marginRight: spacing.sm,
   },
   sendBtn: {
     backgroundColor: colors.primary,
@@ -596,7 +921,7 @@ const styles = StyleSheet.create({
   signOutBtn: {
     padding: spacing.sm,
     borderRadius: borderRadius.sm,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background.surface,
   },
   signOutText: {
     color: colors.error,
@@ -617,7 +942,7 @@ const styles = StyleSheet.create({
     left: 0,
     width: '80%',
     height: '100%',
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background.surface,
     borderRightWidth: 1,
     borderRightColor: colors.border.light,
     zIndex: 1001,

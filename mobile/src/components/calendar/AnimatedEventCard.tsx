@@ -41,7 +41,7 @@ export const AnimatedEventCard: React.FC<AnimatedEventCardProps> = ({
         useNativeDriver: true,
       }),
     ]).start();
-  }, [index]);
+  }, [index, opacity, translateY]);
 
   const handlePress = () => {
     scaleOut();

@@ -41,14 +41,14 @@ export const fadeOut = (value: Animated.Value, duration: number = 300) => {
 };
 
 // Scale animations
-export const scaleIn = (value: Animated.Value, duration: number = 300) => {
+export const scaleIn = (value: Animated.Value, _duration: number = 300) => {
   return Animated.spring(value, {
     toValue: 1,
     ...ANIMATION_CONFIG.SPRING,
   });
 };
 
-export const scaleOut = (value: Animated.Value, duration: number = 300) => {
+export const scaleOut = (value: Animated.Value, _duration: number = 300) => {
   return Animated.spring(value, {
     toValue: 0.95,
     ...ANIMATION_CONFIG.SPRING,
@@ -129,7 +129,7 @@ export const skeletonAnimation = (value: Animated.Value) => {
 };
 
 // Haptic feedback implementation
-import { HapticFeedback } from 'react-native-haptic-feedback';
+import HapticFeedback from 'react-native-haptic-feedback';
 
 const hapticOptions = {
   enableVibrateFallback: true,
@@ -149,35 +149,35 @@ export const triggerHaptic = (type: 'light' | 'medium' | 'heavy' = 'light') => {
 export const useFadeAnimation = (initialValue: number = 0) => {
   const opacity = createAnimatedValue(initialValue);
   
-  const fadeIn = () => Animated.timing(opacity, {
+  const doFadeIn = () => Animated.timing(opacity, {
     toValue: 1,
     duration: 300,
     easing: Easing.out(Easing.cubic),
     useNativeDriver: true,
   }).start();
   
-  const fadeOut = () => Animated.timing(opacity, {
+  const doFadeOut = () => Animated.timing(opacity, {
     toValue: 0,
     duration: 300,
     easing: Easing.in(Easing.cubic),
     useNativeDriver: true,
   }).start();
   
-  return { opacity, fadeIn, fadeOut };
+  return { opacity, fadeIn: doFadeIn, fadeOut: doFadeOut };
 };
 
 export const useScaleAnimation = (initialValue: number = 1) => {
   const scale = createAnimatedValue(initialValue);
   
-  const scaleIn = () => Animated.spring(scale, {
+  const doScaleIn = () => Animated.spring(scale, {
     toValue: 1,
     ...ANIMATION_CONFIG.SPRING,
   }).start();
   
-  const scaleOut = () => Animated.spring(scale, {
+  const doScaleOut = () => Animated.spring(scale, {
     toValue: 0.95,
     ...ANIMATION_CONFIG.SPRING,
   }).start();
   
-  return { scale, scaleIn, scaleOut };
+  return { scale, scaleIn: doScaleIn, scaleOut: doScaleOut };
 }; 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Octicons';
 import { colors } from '../../themes/colors';
@@ -7,6 +7,7 @@ import { typography } from '../../themes/typography';
 import { spacing, borderRadius } from '../../themes/spacing';
 import { Input, Button } from '../../components/common';
 import { goalsAPI } from '../../services/api';
+import { offlineService } from '../../services/offline';
 import { authService, AuthState } from '../../services/auth';
 import GoalsListModal from '../../components/goals/GoalsListModal';
 
@@ -85,7 +86,7 @@ export default function GoalsScreen({ navigation }: any) {
     });
 
     return unsubscribe;
-  }, []);
+  }, [navigation, loadGoals]);
 
   // Load goals from backend on component mount (only if authenticated)
   useEffect(() => {
@@ -94,11 +95,57 @@ export default function GoalsScreen({ navigation }: any) {
     } else if (!authState.isAuthenticated && !authState.isLoading) {
       setGoalsLoading(false);
     }
-  }, [authState.isAuthenticated, authState.isLoading]);
+  }, [authState.isAuthenticated, authState.isLoading, loadGoals]);
 
-  const loadGoals = async () => {
+  const loadGoals = React.useCallback(async () => {
+    let paintedFromCache = false;
     try {
-      setGoalsLoading(true);
+      // Try cache first for instant paint
+      const cached = await offlineService.getCachedGoals();
+      if (cached && Array.isArray(cached) && cached.length > 0) {
+        const transformedFromCache: Goal[] = cached.map((goal: any) => {
+          const milestones = goal.milestones || [];
+          const totalMilestones = milestones.length;
+          const completedMilestones = milestones.filter((m: any) => m.completed).length;
+          const totalSteps = milestones.reduce((total: number, milestone: any) => total + (milestone.steps?.length || 0), 0);
+          const completedSteps = milestones.reduce((total: number, milestone: any) => total + (milestone.steps?.filter((s: any) => s.completed).length || 0), 0);
+          const nextMilestone = milestones.find((m: any) => !m.completed)?.title || '';
+          const nextStep = milestones.find((m: any) => !m.completed)?.steps?.find((s: any) => !s.completed)?.text || '';
+          return {
+            id: goal.id,
+            title: goal.title,
+            description: goal.description,
+            completedMilestones,
+            totalMilestones,
+            completedSteps,
+            totalSteps,
+            nextMilestone,
+            nextStep,
+            status: goal.status || 'active',
+            createdAt: new Date(goal.created_at || goal.createdAt),
+            milestones: milestones.map((milestone: any) => ({
+              id: milestone.id,
+              title: milestone.title,
+              description: milestone.description || '',
+              completed: milestone.completed || false,
+              order: milestone.order,
+              steps: (milestone.steps || []).map((step: any) => ({
+                id: step.id,
+                title: step.text || step.title,
+                description: step.description || '',
+                completed: step.completed || false,
+                order: step.order,
+              })),
+            })),
+          } as Goal;
+        });
+        setGoals(transformedFromCache);
+        setGoalsLoading(false);
+        paintedFromCache = true;
+      } else {
+        setGoalsLoading(true);
+      }
+
       const fetchedGoals = await goalsAPI.getGoals();
       
       // Transform backend data to match our UI structure
@@ -149,8 +196,9 @@ export default function GoalsScreen({ navigation }: any) {
       });
 
       setGoals(transformedGoals);
+      try { await offlineService.cacheGoals(fetchedGoals as any); } catch {}
     } catch (error) {
-      console.error('Error loading goals:', error);
+      // error loading goals
       
       // Check if it's an authentication error
       if (error instanceof Error && error.message.includes('No authentication token')) {
@@ -173,9 +221,9 @@ export default function GoalsScreen({ navigation }: any) {
         Alert.alert('Error', 'Failed to load goals. Please try again.');
       }
     } finally {
-      setGoalsLoading(false);
+      if (!paintedFromCache) setGoalsLoading(false);
     }
-  };
+  }, [navigation]);
 
   const handleAiSubmit = async () => {
     if (!aiInput.trim()) return;
@@ -212,7 +260,7 @@ export default function GoalsScreen({ navigation }: any) {
       setShowAiInput(false);
       setShowAiReview(true);
     } catch (error) {
-      console.error('Error generating AI breakdown:', error);
+      // error generating AI breakdown
       setLoading(false);
       
       // Check if it's an authentication error
@@ -237,7 +285,7 @@ export default function GoalsScreen({ navigation }: any) {
     }
   };
 
-  const handleAcceptSuggestion = async () => {
+  const handleAcceptSuggestion = React.useCallback(async () => {
     if (!aiSuggestion) return;
     
     try {
@@ -270,7 +318,7 @@ export default function GoalsScreen({ navigation }: any) {
       
       Alert.alert('Success', 'Goal created successfully!');
     } catch (error) {
-      console.error('Error creating goal:', error);
+      // error creating goal
       setLoading(false);
       
       // Check if it's an authentication error
@@ -293,7 +341,7 @@ export default function GoalsScreen({ navigation }: any) {
         Alert.alert('Error', 'Failed to create goal. Please try again.');
       }
     }
-  };
+  }, [aiSuggestion, loadGoals, navigation]);
 
   const handleRedoSuggestion = () => {
     setShowAiReview(false);
@@ -331,7 +379,7 @@ export default function GoalsScreen({ navigation }: any) {
                 await loadGoals();
                 Alert.alert('Success', 'Goal deleted successfully');
               } catch (error) {
-                console.error('Error deleting goal:', error);
+                // error deleting goal
                 Alert.alert('Error', 'Failed to delete goal. Please try again.');
               }
             },
@@ -339,7 +387,7 @@ export default function GoalsScreen({ navigation }: any) {
         ]
       );
     } catch (error) {
-      console.error('Error deleting goal:', error);
+      // error deleting goal
       Alert.alert('Error', 'Failed to delete goal. Please try again.');
     }
   };
@@ -430,11 +478,11 @@ export default function GoalsScreen({ navigation }: any) {
         </View>
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Checking authentication...</Text>
-          <Text style={styles.debugText}>Debug: {JSON.stringify(authState)}</Text>
+          <Text style={styles.debugText}>Debug: {authState.isAuthenticated ? 'Authenticated' : 'Not Authenticated'}</Text>
           <Button
             title="Debug: Force Not Authenticated"
             onPress={() => {
-              console.log('🎯 GoalsScreen: Manual debug - forcing not authenticated');
+              // debug: forcing not authenticated
               setAuthState({
                 user: null,
                 token: null,
@@ -448,7 +496,7 @@ export default function GoalsScreen({ navigation }: any) {
                                   <Button
                           title="Debug: Force Authenticated"
                           onPress={() => {
-                            console.log('🎯 GoalsScreen: Manual debug - forcing authenticated');
+                            // debug: forcing authenticated
                             setAuthState({
                               user: { id: 'debug-user', email: 'debug@test.com' },
                               token: 'debug-token',
@@ -462,7 +510,7 @@ export default function GoalsScreen({ navigation }: any) {
                         <Button
                           title="Debug: Re-initialize Auth"
                           onPress={async () => {
-                            console.log('🎯 GoalsScreen: Manual debug - re-initializing auth');
+                            // debug: re-initializing auth
                             await authService.debugReinitialize();
                           }}
                           variant="secondary"
@@ -693,7 +741,7 @@ export default function GoalsScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.background.surface,
   },
   header: {
     flexDirection: 'row',
@@ -702,6 +750,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.border.light,
+    backgroundColor: colors.background.primary,
   },
   headerTitle: {
     fontSize: typography.fontSize.xl,
@@ -716,7 +765,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xl * 2, // Extra padding for system navigation
   },
   aiSection: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background.surface,
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     marginBottom: spacing.lg,
@@ -1006,7 +1055,7 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background.surface,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderRadius: borderRadius.md,
@@ -1056,7 +1105,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.md,
-    backgroundColor: colors.background,
+    backgroundColor: colors.background.surface,
   },
   authIcon: {
     fontSize: 60,

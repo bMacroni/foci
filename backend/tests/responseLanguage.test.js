@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import GeminiService from '../src/utils/geminiService.js';
+import { GeminiService } from '../src/utils/geminiService.js';
 
 // Mock the GoogleGenerativeAI
 vi.mock('@google/generative-ai', () => ({
@@ -25,6 +25,8 @@ describe('Response Language Tests', () => {
     const { GoogleGenerativeAI } = await import('@google/generative-ai');
     const mockGenAI = GoogleGenerativeAI.mock.results[0].value;
     mockModel = mockGenAI.getGenerativeModel();
+    // Reset per-test implementations
+    mockModel.generateContent.mockReset();
   });
 
   it('should use proper response language after creating a task', async () => {
@@ -86,9 +88,9 @@ describe('Response Language Tests', () => {
       text: vi.fn().mockResolvedValue('I\'ve created the goal "Test goal" for you.')
     };
 
-    mockModel.generateContent.mockResolvedValue({
-      response: mockResponse
-    });
+    mockModel.generateContent
+      .mockResolvedValueOnce({ response: mockResponse })
+      .mockResolvedValueOnce({ response: { functionCalls: vi.fn().mockResolvedValue([]), text: vi.fn().mockResolvedValue("I've created the goal \"Test goal\" for you.") } });
 
     // Mock the goal controller
     const mockCreateGoalFromAI = vi.fn().mockResolvedValue({

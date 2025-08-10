@@ -35,12 +35,12 @@ export const updateTaskFunctionDeclaration = {
       due_date: { type: Type.STRING, description: 'Due date (YYYY-MM-DD)' },
       priority: { type: Type.STRING, enum: ['high', 'medium', 'low'], description: 'Task priority' },
       related_goal: { type: Type.STRING, description: 'Associated goal title' },
-      completed: { type: Type.BOOLEAN, description: 'Task completion status' },
+      completed: { type: Type.BOOLEAN, description: 'Task completion status. If provided, mirror to status as completed/not_started.' },
       preferred_time_of_day: { type: Type.STRING, description: 'Preferred time of day for the task (morning, afternoon, evening, any)' },
       deadline_type: { type: Type.STRING, description: 'Deadline type: hard (must be done by due date) or soft (flexible)' },
       travel_time_minutes: { type: Type.NUMBER, description: 'Estimated travel time in minutes to the task location' },
       category: { type: Type.STRING, description: 'Task category (e.g., work, personal, health, etc.)' },
-      status: { type: Type.STRING, description: 'Task status (e.g., not_started, in_progress, completed)' },
+      status: { type: Type.STRING, description: 'Task status (e.g., not_started, in_progress, completed). If provided, mirror to completed boolean.' },
       recurrence: { type: Type.STRING, description: 'Recurrence rule for repeating tasks (e.g., daily, weekly, custom RRULE)' }
     },
     required: [] // id is required if known, but not always present
@@ -94,7 +94,7 @@ export const lookupTaskbyTitleFunctionDeclaration = {
 // Goal Functions
 export const createGoalFunctionDeclaration = {
   name: 'create_goal',
-  description: 'Creates a new goal for the user with optional milestones and steps. Use this when the user wants to set a new goal. The AI should be conversational and help break down goals into milestones and steps. If the user only provides partial data, ask follow-up questions to determine the remaining data points. Before calling this function, call "lookup_goal" to check if the goal already exists. Example user prompts: "Set a goal to run a marathon", "Create a new goal for reading more books", "I want to learn React Native".',
+  description: 'Creates a new goal for the user with optional milestones and steps. Before calling this function, call "lookup_goal" to check if the goal already exists. Example user prompts: "Set a goal to run a marathon", "Create a new goal for reading more books", "I want to learn React Native".',
   parameters: {
     type: Type.OBJECT,
     properties: {
@@ -192,19 +192,26 @@ export const deleteGoalFunctionDeclaration = {
 
 export const lookupGoalbyTitleFunctionDeclaration = {
   name: 'lookup_goal',
-  description: 'This function is used as a precursor call to delete_goal and update_goal function calls. Returns all goals for the user with their IDs and titles. The purpose of this function is to retrieve a list of current goals that you must use to identify the requested goal and obtain the ID. After getting the goals list, use the ID from the most likely goal to call update_goal or delete_goal.',
+  description: 'STRICTLY use this to look up a goal ID before taking any action on a goal. Do NOT use read_goal for lookups. This returns only minimal data (id and title). Always pass the search text the user provided (partial match OK). Prefer limit: 1 to fetch a single best match. After getting the ID, immediately call the requested action (update_goal, delete_goal, or read_goal if details are requested). Example user prompts: "Update my fitness goal", "Delete the goal about learning React", "Show details for my marathon goal".',
   parameters: {
     type: Type.OBJECT,
-    properties: {},
-    required: []
+    properties: {
+      search: { type: Type.STRING, description: 'Keyword to search for in goal title (case-insensitive, partial match allowed)' },
+      category: { type: Type.STRING, description: 'Goal category to filter by (e.g., health, career, personal, etc.)' },
+      priority: { type: Type.STRING, enum: ['high', 'medium', 'low'], description: 'Goal priority to filter by' },
+      status: { type: Type.STRING, description: 'Goal status to filter by (e.g., not_started, in_progress, completed)' },
+      due_date: { type: Type.STRING, description: 'Due date to filter by (YYYY-MM-DD)' },
+      limit: { type: Type.NUMBER, description: 'Maximum number of results to return. Use 1 when identifying a single goal (default behavior when search is provided).' }
+    },
+    required: ['search']
   }
 };
 
 export const readGoalFunctionDeclaration = {
   name: 'read_goal',
-  description: `Reads or lists goals for the user. Use this when the user wants to see their current goals. 
+  description: `Reads goal details for the user. Use this when the user specifically asks for goal details beyond the title (e.g., description, status, due date, milestones) or asks to filter by those fields. For a simple list of titles like "What are my current goals?", prefer the 'get_goal_titles' function which is optimized to return only titles.
 
-When returning data to the frontend, always use this format for compatibility:
+When returning data to the frontend after a detailed read, use this format for compatibility:
 {
   "action_type": "read",
   "entity_type": "goal",
@@ -213,11 +220,54 @@ When returning data to the frontend, always use this format for compatibility:
   }
 }
 
-Only include the goal title in the list unless the user specifically requests other data. Example user prompts: "Show me my goals", "List my goals", "What are my current goals?"`,
+Only return full goal objects when the user requests details. Example user prompts for this function: "Show details for my fitness goal", "What is the due date for my marathon goal?", "List my in-progress goals with their descriptions." For a plain list of goal titles, use 'get_goal_titles'.`,
   parameters: {
     type: Type.OBJECT,
-    properties: {},
+    properties: {
+      search: { type: Type.STRING, description: 'Keyword to search for in goal title (case-insensitive, partial match allowed)' },
+      category: { type: Type.STRING, description: 'Goal category to filter by (e.g., health, career, personal, etc.)' },
+      priority: { type: Type.STRING, enum: ['high', 'medium', 'low'], description: 'Goal priority to filter by' },
+      status: { type: Type.STRING, description: 'Goal status to filter by (e.g., not_started, in_progress, completed)' },
+      due_date: { type: Type.STRING, description: 'Due date to filter by (YYYY-MM-DD)' }
+    },
     required: []
+  }
+};
+
+export const getGoalTitlesFunctionDeclaration = {
+  name: 'get_goal_titles',
+  description: 'Returns only the titles of goals for the user, with optional filtering capabilities. This function is optimized for frontend use when only goal titles are needed (reduced payload). Use this for prompts like "What are my current goals?", "Show me my goals", "List my goal titles", or when filtering by category/status but only titles are needed. Example prompts: "Show me my goal titles", "List my fitness goals", "What are my high priority goal titles?", "Show me goals related to health".',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      search: { type: Type.STRING, description: 'Keyword to search for in goal title (case-insensitive, partial match allowed)' },
+      category: { type: Type.STRING, description: 'Goal category to filter by (e.g., health, career, personal, etc.)' },
+      priority: { type: Type.STRING, enum: ['high', 'medium', 'low'], description: 'Goal priority to filter by' },
+      status: { type: Type.STRING, description: 'Goal status to filter by (e.g., not_started, in_progress, completed)' },
+      due_date: { type: Type.STRING, description: 'Due date to filter by (YYYY-MM-DD)' }
+    },
+    required: []
+  }
+};
+
+// Create a task from the next unfinished step in a goal
+export const createTaskFromNextGoalStepFunctionDeclaration = {
+  name: 'create_task_from_next_goal_step',
+  description: `Creates a new task using the next unfinished step from the specified goal. This function:
+1) Looks up the goal by title for the current user
+2) Finds the first milestone that has an unfinished step and selects the first unfinished step (falls back to the first step if none are marked)
+3) Creates a task with the step text as the title and links it to the goal
+
+Use this when the user says things like: "Add the next step from my <goal> as a task", "Turn my next step for <goal> into a task".
+You may include optional due_date or priority if the user specifies them.`,
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      goal_title: { type: Type.STRING, description: 'Exact or partial title of the goal' },
+      due_date: { type: Type.STRING, description: 'Optional due date for the created task (YYYY-MM-DD or natural language)' },
+      priority: { type: Type.STRING, enum: ['high', 'medium', 'low'], description: 'Optional task priority' }
+    },
+    required: ['goal_title']
   }
 };
 
@@ -247,12 +297,12 @@ export const createCalendarEventFunctionDeclaration = {
 
 export const lookupCalendarEventbyTitleFunctionDeclaration = {
   name: 'lookup_calendar_event',
-  description: 'This function is used as a precursor call to delete_calendar_event and update_calendar_event function calls. If the user users the term meeting or event in their request, do not include it in the search; example: "update my eggs meeting", search for "eggs" not "eggs meeting". If the user uses terms like, "tomorrow" "today" "next week", convert the term into a proper date or date range. Returns all calendar events for the user with their IDs and titles. The purpose of this function is to retrieve a list of current calendar events that you must use to identify the requested calendar event and obtain the ID. After getting the calendar events list, use the ID from the most likely calendar event to call update_calendar_event or delete_calendar_event.',
+  description: 'STRICTLY use this to identify a calendar event ID before updating or deleting. Prefer using ONLY the search string for fuzzy title match. Include a date filter ONLY if the user clearly specifies a date. When the user does not specify a date, DO NOT include any date filter. Do not include words like "meeting" or "event" in the search term (e.g., search for "eggs" not "eggs meeting"). Returns minimal data (id, title, times). After getting the ID, immediately call update_calendar_event or delete_calendar_event as requested.',
   parameters: {
     type: Type.OBJECT,
     properties: {
       search: { type: Type.STRING, description: 'Search string for event title (e.g., "eggs" for "eggs meeting")' },
-      date: { type: Type.STRING, description: 'Date to filter events (natural language like "today", "tomorrow", or specific date like "2025-07-21")' }
+      date: { type: Type.STRING, description: 'OPTIONAL. Only include when the user explicitly states a date. Natural language like "today", "tomorrow", "next week", or specific date like "2025-07-21".' }
     },
     required: ['search']
   }
@@ -319,6 +369,8 @@ export const allGeminiFunctionDeclarations = [
   deleteGoalFunctionDeclaration,
   lookupGoalbyTitleFunctionDeclaration,
   readGoalFunctionDeclaration,
+  getGoalTitlesFunctionDeclaration,
+  createTaskFromNextGoalStepFunctionDeclaration,
   createCalendarEventFunctionDeclaration,
   updateCalendarEventFunctionDeclaration,
   deleteCalendarEventFunctionDeclaration,

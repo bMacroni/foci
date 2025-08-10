@@ -19,7 +19,7 @@ export const CustomTabBar: React.FC<CustomTabBarProps> = ({ state, descriptors, 
       case 'AIChat':
         return 'comment-discussion';
       case 'Goals':
-        return 'goal';
+        return 'milestone';
       case 'Tasks':
         return 'checklist';
       case 'Calendar':
@@ -71,7 +71,7 @@ export const CustomTabBar: React.FC<CustomTabBarProps> = ({ state, descriptors, 
             ]}>
               <Icon 
                 name={getIconName(route.name)}
-                size={16}
+                size={18}
                 color={isFocused ? colors.secondary : colors.text.disabled}
               />
             </View>
@@ -91,10 +91,10 @@ export const CustomTabBar: React.FC<CustomTabBarProps> = ({ state, descriptors, 
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    backgroundColor: colors.background,
+    backgroundColor: colors.secondary,
     borderTopWidth: 1,
     borderTopColor: colors.border.light,
-    paddingTop: 8,
+    paddingTop: 12,
     elevation: 8,
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: -2 },
@@ -105,17 +105,19 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 8,
   },
   tabIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   tabLabel: {
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.medium as any,
+    textAlign: 'center',
   },
 }); 

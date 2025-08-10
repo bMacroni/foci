@@ -91,7 +91,7 @@ export const goalsAPI = {
   },
 
   // Get all goals for the user using real backend
-  getGoals: async (): Promise<Goal[]> => {
+  getGoals: async (signal?: AbortSignal): Promise<Goal[]> => {
     try {
       const token = await getAuthToken();
       
@@ -100,6 +100,7 @@ export const goalsAPI = {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
+        signal,
       });
 
       if (!response.ok) {
@@ -116,6 +117,10 @@ export const goalsAPI = {
       
       return data;
     } catch (error) {
+      if ((error as any)?.name === 'AbortError') {
+        // Silent for expected timeouts; caller handles gracefully
+        throw error;
+      }
       console.error('🔍 API: Error fetching goals:', error);
       
       // Try to get cached goals if offline
@@ -272,7 +277,7 @@ interface Task {
 
 export const tasksAPI = {
   // Get all tasks for the user
-  getTasks: async (): Promise<Task[]> => {
+  getTasks: async (signal?: AbortSignal): Promise<Task[]> => {
     try {
       const token = await getAuthToken();
       
@@ -281,6 +286,7 @@ export const tasksAPI = {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
+        signal,
       });
 
       if (!response.ok) {
@@ -297,6 +303,10 @@ export const tasksAPI = {
       
       return data;
     } catch (error) {
+      if ((error as any)?.name === 'AbortError') {
+        // Silent for expected timeouts; caller handles gracefully
+        throw error;
+      }
       console.error('🔍 API: Error fetching tasks:', error);
       
       // Try to get cached tasks if offline

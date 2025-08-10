@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../../themes/colors';
@@ -31,14 +31,7 @@ export default function GoalFormScreen({ navigation, route }: any) {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(isEditing);
 
-  // Load existing goal data when editing
-  useEffect(() => {
-    if (isEditing && goalId) {
-      loadExistingGoal();
-    }
-  }, [goalId]);
-
-  const loadExistingGoal = async () => {
+  const loadExistingGoal = useCallback(async () => {
     try {
       setInitialLoading(true);
       const goalData = await goalsAPI.getGoalById(goalId);
@@ -63,7 +56,14 @@ export default function GoalFormScreen({ navigation, route }: any) {
     } finally {
       setInitialLoading(false);
     }
-  };
+  }, [goalId, navigation]);
+
+  // Load existing goal data when editing
+  useEffect(() => {
+    if (isEditing && goalId) {
+      loadExistingGoal();
+    }
+  }, [goalId, isEditing, loadExistingGoal]);
 
   const handleSave = async () => {
     if (!title.trim()) {
@@ -363,7 +363,7 @@ export default function GoalFormScreen({ navigation, route }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.background.primary,
   },
   header: {
     flexDirection: 'row',

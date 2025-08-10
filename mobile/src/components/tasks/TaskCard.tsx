@@ -52,9 +52,11 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   onScheduleNow,
 }) => {
   const translateX = new Animated.Value(0);
-  const [isDeleting, setIsDeleting] = React.useState(false);
+  const [_isDeleting, _setIsDeleting] = React.useState(false);
 
-  const getStatusColor = (status: string) => {
+  // helpers retained for future UI variants
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  const _getStatusColor = (status: string) => {
     switch (status) {
       case 'completed':
         return colors.success;
@@ -65,7 +67,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     }
   };
 
-  const getPriorityColor = (priority: string) => {
+  const _getPriorityColor = (priority: string) => {
     switch (priority) {
       case 'high':
         return colors.error;
@@ -76,7 +78,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     }
   };
 
-  const getStatusText = (status: string) => {
+  const _getStatusText = (status: string) => {
     switch (status) {
       case 'completed':
         return 'Completed';
@@ -87,7 +89,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     }
   };
 
-  const getPriorityText = (priority: string) => {
+  const _getPriorityText = (priority: string) => {
     if (!priority) return 'Low';
     return priority.charAt(0).toUpperCase() + priority.slice(1);
   };
@@ -147,7 +149,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     }
   };
 
-  const getNextStatus = () => {
+  const _getNextStatus = () => {
     switch (task.status) {
       case 'not_started':
         return 'in_progress';
@@ -157,6 +159,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         return 'not_started';
     }
   };
+  /* eslint-enable @typescript-eslint/no-unused-vars */
 
   const handleToggleAutoSchedule = () => {
     if (onToggleAutoSchedule) {
@@ -294,7 +297,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   card: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.background.surface,
     borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: colors.border.light,

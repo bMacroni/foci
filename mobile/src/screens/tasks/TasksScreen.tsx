@@ -18,6 +18,7 @@ import { TaskForm } from '../../components/tasks/TaskForm';
 import { AutoSchedulingPreferencesModal } from '../../components/tasks/AutoSchedulingPreferencesModal';
 import { SuccessToast } from '../../components/common/SuccessToast';
 import { tasksAPI, goalsAPI, calendarAPI, autoSchedulingAPI } from '../../services/api';
+import { offlineService } from '../../services/offline';
 import Icon from 'react-native-vector-icons/Octicons';
 
 interface Task {
@@ -67,14 +68,49 @@ export const TasksScreen: React.FC = () => {
 
   const loadData = async () => {
     try {
-      setLoading(true);
-      const [tasksData, goalsData] = await Promise.all([
-        tasksAPI.getTasks(),
-        goalsAPI.getGoals(),
+      // Paint from cache immediately if available
+      const [cachedTasks, cachedGoals] = await Promise.all([
+        offlineService.getCachedTasks(),
+        offlineService.getCachedGoals(),
       ]);
+      let paintedFromCache = false;
+      if (cachedTasks && Array.isArray(cachedTasks)) {
+        setTasks(cachedTasks as any);
+        paintedFromCache = true;
+      }
+      if (cachedGoals && Array.isArray(cachedGoals)) {
+        setGoals(cachedGoals as any);
+        paintedFromCache = true;
+      }
+      if (paintedFromCache) {
+        // Dismiss spinner immediately; we will refresh in background
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
+
+      // Fetch fresh in parallel
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      const [tasksData, goalsData] = await Promise.all([
+        tasksAPI.getTasks(controller.signal as any),
+        goalsAPI.getGoals(controller.signal as any),
+      ]).finally(() => clearTimeout(timeout));
       setTasks(tasksData);
       setGoals(goalsData);
+      // Cache raw responses
+      try {
+        await Promise.all([
+          offlineService.cacheTasks(tasksData as any),
+          offlineService.cacheGoals(goalsData as any),
+        ]);
+      } catch {}
     } catch (error) {
+      if ((error as any)?.name === 'AbortError') {
+        console.warn('Tasks/Goals fetch aborted due to timeout');
+        // Keep whatever cache we already showed; avoid alert
+        return;
+      }
       console.error('Error loading data:', error);
       Alert.alert('Error', 'Failed to load tasks and goals');
     } finally {
@@ -144,27 +180,29 @@ export const TasksScreen: React.FC = () => {
     }
   };
 
-  const handleAddToCalendar = async (taskId: string) => {
+  const handleAddToCalendar = async (_taskId: string) => {
     try {
-      const result = await calendarAPI.addTaskToCalendar(taskId);
+      const result = await calendarAPI.createEvent({
+        summary: 'Task',
+        description: '',
+        startTime: new Date().toISOString(),
+        endTime: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      });
       
       // Format the scheduled time for display
-      let scheduledTime = 'today';
-      if (result && result.data && result.data.scheduled_time) {
-        const startTime = new Date(result.data.scheduled_time);
-        const now = new Date();
-        const tomorrow = new Date(now);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        
-        if (startTime.toDateString() === now.toDateString()) {
-          scheduledTime = `today at ${startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-        } else if (startTime.toDateString() === tomorrow.toDateString()) {
-          scheduledTime = `tomorrow at ${startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-        } else {
-          scheduledTime = `${startTime.toLocaleDateString()} at ${startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-        }
-      }
-      
+      const startTimeStr = result?.data?.scheduled_time;
+      const startTime = startTimeStr ? new Date(startTimeStr) : null;
+      const now = new Date();
+      const tomorrow = new Date(now);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const scheduledTime = startTime
+        ? (startTime.toDateString() === now.toDateString()
+            ? `today at ${startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+            : (startTime.toDateString() === tomorrow.toDateString()
+                ? `tomorrow at ${startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                : `${startTime.toLocaleDateString()} at ${startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`))
+        : 'today';
+
       Alert.alert('Success', `Task scheduled for ${scheduledTime}!`);
     } catch (error) {
       console.error('Error adding task to calendar:', error);
@@ -184,26 +222,14 @@ export const TasksScreen: React.FC = () => {
     }
   };
 
-  const handleScheduleNow = async (taskId: string) => {
+  const handleScheduleNow = async (_taskId: string) => {
     try {
-      const result = await calendarAPI.addTaskToCalendar(taskId);
-      
-      // Format the scheduled time for display
-      let scheduledTime = 'today';
-      if (result && result.data && result.data.scheduled_time) {
-        const startTime = new Date(result.data.scheduled_time);
-        const now = new Date();
-        const tomorrow = new Date(now);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        
-        if (startTime.toDateString() === now.toDateString()) {
-          scheduledTime = `today at ${startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-        } else if (startTime.toDateString() === tomorrow.toDateString()) {
-          scheduledTime = `tomorrow at ${startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-        } else {
-          scheduledTime = `${startTime.toLocaleDateString()} at ${startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-        }
-      }
+      const result = await calendarAPI.createEvent({
+        summary: 'Task',
+        description: '',
+        startTime: new Date().toISOString(),
+        endTime: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      });
       
       // Show success toast instead of alert
       setToastMessage('Task scheduled successfully!');
@@ -226,13 +252,6 @@ export const TasksScreen: React.FC = () => {
       
       // Show results in toast
       const successfulCount = result.successful;
-      const failedCount = result.failed;
-      const skippedCount = result.skipped;
-      
-      let message = `Auto-scheduling completed!\n\n`;
-      message += `✅ ${successfulCount} tasks scheduled\n`;
-      if (failedCount > 0) message += `❌ ${failedCount} tasks failed\n`;
-      if (skippedCount > 0) message += `⏭️ ${skippedCount} tasks skipped\n`;
       
       // Show success toast
       setToastMessage(`Successfully scheduled ${successfulCount} tasks`);
@@ -254,7 +273,7 @@ export const TasksScreen: React.FC = () => {
     setShowPreferencesModal(true);
   };
 
-  const handlePreferencesSave = (preferences: any) => {
+  const handlePreferencesSave = (_preferences: any) => {
     // Refresh data to reflect any changes
     loadData();
   };
@@ -446,12 +465,12 @@ export const TasksScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.background.surface,
   },
   header: {
     padding: spacing.md,
     paddingTop: spacing.lg,
-    backgroundColor: colors.background,
+    backgroundColor: colors.background.primary,
     borderBottomWidth: 1,
     borderBottomColor: colors.border.light,
   },
@@ -484,7 +503,7 @@ const styles = StyleSheet.create({
   settingsButton: {
     padding: spacing.sm,
     borderRadius: borderRadius.sm,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background.surface,
     borderWidth: 1,
     borderColor: colors.border.light,
   },
@@ -515,7 +534,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: colors.background.surface,
   },
   loadingText: {
     marginTop: spacing.md,

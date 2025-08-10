@@ -22,7 +22,7 @@ class EnhancedAPI {
 
     try {
       // Add auth token if not present
-      if (!options.headers || !(options.headers as Record<string, string>)['Authorization']) {
+      if (!options.headers || !(options.headers as Record<string, string>).Authorization) {
         const token = await authService.getAuthToken();
         options.headers = {
           ...options.headers,

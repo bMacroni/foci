@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,14 +7,13 @@ import {
   StyleSheet,
   ScrollView,
   Modal,
-  FlatList,
   Animated,
 } from 'react-native';
 import { colors } from '../../themes/colors';
 import { typography } from '../../themes/typography';
 import { spacing } from '../../themes/spacing';
 import { CalendarEvent, Task, ViewType } from '../../types/calendar';
-import { format, startOfWeek, endOfWeek, startOfDay, endOfDay, isToday, isThisWeek, isOverdue } from '../../utils/dateUtils';
+// import { format, startOfWeek, endOfWeek, startOfDay, endOfDay, isToday, isThisWeek, isOverdue } from '../../utils/dateUtils';
 import { 
   useFadeAnimation, 
   useScaleAnimation, 
@@ -51,7 +50,6 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
   events,
   tasks,
   onFilterChange,
-  viewType,
 }) => {
   const [searchText, setSearchText] = useState('');
   const [filterModalVisible, setFilterModalVisible] = useState(false);
@@ -69,8 +67,8 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
   });
 
   // Animation hooks
-  const { opacity: modalOpacity, fadeIn: modalFadeIn, fadeOut: modalFadeOut } = useFadeAnimation(0);
-  const { scale: buttonScale, scaleIn: buttonScaleIn, scaleOut: buttonScaleOut } = useScaleAnimation(1);
+  const { fadeIn: modalFadeIn, fadeOut: modalFadeOut } = useFadeAnimation(0);
+  const { scale: buttonScale } = useScaleAnimation(1);
   const { scale: chipScale, scaleIn: chipScaleIn, scaleOut: chipScaleOut } = useScaleAnimation(1);
   
   // Modal slide animation
@@ -79,8 +77,8 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
   // Get unique categories from tasks
   const categories = Array.from(new Set(tasks.map(task => task.category).filter(Boolean)));
 
-  // Apply filters and search - removed useCallback to avoid dependency issues
-  const applyFilters = () => {
+  // Apply filters and search
+  const applyFilters = useCallback(() => {
     let filteredEvents = [...events];
     let filteredTasks = [...tasks];
 
@@ -303,12 +301,12 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
 
 
     onFilterChange(filteredEvents, filteredTasks);
-  };
+  }, [events, tasks, onFilterChange, searchText, filterOptions]);
 
   // Single useEffect to handle all filter changes
   useEffect(() => {
     applyFilters();
-  }, [searchText, filterOptions, events, tasks]);
+  }, [applyFilters]);
 
   const clearFilters = () => {
     setSearchText('');
@@ -343,7 +341,8 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
   };
 
   // Modal animation handlers
-  const openModal = () => {
+  // open modal for filters
+  const openModal = useCallback(() => {
     setFilterModalVisible(true);
     try {
       modalFadeIn();
@@ -355,9 +354,10 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
     } catch (error) {
       console.error('Error in openModal animation:', error);
     }
-  };
+  }, [modalFadeIn, modalSlideY]);
 
-  const closeModal = () => {
+  // close modal for filters
+  const closeModal = useCallback(() => {
     modalFadeOut();
     Animated.spring(modalSlideY, {
       toValue: 300,
@@ -366,12 +366,10 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
       setFilterModalVisible(false);
     });
     triggerHaptic('light');
-  };
+  }, [modalFadeOut, modalSlideY]);
 
   // Button press handlers with animations
-  const handleFilterButtonPress = () => {
-    setFilterModalVisible(true);
-  };
+  const handleFilterButtonPress = openModal;
 
   const handleChipPress = (onPress: () => void) => {
     chipScaleOut();
@@ -400,13 +398,13 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
       visible={filterModalVisible}
       animationType="slide"
       transparent={true}
-      onRequestClose={() => setFilterModalVisible(false)}
+      onRequestClose={closeModal}
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Filter Options</Text>
-            <TouchableOpacity onPress={() => setFilterModalVisible(false)}>
+            <TouchableOpacity onPress={closeModal}>
               <Text style={styles.closeButton}>✕</Text>
             </TouchableOpacity>
           </View>
@@ -721,7 +719,7 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.applyButton}
-              onPress={() => setFilterModalVisible(false)}
+              onPress={closeModal}
             >
               <Text style={styles.applyButtonText}>Apply</Text>
             </TouchableOpacity>
@@ -785,7 +783,7 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.background.primary,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
@@ -857,7 +855,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.background.primary,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '80%',

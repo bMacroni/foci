@@ -186,7 +186,7 @@ class ErrorHandlingService {
   private generateUserFriendlyError(
     type: ErrorType,
     category: ErrorCategory,
-    context: ErrorContext
+    _context: ErrorContext
   ): UserFriendlyError {
     const baseMessages = {
       [ErrorCategory.CALENDAR]: {

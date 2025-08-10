@@ -63,6 +63,12 @@ export async function syncGoogleCalendarEvents(userId) {
  */
 export async function getCalendarEventsFromDB(userId, maxResults = 100, timeMin = null, timeMax = null) {
   try {
+    console.log('=== DATABASE QUERY DEBUG ===');
+    console.log('UserId:', userId);
+    console.log('MaxResults:', maxResults);
+    console.log('TimeMin:', timeMin ? timeMin.toISOString() : 'null');
+    console.log('TimeMax:', timeMax ? timeMax.toISOString() : 'null');
+
     let query = supabase
       .from('calendar_events')
       .select('*')
@@ -73,12 +79,23 @@ export async function getCalendarEventsFromDB(userId, maxResults = 100, timeMin 
     // Add time filters if provided
     if (timeMin) {
       query = query.gte('start_time', timeMin.toISOString());
+      console.log('Added timeMin filter:', timeMin.toISOString());
     }
     if (timeMax) {
       query = query.lte('start_time', timeMax.toISOString());
+      console.log('Added timeMax filter:', timeMax.toISOString());
     }
 
     const { data, error } = await query;
+    console.log('Database query result - count:', data ? data.length : 0);
+    if (data && data.length > 0) {
+      console.log('Sample events:', data.slice(0, 2).map(e => ({
+        id: e.id,
+        title: e.title,
+        start_time: e.start_time,
+        end_time: e.end_time
+      })));
+    }
 
     if (error) {
       console.error('Error fetching events from database:', error);

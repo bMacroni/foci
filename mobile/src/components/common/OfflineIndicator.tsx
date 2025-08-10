@@ -45,7 +45,10 @@ export const OfflineIndicator: React.FC<OfflineIndicatorProps> = ({ onSyncPress 
       }
     });
 
-    return unsubscribe;
+    return () => {
+      // Cleanup subscription
+      unsubscribe();
+    };
   }, [slideAnim]);
 
   const handleSyncPress = () => {

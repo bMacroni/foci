@@ -4,7 +4,6 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   Dimensions,
 } from 'react-native';
 import { UserFriendlyError, ErrorSeverity } from '../../services/errorHandling';
@@ -218,13 +217,13 @@ export const ErrorBanner: React.FC<ErrorDisplayProps> = ({
   if (!error) return null;
 
   return (
-    <View style={styles.bannerContainer}>
+    <View style={bannerStyles.bannerContainer}>
       <ErrorDisplay
         error={error}
         onRetry={onRetry}
         onDismiss={onDismiss}
         onAction={onAction}
-        style={styles.banner}
+        style={bannerStyles.banner}
       />
     </View>
   );
