@@ -6,7 +6,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../../themes/colors';
 import { typography } from '../../themes/typography';
 import { spacing, borderRadius } from '../../themes/spacing';
-import { Input, PasswordInput, Button } from '../../components/common';
+import { Input, PasswordInput, Button, ApiToggle } from '../../components/common';
+import { configService } from '../../services/config';
 
 export default function SignupScreen({ navigation }: any) {
   const [email, setEmail] = useState('');
@@ -18,7 +19,8 @@ export default function SignupScreen({ navigation }: any) {
     setError('');
     setLoading(true);
     try {
-      const response = await axios.post('http://192.168.1.66:5000/api/auth/signup', {
+      const baseUrl = configService.getBaseUrl();
+      const response = await axios.post(`${baseUrl}/auth/signup`, {
         email,
         password,
       });
@@ -66,6 +68,8 @@ export default function SignupScreen({ navigation }: any) {
             <Text style={styles.inactiveTabText}>JWT Token</Text>
           </View>
         </View>
+        
+        <ApiToggle />
         
         <Input
           placeholder="Email"

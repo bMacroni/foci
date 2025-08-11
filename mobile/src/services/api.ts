@@ -1,8 +1,7 @@
 // Real API implementation for backend integration
 // For Android emulator, use 10.0.2.2 instead of localhost
 // For physical device, use your computer's IP address (e.g., 192.168.1.100)
-const API_BASE_URL = 'http://192.168.1.66:5000/api'; // Backend runs on port 5000
-
+import { configService } from './config';
 import {
   SchedulingPreferences,
   TaskSchedulingStatus,
@@ -47,7 +46,7 @@ export const goalsAPI = {
   // Generate AI-powered goal breakdown using real backend
   generateBreakdown: async (data: GoalBreakdownRequest): Promise<GoalBreakdownResponse> => {
     try {
-      const response = await fetch(`${API_BASE_URL}/goals/generate-breakdown`, {
+      const response = await fetch(`${configService.getBaseUrl()}/goals/generate-breakdown`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -70,7 +69,7 @@ export const goalsAPI = {
   // Create a new goal using real backend
   createGoal: async (goalData: Goal): Promise<Goal> => {
     try {
-      const response = await fetch(`${API_BASE_URL}/goals`, {
+      const response = await fetch(`${configService.getBaseUrl()}/goals`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -95,7 +94,7 @@ export const goalsAPI = {
     try {
       const token = await getAuthToken();
       
-      const response = await fetch(`${API_BASE_URL}/goals`, {
+      const response = await fetch(`${configService.getBaseUrl()}/goals`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -141,7 +140,7 @@ export const goalsAPI = {
   getGoalById: async (goalId: string): Promise<Goal> => {
     try {
       const token = await getAuthToken();
-      const response = await fetch(`${API_BASE_URL}/goals/${goalId}`, {
+      const response = await fetch(`${configService.getBaseUrl()}/goals/${goalId}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -166,7 +165,7 @@ export const goalsAPI = {
   updateMilestone: async (milestoneId: string, updates: { completed?: boolean; title?: string }): Promise<void> => {
     try {
       const token = await getAuthToken();
-      const response = await fetch(`${API_BASE_URL}/goals/milestones/${milestoneId}`, {
+      const response = await fetch(`${configService.getBaseUrl()}/goals/milestones/${milestoneId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -189,7 +188,7 @@ export const goalsAPI = {
   updateStep: async (stepId: string, updates: { completed?: boolean; text?: string }): Promise<void> => {
     try {
       const token = await getAuthToken();
-      const response = await fetch(`${API_BASE_URL}/goals/steps/${stepId}`, {
+      const response = await fetch(`${configService.getBaseUrl()}/goals/steps/${stepId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -212,7 +211,7 @@ export const goalsAPI = {
   updateGoal: async (goalId: string, goalData: Partial<Goal>): Promise<Goal> => {
     try {
       const token = await getAuthToken();
-      const response = await fetch(`${API_BASE_URL}/goals/${goalId}`, {
+      const response = await fetch(`${configService.getBaseUrl()}/goals/${goalId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -238,7 +237,7 @@ export const goalsAPI = {
   deleteGoal: async (goalId: string): Promise<void> => {
     try {
       const token = await getAuthToken();
-      const response = await fetch(`${API_BASE_URL}/goals/${goalId}`, {
+      const response = await fetch(`${configService.getBaseUrl()}/goals/${goalId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -281,7 +280,7 @@ export const tasksAPI = {
     try {
       const token = await getAuthToken();
       
-      const response = await fetch(`${API_BASE_URL}/tasks`, {
+      const response = await fetch(`${configService.getBaseUrl()}/tasks`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -327,7 +326,7 @@ export const tasksAPI = {
   getTaskById: async (taskId: string): Promise<Task> => {
     try {
       const token = await getAuthToken();
-      const response = await fetch(`${API_BASE_URL}/tasks/${taskId}`, {
+      const response = await fetch(`${configService.getBaseUrl()}/tasks/${taskId}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -351,7 +350,7 @@ export const tasksAPI = {
   // Create a new task
   createTask: async (taskData: Partial<Task>): Promise<Task> => {
     try {
-      const response = await fetch(`${API_BASE_URL}/tasks`, {
+      const response = await fetch(`${configService.getBaseUrl()}/tasks`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -388,7 +387,7 @@ export const tasksAPI = {
   updateTask: async (taskId: string, taskData: Partial<Task>): Promise<Task> => {
     try {
       const token = await getAuthToken();
-      const response = await fetch(`${API_BASE_URL}/tasks/${taskId}`, {
+      const response = await fetch(`${configService.getBaseUrl()}/tasks/${taskId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -427,7 +426,7 @@ export const tasksAPI = {
   deleteTask: async (taskId: string): Promise<void> => {
     try {
       const token = await getAuthToken();
-      const response = await fetch(`${API_BASE_URL}/tasks/${taskId}`, {
+      const response = await fetch(`${configService.getBaseUrl()}/tasks/${taskId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -463,7 +462,7 @@ export const calendarAPI = {
   getEvents: async (maxResults: number = 100): Promise<any> => {
     try {
       const token = await getAuthToken();
-      const response = await fetch(`${API_BASE_URL}/calendar/events?maxResults=${maxResults}`, {
+      const response = await fetch(`${configService.getBaseUrl()}/calendar/events?maxResults=${maxResults}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -502,7 +501,7 @@ export const calendarAPI = {
   getEventsForDate: async (date: string): Promise<any> => {
     try {
       const token = await getAuthToken();
-      const response = await fetch(`${API_BASE_URL}/calendar/events/date?date=${date}`, {
+      const response = await fetch(`${configService.getBaseUrl()}/calendar/events/date?date=${date}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -531,7 +530,7 @@ export const calendarAPI = {
   }): Promise<any> => {
     try {
       const token = await getAuthToken();
-      const response = await fetch(`${API_BASE_URL}/calendar/events`, {
+      const response = await fetch(`${configService.getBaseUrl()}/calendar/events`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -578,7 +577,7 @@ export const calendarAPI = {
   }): Promise<any> => {
     try {
       const token = await getAuthToken();
-      const response = await fetch(`${API_BASE_URL}/calendar/events/${eventId}`, {
+      const response = await fetch(`${configService.getBaseUrl()}/calendar/events/${eventId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -618,7 +617,7 @@ export const calendarAPI = {
   deleteEvent: async (eventId: string): Promise<void> => {
     try {
       const token = await getAuthToken();
-      const response = await fetch(`${API_BASE_URL}/calendar/events/${eventId}?useSupabase=true`, {
+      const response = await fetch(`${configService.getBaseUrl()}/calendar/events/${eventId}?useSupabase=true`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -650,7 +649,7 @@ export const calendarAPI = {
   syncCalendar: async (): Promise<any> => {
     try {
       const token = await getAuthToken();
-      const response = await fetch(`${API_BASE_URL}/calendar/sync`, {
+      const response = await fetch(`${configService.getBaseUrl()}/calendar/sync`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -675,7 +674,7 @@ export const autoSchedulingAPI = {
   autoScheduleTasks: async (): Promise<AutoSchedulingResult> => {
     try {
       const token = await getAuthToken();
-      const response = await fetch(`${API_BASE_URL}/ai/auto-schedule-tasks`, {
+      const response = await fetch(`${configService.getBaseUrl()}/ai/auto-schedule-tasks`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -701,7 +700,7 @@ export const autoSchedulingAPI = {
   getPreferences: async (): Promise<SchedulingPreferences> => {
     try {
       const token = await getAuthToken();
-      const response = await fetch(`${API_BASE_URL}/ai/scheduling-preferences`, {
+      const response = await fetch(`${configService.getBaseUrl()}/ai/scheduling-preferences`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -726,7 +725,7 @@ export const autoSchedulingAPI = {
   updatePreferences: async (preferences: Partial<SchedulingPreferences>): Promise<SchedulingPreferences> => {
     try {
       const token = await getAuthToken();
-      const response = await fetch(`${API_BASE_URL}/ai/scheduling-preferences`, {
+      const response = await fetch(`${configService.getBaseUrl()}/ai/scheduling-preferences`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -753,7 +752,7 @@ export const autoSchedulingAPI = {
   getTaskSchedulingStatus: async (taskId: string): Promise<TaskSchedulingStatus> => {
     try {
       const token = await getAuthToken();
-      const response = await fetch(`${API_BASE_URL}/tasks/${taskId}/scheduling-status`, {
+      const response = await fetch(`${configService.getBaseUrl()}/tasks/${taskId}/scheduling-status`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -778,7 +777,7 @@ export const autoSchedulingAPI = {
   toggleTaskAutoScheduling: async (taskId: string, enabled: boolean): Promise<void> => {
     try {
       const token = await getAuthToken();
-      const response = await fetch(`${API_BASE_URL}/tasks/${taskId}/auto-schedule`, {
+      const response = await fetch(`${configService.getBaseUrl()}/tasks/${taskId}/auto-schedule`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -802,7 +801,7 @@ export const autoSchedulingAPI = {
   getAvailableTimeSlots: async (taskId: string): Promise<TimeSlot[]> => {
     try {
       const token = await getAuthToken();
-      const response = await fetch(`${API_BASE_URL}/ai/available-time-slots?taskId=${taskId}`, {
+      const response = await fetch(`${configService.getBaseUrl()}/ai/available-time-slots?taskId=${taskId}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,

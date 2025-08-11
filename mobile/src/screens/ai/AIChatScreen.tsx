@@ -10,6 +10,7 @@ import { typography } from '../../themes/typography';
 import { spacing, borderRadius } from '../../themes/spacing';
 import { OnboardingState, QuickAction } from '../../types/onboarding';
 import { OnboardingService } from '../../services/onboarding';
+import { configService } from '../../services/config';
 import QuickActions from '../../components/ai/QuickActions';
 import ScheduleDisplay from '../../components/ai/ScheduleDisplay';
 import GoalBreakdownDisplay from '../../components/ai/GoalBreakdownDisplay';
@@ -487,7 +488,7 @@ export default function AIChatScreen({ navigation, route }: any) {
     try {
       const token = await AsyncStorage.getItem('authToken');
       const response = await axios.post(
-        'http://192.168.1.66:5000/api/ai/chat',
+        `${configService.getBaseUrl()}/ai/chat`,
         { message: userMessage },
         { headers: { Authorization: `Bearer ${token}` } }
       );

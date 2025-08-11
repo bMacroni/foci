@@ -1,0 +1,69 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="goldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFD700;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#FFA500;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#B8860B;stop-opacity:1" />
+    </linearGradient>
+    <radialGradient id="magicGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#FFD700;stop-opacity:0.3" />
+      <stop offset="100%" style="stop-color:#FFD700;stop-opacity:0" />
+    </radialGradient>
+  </defs>
+  
+  <!-- Background circle -->
+  <circle cx="512" cy="512" r="480" fill="#FFFFFF" stroke="#000000" stroke-width="12"/>
+  
+  <!-- Magic glow background -->
+  <circle cx="512" cy="512" r="400" fill="url(#magicGlow)"/>
+  
+  <!-- Main focus crystal/gem -->
+  <polygon points="512,200 600,350 512,500 424,350" 
+           fill="#000000" stroke="url(#goldGradient)" stroke-width="8"/>
+  
+  <!-- Inner crystal facets -->
+  <polygon points="512,240 560,340 512,440 464,340" 
+           fill="#FFFFFF" stroke="url(#goldGradient)" stroke-width="4"/>
+  
+  <!-- Crystal center -->
+  <circle cx="512" cy="350" r="30" fill="url(#goldGradient)"/>
+  
+  <!-- Magic energy lines radiating from center -->
+  <line x1="512" y1="350" x2="512" y2="150" stroke="url(#goldGradient)" stroke-width="6" stroke-linecap="round"/>
+  <line x1="512" y1="350" x2="712" y2="350" stroke="url(#goldGradient)" stroke-width="6" stroke-linecap="round"/>
+  <line x1="512" y1="350" x2="512" y2="550" stroke="url(#goldGradient)" stroke-width="6" stroke-linecap="round"/>
+  <line x1="512" y1="350" x2="312" y2="350" stroke="url(#goldGradient)" stroke-width="6" stroke-linecap="round"/>
+  
+  <!-- Diagonal energy lines -->
+  <line x1="512" y1="350" x2="662" y2="200" stroke="url(#goldGradient)" stroke-width="4" stroke-linecap="round"/>
+  <line x1="512" y1="350" x2="662" y2="500" stroke="url(#goldGradient)" stroke-width="4" stroke-linecap="round"/>
+  <line x1="512" y1="350" x2="362" y2="200" stroke="url(#goldGradient)" stroke-width="4" stroke-linecap="round"/>
+  <line x1="512" y1="350" x2="362" y2="500" stroke="url(#goldGradient)" stroke-width="4" stroke-linecap="round"/>
+  
+  <!-- Floating magical runes/symbols -->
+  <circle cx="512" cy="120" r="8" fill="url(#goldGradient)"/>
+  <circle cx="712" cy="350" r="8" fill="url(#goldGradient)"/>
+  <circle cx="512" cy="580" r="8" fill="url(#goldGradient)"/>
+  <circle cx="312" cy="350" r="8" fill="url(#goldGradient)"/>
+  
+  <!-- Additional smaller runes -->
+  <circle cx="662" cy="200" r="6" fill="url(#goldGradient)"/>
+  <circle cx="662" cy="500" r="6" fill="url(#goldGradient)"/>
+  <circle cx="362" cy="200" r="6" fill="url(#goldGradient)"/>
+  <circle cx="362" cy="500" r="6" fill="url(#goldGradient)"/>
+  
+  <!-- Magic particles/sparkles -->
+  <circle cx="450" cy="280" r="4" fill="url(#goldGradient)"/>
+  <circle cx="574" cy="280" r="4" fill="url(#goldGradient)"/>
+  <circle cx="450" cy="420" r="4" fill="url(#goldGradient)"/>
+  <circle cx="574" cy="420" r="4" fill="url(#goldGradient)"/>
+  
+  <!-- Outer ring with magical symbols -->
+  <circle cx="512" cy="512" r="380" fill="none" stroke="#000000" stroke-width="3"/>
+  
+  <!-- Decorative corner elements -->
+  <rect x="200" y="200" width="40" height="40" fill="#000000" stroke="url(#goldGradient)" stroke-width="3"/>
+  <rect x="784" y="200" width="40" height="40" fill="#000000" stroke="url(#goldGradient)" stroke-width="3"/>
+  <rect x="200" y="784" width="40" height="40" fill="#000000" stroke="url(#goldGradient)" stroke-width="3"/>
+  <rect x="784" y="784" width="40" height="40" fill="#000000" stroke="url(#goldGradient)" stroke-width="3"/>
+</svg>

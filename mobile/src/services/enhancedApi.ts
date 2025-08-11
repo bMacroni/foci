@@ -1,8 +1,8 @@
 import { errorHandlingService, ErrorCategory, ErrorContext, UserFriendlyError } from './errorHandling';
 import { authService } from './auth';
+import { configService } from './config';
 
 // Real API implementation for backend integration
-const API_BASE_URL = 'http://192.168.1.66:5000/api';
 
 // Enhanced API wrapper with retry logic and error handling
 class EnhancedAPI {
@@ -75,7 +75,7 @@ class EnhancedAPI {
   // Calendar API methods
   async getEvents(maxResults: number = 100): Promise<any> {
     return this.makeRequest(
-      `${API_BASE_URL}/calendar/events?maxResults=${maxResults}`,
+      `${configService.getBaseUrl()}/calendar/events?maxResults=${maxResults}`,
       { method: 'GET' },
       ErrorCategory.CALENDAR,
       'getEvents'
@@ -84,7 +84,7 @@ class EnhancedAPI {
 
   async getEventsForDate(date: string): Promise<any> {
     return this.makeRequest(
-      `${API_BASE_URL}/calendar/events/date?date=${date}`,
+      `${configService.getBaseUrl()}/calendar/events/date?date=${date}`,
       { method: 'GET' },
       ErrorCategory.CALENDAR,
       'getEventsForDate'
@@ -100,7 +100,7 @@ class EnhancedAPI {
     location?: string;
   }): Promise<any> {
     return this.makeRequest(
-      `${API_BASE_URL}/calendar/events`,
+      `${configService.getBaseUrl()}/calendar/events`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -123,7 +123,7 @@ class EnhancedAPI {
     location?: string;
   }): Promise<any> {
     return this.makeRequest(
-      `${API_BASE_URL}/calendar/events/${eventId}`,
+      `${configService.getBaseUrl()}/calendar/events/${eventId}`,
       {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -139,7 +139,7 @@ class EnhancedAPI {
 
   async deleteEvent(eventId: string): Promise<void> {
     return this.makeRequest(
-      `${API_BASE_URL}/calendar/events/${eventId}?useSupabase=true`,
+      `${configService.getBaseUrl()}/calendar/events/${eventId}?useSupabase=true`,
       { method: 'DELETE' },
       ErrorCategory.CALENDAR,
       'deleteEvent'
@@ -148,7 +148,7 @@ class EnhancedAPI {
 
   async syncCalendar(): Promise<any> {
     return this.makeRequest(
-      `${API_BASE_URL}/calendar/sync`,
+      `${configService.getBaseUrl()}/calendar/sync`,
       { method: 'POST' },
       ErrorCategory.SYNC,
       'syncCalendar'
@@ -158,7 +158,7 @@ class EnhancedAPI {
   // Tasks API methods
   async getTasks(): Promise<any> {
     return this.makeRequest(
-      `${API_BASE_URL}/tasks`,
+      `${configService.getBaseUrl()}/tasks`,
       { method: 'GET' },
       ErrorCategory.TASKS,
       'getTasks'
@@ -167,7 +167,7 @@ class EnhancedAPI {
 
   async getTaskById(taskId: string): Promise<any> {
     return this.makeRequest(
-      `${API_BASE_URL}/tasks/${taskId}`,
+      `${configService.getBaseUrl()}/tasks/${taskId}`,
       { method: 'GET' },
       ErrorCategory.TASKS,
       'getTaskById'
@@ -176,7 +176,7 @@ class EnhancedAPI {
 
   async createTask(taskData: any): Promise<any> {
     return this.makeRequest(
-      `${API_BASE_URL}/tasks`,
+      `${configService.getBaseUrl()}/tasks`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -189,7 +189,7 @@ class EnhancedAPI {
 
   async updateTask(taskId: string, taskData: any): Promise<any> {
     return this.makeRequest(
-      `${API_BASE_URL}/tasks/${taskId}`,
+      `${configService.getBaseUrl()}/tasks/${taskId}`,
       {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -202,7 +202,7 @@ class EnhancedAPI {
 
   async deleteTask(taskId: string): Promise<void> {
     return this.makeRequest(
-      `${API_BASE_URL}/tasks/${taskId}`,
+      `${configService.getBaseUrl()}/tasks/${taskId}`,
       { method: 'DELETE' },
       ErrorCategory.TASKS,
       'deleteTask'
@@ -212,7 +212,7 @@ class EnhancedAPI {
   // Goals API methods
   async getGoals(): Promise<any> {
     return this.makeRequest(
-      `${API_BASE_URL}/goals`,
+      `${configService.getBaseUrl()}/goals`,
       { method: 'GET' },
       ErrorCategory.GOALS,
       'getGoals'
@@ -221,7 +221,7 @@ class EnhancedAPI {
 
   async createGoal(goalData: any): Promise<any> {
     return this.makeRequest(
-      `${API_BASE_URL}/goals`,
+      `${configService.getBaseUrl()}/goals`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -234,7 +234,7 @@ class EnhancedAPI {
 
   async updateGoal(goalId: string, goalData: any): Promise<any> {
     return this.makeRequest(
-      `${API_BASE_URL}/goals/${goalId}`,
+      `${configService.getBaseUrl()}/goals/${goalId}`,
       {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -247,7 +247,7 @@ class EnhancedAPI {
 
   async deleteGoal(goalId: string): Promise<void> {
     return this.makeRequest(
-      `${API_BASE_URL}/goals/${goalId}`,
+      `${configService.getBaseUrl()}/goals/${goalId}`,
       { method: 'DELETE' },
       ErrorCategory.GOALS,
       'deleteGoal'
@@ -257,7 +257,7 @@ class EnhancedAPI {
   // Auto-scheduling API methods
   async autoScheduleTasks(): Promise<any> {
     return this.makeRequest(
-      `${API_BASE_URL}/ai/auto-schedule-tasks`,
+      `${configService.getBaseUrl()}/ai/auto-schedule-tasks`,
       { method: 'POST' },
       ErrorCategory.SYNC,
       'autoScheduleTasks'
@@ -266,7 +266,7 @@ class EnhancedAPI {
 
   async getSchedulingPreferences(): Promise<any> {
     return this.makeRequest(
-      `${API_BASE_URL}/ai/scheduling-preferences`,
+      `${configService.getBaseUrl()}/ai/scheduling-preferences`,
       { method: 'GET' },
       ErrorCategory.SYNC,
       'getSchedulingPreferences'
@@ -275,7 +275,7 @@ class EnhancedAPI {
 
   async updateSchedulingPreferences(preferences: any): Promise<any> {
     return this.makeRequest(
-      `${API_BASE_URL}/ai/scheduling-preferences`,
+      `${configService.getBaseUrl()}/ai/scheduling-preferences`,
       {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

@@ -1,8 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// For Android emulator, use 10.0.2.2 instead of localhost
-// For physical device, use your computer's IP address (e.g., 192.168.1.100)
-const API_BASE_URL = 'http://192.168.1.66:5000/api';
+import { configService } from './config';
 
 // Helper function to decode JWT token
 function decodeJWT(token: string): any {
@@ -208,7 +205,7 @@ class AuthService {
       this.authState.isLoading = true;
       this.notifyListeners();
 
-      const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+      const response = await fetch(`${configService.getBaseUrl()}/auth/signup`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -244,7 +241,7 @@ class AuthService {
       this.authState.isLoading = true;
       this.notifyListeners();
 
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      const response = await fetch(`${configService.getBaseUrl()}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -296,7 +293,7 @@ class AuthService {
         return { success: false, message: 'No authentication token' };
       }
 
-      const response = await fetch(`${API_BASE_URL}/auth/profile`, {
+      const response = await fetch(`${configService.getBaseUrl()}/auth/profile`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -382,7 +379,7 @@ class AuthService {
         return false;
       }
 
-      const response = await fetch(`${API_BASE_URL}/auth/profile`, {
+      const response = await fetch(`${configService.getBaseUrl()}/auth/profile`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
