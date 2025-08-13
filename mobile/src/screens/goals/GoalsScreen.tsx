@@ -458,7 +458,7 @@ export default function GoalsScreen({ navigation }: any) {
             onPress={() => {
               // Navigate to AI Chat tab and start a new conversation with pre-filled message
               navigation.navigate('AIChat', { 
-                initialMessage: `Can you help me update the ${goal.title} goal?`
+                initialMessage: `Help me break down this goal: ${goal.title}`
               });
             }}
           >

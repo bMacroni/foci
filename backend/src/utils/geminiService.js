@@ -20,6 +20,80 @@ export class GeminiService {
     this.genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
     this.model = this.genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     // Gemini AI initialized with model: gemini-2.5-flash
+
+    // Gate verbose debug logs. When DEBUG is false, suppress logs that are clearly
+    // marked as Gemini debug (to keep console clean in pre-alpha builds).
+    // This avoids touching error logs and other app logs.
+    if (!this.DEBUG && !GeminiService.__debugLogPatched) {
+      const originalLog = console.log.bind(console);
+      console.log = (...args) => {
+        try {
+          const first = args && args.length > 0 ? args[0] : '';
+          if (typeof first === 'string' && first.startsWith('🔍 [GEMINI DEBUG]')) {
+            return; // swallow debug-only logs when DEBUG=false
+          }
+        } catch {}
+        return originalLog(...args);
+      };
+      GeminiService.__debugLogPatched = true;
+    }
+  }
+
+  /**
+   * Parse brain dump text into structured items.
+   * Returns an array of normalized items with fields:
+   * [{ text, type: 'task'|'goal', confidence: number, category: string|null, stress_level: 'low'|'medium'|'high', priority: 'low'|'medium'|'high' }]
+   *
+   * @param {string} text
+   * @param {string} userId
+   * @returns {Promise<Array<{text:string,type:string,confidence:number,category:string|null,stress_level:string,priority:string}>>}
+   */
+  async processBrainDump(text, userId) { // eslint-disable-line @typescript-eslint/no-unused-vars
+    const buildFallback = () => {
+      const first = String(text || '').split(/\.|\n|;|,/)[0]?.trim() || 'Note';
+      return [{ text: first, type: 'task', confidence: 0.5, category: null, stress_level: 'medium', priority: 'medium' }];
+    };
+
+    if (!this.enabled) {
+      return buildFallback();
+    }
+
+    const prompt = `You will receive a user's free-form brain dump. Extract a deduplicated list of items and classify each as either a short-term task or a longer-term goal (project/objective).\n
+For each item, return ONLY a JSON array of objects with fields:\n- text: string\n- type: "task" | "goal"\n- confidence: number in [0,1]\n- category: string | null (use user's existing task categories if applicable for tasks; null for goals is acceptable)\n- stress_level: "low" | "medium" | "high"\n
+Rules:\n- Tasks are concrete, one-off actions (e.g., "Email Dr. Lee", "Buy milk").\n- Goals are broader outcomes/projects (e.g., "Get in shape", "Plan a vacation").\n- Keep items concise.\n
+Respond ONLY with a JSON array.`;
+
+    try {
+      const response = await this._generateContentWithRetry({
+        contents: [
+          { role: 'user', parts: [{ text: prompt }] },
+          { role: 'user', parts: [{ text }] }
+        ]
+      });
+      const raw = response.text ? await response.text() : '';
+      let items = [];
+      try {
+        const match = raw.match(/\[[\s\S]*\]/);
+        if (match) items = JSON.parse(match[0]);
+      } catch (_) {
+        // ignore parse error, will fallback below
+      }
+      const normalized = Array.isArray(items) ? items
+        .filter(it => it && typeof it.text === 'string' && it.text.trim() !== '')
+        .map(it => ({
+          text: String(it.text).trim(),
+          type: /^(task|goal)$/i.test(it.type) ? it.type.toLowerCase() : 'task',
+          confidence: typeof it.confidence === 'number' && it.confidence >= 0 && it.confidence <= 1 ? it.confidence : 0.7,
+          category: it.category || null,
+          stress_level: /^(low|medium|high)$/i.test(it.stress_level) ? it.stress_level.toLowerCase() : 'medium',
+          priority: /^(low|medium|high)$/i.test(it.stress_level) ? it.stress_level.toLowerCase() : 'medium'
+        })) : [];
+
+      return normalized.length > 0 ? normalized : buildFallback();
+    } catch (err) {
+      if (this.DEBUG) console.error('processBrainDump error:', err);
+      return buildFallback();
+    }
   }
 
   /**

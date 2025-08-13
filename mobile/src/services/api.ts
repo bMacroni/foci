@@ -42,6 +42,25 @@ export interface Goal {
   milestones?: Milestone[];
 }
 
+// Brain Dump API
+export const brainDumpAPI = {
+  submit: async (text: string): Promise<{ threadId: string; items: Array<{ text: string; category?: string | null; stress_level: 'low'|'medium'|'high'; priority: 'low'|'medium'|'high' }>}> => {
+    const response = await fetch(`${configService.getBaseUrl()}/ai/braindump`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${await getAuthToken()}`,
+      },
+      body: JSON.stringify({ text }),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(()=>({}));
+      throw new Error(body?.message || 'Failed to process brain dump');
+    }
+    return response.json();
+  },
+};
+
 export const goalsAPI = {
   // Generate AI-powered goal breakdown using real backend
   generateBreakdown: async (data: GoalBreakdownRequest): Promise<GoalBreakdownResponse> => {
@@ -318,6 +337,28 @@ export const tasksAPI = {
         }
       }
       
+      throw error;
+    }
+  },
+
+  // Bulk create tasks (atomic insert)
+  bulkCreateTasks: async (tasks: Partial<Task>[]): Promise<Task[]> => {
+    try {
+      const response = await fetch(`${configService.getBaseUrl()}/tasks/bulk`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${await getAuthToken()}`,
+        },
+        body: JSON.stringify(tasks),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, body: ${text}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error bulk creating tasks:', error);
       throw error;
     }
   },

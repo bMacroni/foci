@@ -20,6 +20,8 @@ import { SuccessToast } from '../../components/common/SuccessToast';
 import { tasksAPI, goalsAPI, calendarAPI, autoSchedulingAPI } from '../../services/api';
 import { offlineService } from '../../services/offline';
 import Icon from 'react-native-vector-icons/Octicons';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface Task {
   id: string;
@@ -31,6 +33,7 @@ interface Task {
   category?: string;
   goal_id?: string;
   estimated_duration_minutes?: number;
+  is_today_focus?: boolean;
   goal?: {
     id: string;
     title: string;
@@ -48,6 +51,7 @@ interface Goal {
 }
 
 export const TasksScreen: React.FC = () => {
+  const navigation = useNavigation<any>();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,12 +65,25 @@ export const TasksScreen: React.FC = () => {
   const [toastMessage, setToastMessage] = useState('');
   const [toastScheduledTime, setToastScheduledTime] = useState<string | undefined>();
   const [toastCalendarEvent, setToastCalendarEvent] = useState(false);
+  const [showInbox, setShowInbox] = useState(false);
+  const [selectingFocus, setSelectingFocus] = useState(false);
+  const [showEodPrompt, setShowEodPrompt] = useState(false);
 
   useEffect(() => {
     loadData();
   }, []);
 
-  const loadData = async () => {
+  // Auto refresh whenever the Tasks tab/screen gains focus (silent background refresh)
+  useFocusEffect(
+    React.useCallback(() => {
+      // Avoid showing a spinner if we already have content; fetch fresh in background
+      loadData({ silent: true });
+      return () => {};
+    }, [])
+  );
+
+  const loadData = async (options?: { silent?: boolean }) => {
+    const silent = !!options?.silent;
     try {
       // Paint from cache immediately if available
       const [cachedTasks, cachedGoals] = await Promise.all([
@@ -86,7 +103,7 @@ export const TasksScreen: React.FC = () => {
         // Dismiss spinner immediately; we will refresh in background
         setLoading(false);
       } else {
-        setLoading(true);
+        if (!silent) setLoading(true);
       }
 
       // Fetch fresh in parallel
@@ -123,6 +140,19 @@ export const TasksScreen: React.FC = () => {
     await loadData();
     setRefreshing(false);
   };
+
+  // Honor cross-screen refresh hints
+  useEffect(() => {
+    (async () => {
+      try {
+        const flag = await AsyncStorage.getItem('needsTasksRefresh');
+        if (flag === '1') {
+          await loadData({ silent: true });
+          await AsyncStorage.removeItem('needsTasksRefresh');
+        }
+      } catch {}
+    })();
+  }, []);
 
   const handleTaskPress = (task: Task) => {
     setEditingTask(task);
@@ -231,9 +261,26 @@ export const TasksScreen: React.FC = () => {
         endTime: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
       });
       
-      // Show success toast instead of alert
-      setToastMessage('Task scheduled successfully!');
-      setToastScheduledTime(result?.data?.scheduled_time);
+      // Build human-friendly scheduled time for toast
+      const startTimeStr = result?.data?.scheduled_time;
+      let formatted = '';
+      if (startTimeStr) {
+        const start = new Date(startTimeStr);
+        const now = new Date();
+        const tomorrow = new Date(now);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        if (start.toDateString() === now.toDateString()) {
+          formatted = `today at ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+        } else if (start.toDateString() === tomorrow.toDateString()) {
+          formatted = `tomorrow at ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+        } else {
+          formatted = `${start.toLocaleDateString()} at ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+        }
+      }
+
+      // Show success toast including scheduled date/time
+      setToastMessage(formatted ? `Scheduled for ${formatted}` : 'Task scheduled successfully!');
+      setToastScheduledTime(startTimeStr);
       setToastCalendarEvent(true);
       setShowToast(true);
       
@@ -291,6 +338,14 @@ export const TasksScreen: React.FC = () => {
     return tasks.filter(task => task.status === 'completed');
   };
 
+  const getFocusTask = (): Task | undefined => {
+    return tasks.find(task => task.is_today_focus && task.status !== 'completed');
+  };
+
+  const getInboxTasks = () => {
+    return tasks.filter(task => !task.is_today_focus && task.status !== 'completed');
+  };
+
   const getAutoScheduledTasks = () => {
     return tasks.filter(task => task.auto_schedule_enabled);
   };
@@ -311,7 +366,24 @@ export const TasksScreen: React.FC = () => {
   const renderTaskItem = ({ item }: { item: Task }) => (
     <TaskCard
       task={item}
-      onPress={handleTaskPress}
+      onPress={(task) => {
+        if (selectingFocus) {
+          tasksAPI.updateTask(task.id, { ...(undefined as any), is_today_focus: true } as any)
+            .then(updated => {
+              setTasks(prev => prev.map(t => t.id === updated.id ? updated : { ...t, is_today_focus: false }));
+              setShowInbox(false);
+              setSelectingFocus(false);
+              setToastMessage("Set as Today's Focus.");
+              setToastCalendarEvent(false);
+              setShowToast(true);
+            })
+            .catch(() => {
+              Alert.alert('Error', 'Failed to set Today\'s Focus');
+            });
+          return;
+        }
+        handleTaskPress(task);
+      }}
       onDelete={handleDeleteTask}
       onToggleStatus={handleToggleStatus}
       onAddToCalendar={handleAddToCalendar}
@@ -359,6 +431,102 @@ export const TasksScreen: React.FC = () => {
     </View>
   );
 
+  // End-of-day prompt logic: once per day if focus exists and is not completed
+  useEffect(() => {
+    const maybePromptEndOfDay = async () => {
+      if (loading) return;
+      const focus = getFocusTask();
+      if (!focus) return;
+      const todayStr = new Date().toISOString().slice(0, 10);
+      try {
+        const lastPrompt = await AsyncStorage.getItem('lastEODPromptDate');
+        if (lastPrompt === todayStr) return;
+        if (focus.status !== 'completed') {
+          setShowEodPrompt(true);
+        }
+      } catch {}
+    };
+    maybePromptEndOfDay();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, tasks]);
+
+  const markEodPrompted = async () => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    try { await AsyncStorage.setItem('lastEODPromptDate', todayStr); } catch {}
+  };
+
+  const handleEodMarkDone = async () => {
+    const focus = getFocusTask();
+    if (!focus) { setShowEodPrompt(false); return; }
+    await handleFocusDone(focus);
+    setShowEodPrompt(false);
+    await markEodPrompted();
+  };
+
+  const handleEodRollover = async () => {
+    const focus = getFocusTask();
+    if (!focus) { setShowEodPrompt(false); return; }
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    try {
+      const updated = await tasksAPI.updateTask(focus.id, { due_date: `${yyyy}-${mm}-${dd}` });
+      setTasks(prev => prev.map(t => t.id === focus.id ? updated : t));
+      setToastMessage('Rolled over to today.');
+      setToastCalendarEvent(false);
+      setShowToast(true);
+    } catch (e) {
+      Alert.alert('Error', 'Failed to roll over task');
+    }
+    setShowEodPrompt(false);
+    await markEodPrompted();
+  };
+
+  const handleEodChooseNew = async () => {
+    setShowEodPrompt(false);
+    await markEodPrompted();
+    navigation.navigate('BrainDump');
+  };
+
+  const handleFocusDone = async (task: Task) => {
+    try {
+      const updated = await tasksAPI.updateTask(task.id, { status: 'completed' });
+      setTasks(prev => prev.map(t => t.id === task.id ? updated : t));
+      setToastMessage('Great job! Focus task completed.');
+      setToastCalendarEvent(false);
+      setShowToast(true);
+    } catch (e) {
+      Alert.alert('Error', 'Failed to complete focus task');
+    }
+  };
+
+  const handleFocusRollover = async (task: Task) => {
+    try {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const yyyy = tomorrow.getFullYear();
+      const mm = String(tomorrow.getMonth() + 1).padStart(2, '0');
+      const dd = String(tomorrow.getDate()).padStart(2, '0');
+      const updated = await tasksAPI.updateTask(task.id, { due_date: `${yyyy}-${mm}-${dd}` });
+      setTasks(prev => prev.map(t => t.id === task.id ? updated : t));
+      setToastMessage('Rolled over to tomorrow.');
+      setToastCalendarEvent(false);
+      setShowToast(true);
+    } catch (e) {
+      Alert.alert('Error', 'Failed to roll over task');
+    }
+  };
+
+  const handleChangeFocus = () => {
+    // Let user pick a new focus from Inbox directly
+    setShowInbox(true);
+    setSelectingFocus(true);
+    setToastMessage("Select a task from your Inbox to set as Today's Focus.");
+    setToastCalendarEvent(false);
+    setShowToast(true);
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -376,10 +544,57 @@ export const TasksScreen: React.FC = () => {
           {tasks.length} task{tasks.length !== 1 ? 's' : ''}
         </Text>
         {renderHeaderActions()}
+        {/* Today's Focus Card */}
+        {(() => {
+          const focus = getFocusTask();
+          const inboxCount = getInboxTasks().length;
+          return (
+            <View>
+              <View style={styles.focusHeaderRow}>
+                <Text style={styles.focusTitle}>Today's Focus</Text>
+                <TouchableOpacity style={styles.inboxButton} onPress={() => { setShowInbox(!showInbox); setSelectingFocus(false); }}>
+                  <Icon name="inbox" size={14} color={colors.text.primary} />
+                  <Text style={styles.inboxText}>Inbox{inboxCount > 0 ? ` (${inboxCount})` : ''}</Text>
+                  <Icon name={showInbox ? 'chevron-up' : 'chevron-down'} size={14} color={colors.text.primary} />
+                </TouchableOpacity>
+              </View>
+              {focus ? (
+                <View style={styles.focusCard}>
+                  <Text style={styles.focusTaskTitle}>{focus.title}</Text>
+                  <View style={styles.focusBadges}>
+                    {!!focus.category && (
+                      <View style={styles.badge}><Text style={styles.badgeText}>{focus.category}</Text></View>
+                    )}
+                    <View style={[styles.badge, styles[focus.priority]]}><Text style={[styles.badgeText, styles.badgeTextDark]}>{focus.priority}</Text></View>
+                  </View>
+                  <View style={styles.focusActionsRow}>
+                    <TouchableOpacity style={styles.focusBtn} onPress={() => handleFocusDone(focus)}>
+                      <Icon name="check" size={16} color={colors.secondary} />
+                      <Text style={styles.focusBtnText}>Done</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.focusBtn} onPress={() => handleFocusRollover(focus)}>
+                      <Icon name="clock" size={16} color={colors.secondary} />
+                      <Text style={styles.focusBtnText}>Rollover</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.focusBtn} onPress={handleChangeFocus}>
+                      <Icon name="arrow-switch" size={16} color={colors.secondary} />
+                      <Text style={styles.focusBtnText}>Change</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <TouchableOpacity style={styles.focusCard} onPress={handleChangeFocus}>
+                  <Text style={styles.focusTaskTitle}>No focus set</Text>
+                  <Text style={styles.badgeText}>Set Today’s Focus to keep things simple.</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          );
+        })()}
       </View>
 
       <FlatList
-        data={getActiveTasks()}
+        data={showInbox ? getInboxTasks() : []}
         renderItem={renderTaskItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}
@@ -392,8 +607,9 @@ export const TasksScreen: React.FC = () => {
             tintColor={colors.primary}
           />
         }
-        ListEmptyComponent={renderEmptyState}
+        ListEmptyComponent={showInbox ? renderEmptyState : undefined}
         ListFooterComponent={() => {
+          if (!showInbox) return null;
           const completedTasks = getCompletedTasks();
           if (completedTasks.length === 0) return null;
           
@@ -449,6 +665,49 @@ export const TasksScreen: React.FC = () => {
         onSave={handlePreferencesSave}
       />
 
+      {/* End-of-day prompt modal */}
+      <Modal
+        visible={showEodPrompt}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowEodPrompt(false)}
+      >
+        <View style={styles.eodOverlay}>
+          <View style={styles.eodCard}>
+            <Text style={styles.eodTitle}>How did today’s focus go?</Text>
+            <Text style={styles.eodSubtitle}>No pressure—want to mark it done, roll it over to today, or choose something new?</Text>
+            {(() => {
+              const focus = getFocusTask();
+              if (!focus) return null;
+              return (
+                <View style={[styles.focusCard, { marginTop: spacing.sm }]}> 
+                  <Text style={styles.focusTaskTitle}>{focus.title}</Text>
+                  <View style={styles.focusBadges}>
+                    {!!focus.category && (
+                      <View style={styles.badge}><Text style={styles.badgeText}>{focus.category}</Text></View>
+                    )}
+                    <View style={[styles.badge, styles[focus.priority]]}><Text style={[styles.badgeText, styles.badgeTextDark]}>{focus.priority}</Text></View>
+                  </View>
+                </View>
+              );
+            })()}
+            <View style={styles.eodActionsRow}>
+              <TouchableOpacity style={[styles.eodBtn, styles.eodPrimary]} onPress={handleEodMarkDone}>
+                <Icon name="check" size={16} color={colors.secondary} />
+                <Text style={styles.eodBtnText}>Mark done</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.eodBtn, styles.eodPrimary]} onPress={handleEodRollover}>
+                <Icon name="clock" size={16} color={colors.secondary} />
+                <Text style={styles.eodBtnText}>Roll over</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity style={styles.eodSecondary} onPress={handleEodChooseNew}>
+              <Text style={styles.eodSecondaryText}>Choose a new focus</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Success Toast */}
       <SuccessToast
         visible={showToast}
@@ -488,6 +747,80 @@ const styles = StyleSheet.create({
   headerActions: {
     marginTop: spacing.sm,
   },
+  focusHeaderRow: {
+    marginTop: spacing.md,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  focusTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold as any,
+    color: colors.text.primary,
+  },
+  inboxButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.background.surface,
+  },
+  inboxText: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.sm,
+  },
+  focusCard: {
+    marginTop: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    backgroundColor: colors.secondary,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+  },
+  focusTaskTitle: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold as any,
+  },
+  focusBadges: {
+    flexDirection: 'row',
+    marginTop: spacing.xs,
+  },
+  badge: {
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    borderRadius: 999,
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    marginRight: spacing.xs,
+  },
+  badgeText: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.xs,
+  },
+  badgeTextDark: { color: colors.text.primary },
+  low: { backgroundColor: '#E8F5E9', borderColor: '#C8E6C9' },
+  medium: { backgroundColor: '#FFFDE7', borderColor: '#FFF9C4' },
+  high: { backgroundColor: '#FFEBEE', borderColor: '#FFCDD2' },
+  focusActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: spacing.sm,
+  },
+  focusBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.sm,
+  },
+  focusBtnText: { color: colors.secondary, fontWeight: typography.fontWeight.bold as any },
   autoScheduleSummary: {
     marginBottom: spacing.sm,
   },
@@ -596,5 +929,64 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     marginBottom: spacing.md,
     paddingHorizontal: spacing.md,
+  },
+  eodOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  eodCard: {
+    width: '88%',
+    backgroundColor: colors.background.surface,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    padding: spacing.lg,
+  },
+  eodTitle: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold as any,
+    marginBottom: spacing.xs,
+  },
+  eodSubtitle: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
+    marginBottom: spacing.md,
+  },
+  eodActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  eodBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.sm,
+  },
+  eodPrimary: {
+    backgroundColor: colors.primary,
+  },
+  eodBtnText: {
+    color: colors.secondary,
+    fontWeight: typography.fontWeight.bold as any,
+  },
+  eodSecondary: {
+    marginTop: spacing.sm,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    borderRadius: borderRadius.sm,
+  },
+  eodSecondaryText: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium as any,
   },
 });

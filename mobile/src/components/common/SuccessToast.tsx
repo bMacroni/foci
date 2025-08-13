@@ -18,6 +18,8 @@ interface SuccessToastProps {
   calendarEventCreated?: boolean;
   onClose: () => void;
   duration?: number;
+  actionLabel?: string;
+  onActionPress?: () => void;
 }
 
 export const SuccessToast: React.FC<SuccessToastProps> = ({
@@ -27,6 +29,8 @@ export const SuccessToast: React.FC<SuccessToastProps> = ({
   calendarEventCreated = false,
   onClose,
   duration = 4000,
+  actionLabel,
+  onActionPress,
 }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(-100)).current;
@@ -125,6 +129,11 @@ export const SuccessToast: React.FC<SuccessToastProps> = ({
               </Text>
             </View>
           )}
+          {actionLabel && onActionPress && (
+            <TouchableOpacity style={styles.actionBtn} onPress={() => { onActionPress(); hideToast(); }}>
+              <Text style={styles.actionText}>{actionLabel}</Text>
+            </TouchableOpacity>
+          )}
         </View>
         
         <TouchableOpacity style={styles.closeButton} onPress={hideToast}>
@@ -195,5 +204,17 @@ const styles = StyleSheet.create({
   closeButton: {
     padding: spacing.xs,
     marginLeft: spacing.xs,
+  },
+  actionBtn: {
+    alignSelf: 'flex-start',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.sm,
+  },
+  actionText: {
+    color: colors.secondary,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold as any,
   },
 });

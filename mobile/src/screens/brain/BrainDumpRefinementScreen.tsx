@@ -1,0 +1,335 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, LayoutAnimation, Platform, UIManager } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Icon from 'react-native-vector-icons/Octicons';
+import { colors } from '../../themes/colors';
+import { spacing, borderRadius } from '../../themes/spacing';
+import { typography } from '../../themes/typography';
+import { tasksAPI } from '../../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SuccessToast } from '../../components/common/SuccessToast';
+
+type Item = { text: string; type: 'task'|'goal'; confidence?: number; category?: string | null; stress_level: 'low'|'medium'|'high'; priority: 'low'|'medium'|'high' };
+
+export default function BrainDumpRefinementScreen({ navigation, route }: any) {
+  const { items, threadId } = route.params as { items: Item[]; threadId: string };
+  const [saving, setSaving] = useState(false);
+  const [tab, setTab] = useState<'task'|'goal'>('task');
+  const sanitizeText = (text: string): string => {
+    return String(text || '')
+      .replace(/\r?\n|\r/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+  const normalizeKey = (text: string): string => sanitizeText(text).toLowerCase();
+
+  // Initialize with sanitized items (collapse newlines/whitespace, drop empties)
+  const [editedItems, setEditedItems] = useState<Item[]>(() =>
+    (Array.isArray(items) ? items : [])
+      .map(it => ({ ...it, text: sanitizeText(it.text) }))
+      .filter(it => it.text.length > 0)
+  );
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [inFlightKeys, setInFlightKeys] = useState<Set<string>>(new Set());
+
+  const list = useMemo(()=> Array.isArray(editedItems) ? editedItems : [], [editedItems]);
+  const tasks = useMemo(()=> list.filter(i=>i.type==='task'), [list]);
+  const goals = useMemo(()=> list.filter(i=>i.type==='goal'), [list]);
+
+  // Persist latest refinement session so user can return later
+  useEffect(() => {
+    (async () => {
+      try {
+        await AsyncStorage.multiSet([
+          ['lastBrainDumpThreadId', threadId],
+          ['lastBrainDumpItems', JSON.stringify(editedItems)],
+        ]);
+      } catch {}
+    })();
+  }, [threadId, editedItems]);
+
+  // Enable layout animation on Android for smoother toggle feedback
+  if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+    try { UIManager.setLayoutAnimationEnabledExperimental(true); } catch {}
+  }
+
+  const createFocusTask = async (item: Item) => {
+    if (saving) return;
+    const key = normalizeKey(item.text);
+    if (inFlightKeys.has(key)) return;
+    setInFlightKeys(prev => new Set(prev).add(key));
+    setSaving(true);
+    try {
+      // 1) Create the focus task
+      await tasksAPI.createTask({
+        title: sanitizeText(item.text),
+        description: '',
+        priority: item.priority,
+        category: item.category || undefined,
+        is_today_focus: true,
+      } as any);
+
+      // 2) Save remaining tasks to Inbox (non-focus)
+      const remainder = tasks
+        .filter(t => t.text !== item.text)
+        .reduce((acc: Item[], cur) => {
+          const k = normalizeKey(cur.text);
+          if (!acc.some(x => normalizeKey(x.text) === k)) acc.push(cur);
+          return acc;
+        }, []);
+      if (remainder.length > 0) {
+        const bulk = remainder.map((it) => ({
+          title: sanitizeText(it.text),
+          description: '',
+          priority: it.priority,
+          category: it.category || undefined,
+          is_today_focus: false,
+        }));
+        await tasksAPI.bulkCreateTasks(bulk as any);
+      }
+
+      // 3) Update UI: remove task items from refinement list
+      setEditedItems(prev => prev.filter(i => i.type !== 'task'));
+
+      // 4) Persist a flag to hint Tasks screen to refresh on focus
+      try { await AsyncStorage.setItem('needsTasksRefresh', '1'); } catch {}
+
+      // 5) Show confirmation toast
+      const savedCount = remainder.length;
+      const message = savedCount > 0
+        ? `Set "${sanitizeText(item.text)}" as Today's Focus and saved ${savedCount} task${savedCount === 1 ? '' : 's'} to your Inbox.`
+        : `Set "${sanitizeText(item.text)}" as Today's Focus.`;
+      setToastMessage(message);
+      setToastVisible(true);
+    } catch (e) {
+      setToastMessage('Something went wrong setting Today\'s Focus.');
+      setToastVisible(true);
+    } finally {
+      setSaving(false);
+      setInFlightKeys(prev => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }
+  };
+
+  const startGoalBreakdown = async (item: Item) => {
+    try {
+      // Update conversation thread title to the goal text
+      const token = await AsyncStorage.getItem('authToken');
+      await fetch('http://192.168.1.66:5000/api/ai/threads/' + threadId, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ title: item.text }),
+      });
+    } catch {}
+    // Remove the goal from the refinement list
+    setEditedItems(prev => prev.filter(i => !(i.type === 'goal' && i.text === item.text)));
+    // Navigate to chat with the prefilled message so title can be inferred
+    navigation.navigate('AIChat', { initialMessage: `Help me break down this goal: ${item.text}`, threadId });
+  };
+
+  const saveRemainderToInbox = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      // De-dupe within the list on normalized title
+      const uniqueTasks = tasks.reduce((acc: Item[], cur) => {
+        const k = normalizeKey(cur.text);
+        if (!acc.some(x => normalizeKey(x.text) === k)) acc.push(cur);
+        return acc;
+      }, []);
+      const savedCount = uniqueTasks.length;
+      const bulk = uniqueTasks.map((it)=>({
+        title: sanitizeText(it.text),
+        description: '',
+        priority: it.priority,
+        category: it.category || undefined,
+        is_today_focus: false,
+      }));
+      await tasksAPI.bulkCreateTasks(bulk as any);
+      setToastMessage(savedCount === 1 ? 'Saved 1 task to your Inbox under Tasks.' : `Saved ${savedCount} tasks to your Inbox under Tasks.`);
+      setToastVisible(true);
+      // Hide saved tasks from the refinement screen
+      setEditedItems(prev => prev.filter(i => i.type !== 'task'));
+    } catch {}
+    setSaving(false);
+  };
+
+  const flipType = (target: Item) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setEditedItems(prev => prev.map(it => {
+      if (it.text === target.text) {
+        const newType = it.type === 'task' ? 'goal' : 'task';
+        setToastMessage(`Marked as ${newType}.`);
+        setToastVisible(true);
+        return { ...it, type: newType } as Item;
+      }
+      return it;
+    }));
+  };
+
+  const setType = (target: Item, newType: 'task'|'goal') => {
+    if (target.type === newType) return;
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setEditedItems(prev => prev.map(it => {
+      if (it.text === target.text) {
+        return { ...it, type: newType } as Item;
+      }
+      return it;
+    }));
+    setToastMessage(`Marked as ${newType}.`);
+    setToastVisible(true);
+  };
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <View style={styles.headerRow}>
+        <Text style={styles.title}>Let’s pick one small step</Text>
+        <TouchableOpacity
+          style={styles.newDumpBtn}
+          onPress={() => {
+            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+            navigation.navigate('BrainDumpInput');
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Start a new brain dump"
+        >
+          <Icon name="plus" size={14} color={colors.text.primary} style={{ marginRight: 6 }} />
+          <Text style={styles.newDumpText}>New Brain Dump</Text>
+        </TouchableOpacity>
+      </View>
+      <View style={styles.tabs}>
+        <TouchableOpacity style={[styles.tabBtn, tab==='task' && styles.tabBtnActive]} onPress={()=>setTab('task')}>
+          <Text style={[styles.tabText, tab==='task' && styles.tabTextActive]}>Tasks ({tasks.length})</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.tabBtn, tab==='goal' && styles.tabBtnActive]} onPress={()=>setTab('goal')}>
+          <Text style={[styles.tabText, tab==='goal' && styles.tabTextActive]}>Goals ({goals.length})</Text>
+        </TouchableOpacity>
+      </View>
+
+      <FlatList
+        data={tab==='task' ? tasks : goals}
+        keyExtractor={(it, idx)=>`${idx}-${it.text}`}
+        contentContainerStyle={{ padding: spacing.md }}
+        renderItem={({ item }) => (
+          <TouchableOpacity style={styles.card} activeOpacity={0.8} onPress={() => (item.type==='task' ? createFocusTask(item) : startGoalBreakdown(item))}>
+            <View style={styles.row}>
+              <Text style={styles.text} numberOfLines={3} ellipsizeMode="tail">{sanitizeText(item.text)}</Text>
+              <View style={styles.badges}>
+                <View style={styles.segmented}>
+                  <TouchableOpacity
+                    onPress={() => setType(item, 'task')}
+                    activeOpacity={0.8}
+                    style={[styles.segment, item.type==='task' && styles.segmentActive]}
+                  >
+                    <Icon name="checklist" size={12} color={item.type==='task' ? colors.secondary : colors.text.secondary} style={{ marginRight: 4 }} />
+                    <Text style={[styles.segmentLabel, item.type==='task' && styles.segmentLabelActive]}>Task</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setType(item, 'goal')}
+                    activeOpacity={0.8}
+                    style={[styles.segment, item.type==='goal' && styles.segmentActive]}
+                  >
+                    <Icon name="milestone" size={12} color={item.type==='goal' ? colors.secondary : colors.text.secondary} style={{ marginRight: 4 }} />
+                    <Text style={[styles.segmentLabel, item.type==='goal' && styles.segmentLabelActive]}>Goal</Text>
+                  </TouchableOpacity>
+                </View>
+                {!!item.category && (
+                  <View style={styles.badge}><Text style={styles.badgeText}>{item.category}</Text></View>
+                )}
+                <View style={[styles.badge, styles[item.priority]]}><Text style={[styles.badgeText, styles.badgeTextDark]}>{item.priority}</Text></View>
+              </View>
+            </View>
+            {item.type==='task' ? (
+              <Text style={styles.hint}>Tap to make this Today’s Focus</Text>
+            ) : (
+              <Text style={styles.hint}>Tap to break this goal into tiny steps</Text>
+            )}
+          </TouchableOpacity>
+        )}
+      />
+
+      <View style={styles.footer}>
+        <TouchableOpacity style={styles.secondaryBtn} onPress={saveRemainderToInbox}>
+          <Icon name="inbox" size={16} color={colors.text.primary} style={{ marginRight: spacing.xs }} />
+          <Text style={styles.secondaryBtnText}>Save all to Inbox</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.primaryBtn} onPress={() => navigation.navigate('AIChat', { threadId })}>
+          <Text style={styles.primaryBtnText}>Open Chat</Text>
+        </TouchableOpacity>
+      </View>
+
+      <SuccessToast
+        visible={toastVisible}
+        message={toastMessage}
+        actionLabel="Open Tasks"
+        onActionPress={() => navigation.navigate('Tasks')}
+        onClose={() => setToastVisible(false)}
+      />
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background.surface },
+  title: { fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, color: colors.text.primary, padding: spacing.md },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  newDumpBtn: { flexDirection: 'row', alignItems: 'center', marginRight: spacing.md, paddingVertical: spacing.xs, paddingHorizontal: spacing.sm, borderWidth: 1, borderColor: colors.border.light, borderRadius: borderRadius.sm, backgroundColor: colors.background.surface },
+  newDumpText: { color: colors.text.primary, fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium },
+  tabs: { flexDirection: 'row', marginHorizontal: spacing.md, borderWidth: 1, borderColor: colors.border.light, borderRadius: borderRadius.md, overflow: 'hidden' },
+  tabBtn: { flex: 1, paddingVertical: spacing.sm, alignItems: 'center', backgroundColor: colors.secondary },
+  tabBtnActive: { backgroundColor: colors.primary },
+  tabText: { color: colors.text.primary },
+  tabTextActive: { color: colors.secondary, fontWeight: typography.fontWeight.bold },
+  card: { borderWidth: 1, borderColor: colors.border.light, backgroundColor: colors.secondary, borderRadius: borderRadius.md, padding: spacing.md, marginBottom: spacing.sm },
+  row: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  text: { color: colors.text.primary, fontSize: typography.fontSize.base, flex: 1, paddingRight: spacing.sm },
+  badges: { flexDirection: 'row', alignItems: 'center' },
+  badge: { borderWidth: 1, borderColor: colors.border.light, borderRadius: 999, paddingVertical: 2, paddingHorizontal: 8, marginLeft: spacing.xs },
+  badgeType: { backgroundColor: '#E6E6E6', borderColor: '#D0D0D0' },
+  badgeText: { color: colors.text.secondary, fontSize: typography.fontSize.xs },
+  badgeTextDark: { color: colors.text.primary },
+  segmented: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    borderRadius: 999,
+    overflow: 'hidden',
+    marginLeft: spacing.xs,
+  },
+  segment: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    backgroundColor: colors.secondary,
+  },
+  segmentActive: {
+    backgroundColor: colors.primary,
+  },
+  segmentLabel: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.xs,
+  },
+  segmentLabelActive: {
+    color: colors.secondary,
+    fontWeight: typography.fontWeight.bold,
+  },
+  low: { backgroundColor: '#E8F5E9', borderColor: '#C8E6C9' },
+  medium: { backgroundColor: '#FFFDE7', borderColor: '#FFF9C4' },
+  high: { backgroundColor: '#FFEBEE', borderColor: '#FFCDD2' },
+  hint: { color: colors.text.secondary, fontSize: typography.fontSize.xs, marginTop: spacing.xs },
+  footer: { flexDirection: 'row', justifyContent: 'space-between', padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.border.light },
+  secondaryBtn: { flexDirection: 'row', alignItems: 'center' },
+  secondaryBtnText: { color: colors.text.primary },
+  primaryBtn: { backgroundColor: colors.primary, paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: borderRadius.md },
+  primaryBtnText: { color: colors.secondary, fontWeight: typography.fontWeight.bold },
+});
+
+

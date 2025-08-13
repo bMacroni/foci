@@ -35,7 +35,10 @@ export async function createTask(req, res) {
     preferred_time_windows,
     max_daily_tasks,
     buffer_time_minutes,
-    task_type
+    task_type,
+    // Brain dump / focus
+    is_today_focus,
+    category
   } = req.body;
   const user_id = req.user.id;
   
@@ -72,6 +75,8 @@ export async function createTask(req, res) {
       preferred_time_of_day, 
       deadline_type, 
       travel_time_minutes,
+      category,
+      is_today_focus,
       // Auto-scheduling fields
       auto_schedule_enabled,
       recurrence_pattern,
@@ -179,6 +184,8 @@ export async function updateTask(req, res) {
     status,
     estimated_duration_minutes,
     scheduled_time,
+    category,
+    is_today_focus,
     // Auto-scheduling fields
     auto_schedule_enabled,
     recurrence_pattern,
@@ -222,6 +229,8 @@ export async function updateTask(req, res) {
     ...(status !== undefined && { status }),
     ...(estimated_duration_minutes !== undefined && { estimated_duration_minutes }),
     ...(scheduled_time !== undefined && { scheduled_time }),
+    ...(category !== undefined && { category }),
+    ...(is_today_focus !== undefined && { is_today_focus }),
     // Auto-scheduling fields
     ...(auto_schedule_enabled !== undefined && { auto_schedule_enabled }),
     ...(recurrence_pattern !== undefined && { recurrence_pattern }),
@@ -313,29 +322,52 @@ export async function bulkCreateTasks(req, res) {
     return res.status(400).json({ error: 'Request body must be a non-empty array of tasks.' });
   }
 
-  // Attach user_id to each task and sanitize fields
-  const tasksToInsert = tasks.map(task => ({
-    user_id,
-    title: task.title,
-    description: task.description || '',
-    due_date: task.due_date || null,
-    priority: task.priority || null,
-    goal_id: task.goal_id === '' ? null : (task.goal_id || null),
-    completed: task.completed || false,
-    preferred_time_of_day: task.preferred_time_of_day || null,
-    deadline_type: task.deadline_type || null,
-    travel_time_minutes: task.travel_time_minutes || null
-  }));
+  // Build normalized titles to deduplicate (case-insensitive, trim)
+  const normalizeTitle = (t) => (typeof t === 'string' ? t.trim().toLowerCase() : '');
+  const attemptedCount = tasks.length;
 
-  const { data, error } = await supabase
+  // Fetch existing titles for this user
+  const { data: existingRows, error: existingErr } = await supabase
     .from('tasks')
-    .insert(tasksToInsert)
-    .select();
-
-  if (error) {
-    console.log('Supabase bulk insert error:', error);
-    return res.status(400).json({ error: error.message });
+    .select('title')
+    .eq('user_id', user_id);
+  if (existingErr) {
+    console.log('Supabase fetch existing titles error:', existingErr);
+    return res.status(400).json({ error: existingErr.message });
   }
+  const existingTitleSet = new Set((existingRows || []).map(r => normalizeTitle(r.title)));
+
+  // Attach user_id to each task and sanitize fields; filter out duplicates by normalized title
+  const tasksToInsert = tasks
+    .filter(task => !existingTitleSet.has(normalizeTitle(task.title)))
+    .map(task => ({
+      user_id,
+      title: task.title,
+      description: task.description || '',
+      due_date: task.due_date || null,
+      priority: task.priority || null,
+      goal_id: task.goal_id === '' ? null : (task.goal_id || null),
+      completed: task.completed || false,
+      preferred_time_of_day: task.preferred_time_of_day || null,
+      deadline_type: task.deadline_type || null,
+      travel_time_minutes: task.travel_time_minutes || null,
+      category: task.category || null,
+      is_today_focus: task.is_today_focus === true
+    }));
+
+  let data = [];
+  if (tasksToInsert.length > 0) {
+    const insertResult = await supabase
+      .from('tasks')
+      .insert(tasksToInsert)
+      .select();
+    if (insertResult.error) {
+      console.log('Supabase bulk insert error:', insertResult.error);
+      return res.status(400).json({ error: insertResult.error.message });
+    }
+    data = insertResult.data || [];
+  }
+
   res.status(201).json(data);
 }
 

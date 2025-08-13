@@ -16,6 +16,8 @@ export const CustomTabBar: React.FC<CustomTabBarProps> = ({ state, descriptors, 
 
   const getIconName = (routeName: string) => {
     switch (routeName) {
+      case 'BrainDump':
+        return 'pencil';
       case 'AIChat':
         return 'comment-discussion';
       case 'Goals':

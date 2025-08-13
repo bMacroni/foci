@@ -489,7 +489,7 @@ export default function AIChatScreen({ navigation, route }: any) {
       const token = await AsyncStorage.getItem('authToken');
       const response = await axios.post(
         `${configService.getBaseUrl()}/ai/chat`,
-        { message: userMessage },
+        { message: userMessage, threadId: route.params?.threadId },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       
@@ -536,15 +536,35 @@ export default function AIChatScreen({ navigation, route }: any) {
   // Handle initial message from navigation
   useEffect(() => {
     if (route.params?.initialMessage) {
-      const initialMessage = route.params.initialMessage;
+      const initialMessage = route.params.initialMessage as string;
+      // Try to derive a concise title from the initial message (goal-focused)
+      const deriveTitle = (msg: string): string => {
+        const cleaned = String(msg || '').trim();
+        // Common prefixes
+        const prefixes = [
+          /^help me break down this goal:\s*/i,
+          /^can you help me (update|with) (the\s*)?/i,
+          /^help me with (the\s*)?/i,
+          /^please (help|assist) (me\s*)?(with\s*)?/i,
+        ];
+        let text = cleaned;
+        for (const p of prefixes) text = text.replace(p, '');
+        // Remove trailing question marks/periods and limit length
+        text = text.replace(/[?.!\s]+$/g, '').trim();
+        // If it still contains leading "goal:" or quotes, strip them
+        text = text.replace(/^goal:\s*/i, '').replace(/^"|"$/g, '').trim();
+        // Shorten to ~32 chars if very long
+        if (text.length > 32) text = text.slice(0, 32).trim() + '…';
+        return text || 'Goal Help';
+      };
+      const inferredTitle = deriveTitle(initialMessage);
       
-      // Create a new conversation with the initial message
+      // Create a new conversation; we'll append the user's initial message once during auto-send
       const newConversation: Conversation = {
         id: Date.now().toString(),
-        title: 'Goal Help',
+        title: inferredTitle,
         messages: [
-          { id: 1, text: 'Welcome to Foci! How can I help you today?', sender: 'ai' },
-          { id: 2, text: initialMessage, sender: 'user' }
+          { id: 1, text: 'Welcome to Foci! How can I help you today?', sender: 'ai' }
         ],
         isPinned: false,
         createdAt: new Date(),
@@ -555,14 +575,40 @@ export default function AIChatScreen({ navigation, route }: any) {
       setCurrentConversationId(newConversation.id);
       
       // Clear the route params to prevent re-triggering
-      navigation.setParams({ initialMessage: undefined });
+      navigation.setParams({ initialMessage: undefined, threadId: route.params?.threadId });
       
-      // Auto-send the message
-      setInput(initialMessage);
-      // Trigger handleSend after a short delay
-      setTimeout(() => {
-        handleSend();
-      }, 100);
+      // Auto-send the message immediately without requiring user to tap send
+      (async () => {
+        try {
+          const token = await AsyncStorage.getItem('authToken');
+          // Add user message to conversation state first
+          setConversations(prev => prev.map(c => {
+            if (c.id === newConversation.id) {
+              const newMsg: Message = { id: Date.now(), text: initialMessage, sender: 'user' };
+              return { ...c, messages: [...c.messages, newMsg], lastMessageAt: new Date() };
+            }
+            return c;
+          }));
+          setLoading(true);
+          setError('');
+          const response = await axios.post(
+            `${configService.getBaseUrl()}/ai/chat`,
+            { message: initialMessage, threadId: route.params?.threadId },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          const aiMessage: Message = { id: Date.now() + 1, text: response.data.message, sender: 'ai' };
+          setConversations(prev => prev.map(c => {
+            if (c.id === newConversation.id) {
+              return { ...c, messages: [...c.messages, aiMessage], lastMessageAt: new Date() };
+            }
+            return c;
+          }));
+        } catch (err) {
+          setError('AI failed to respond. Please try again.');
+        } finally {
+          setLoading(false);
+        }
+      })();
     }
   }, [route.params?.initialMessage, handleSend, navigation]);
 

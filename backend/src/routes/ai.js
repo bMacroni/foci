@@ -92,6 +92,35 @@ router.post('/recommend-task', requireAuth, async (req, res) => {
   }
 });
 
+// Brain dump endpoint (Refs: FeaturePRDs/PRD_guided-brain-dump.md L34-L44)
+router.post('/braindump', requireAuth, async (req, res) => {
+  try {
+    const { text } = req.body;
+    const userId = req.user.id;
+    if (!text || typeof text !== 'string' || text.trim().length === 0) {
+      return res.status(400).json({
+        error: 'Text is required',
+        message: "It's okay if nothing comes to mind right away. Just typing one word about how you're feeling can be a great start."
+      });
+    }
+
+    const token = req.headers.authorization?.split(' ')[1];
+
+    // 1) Create a new conversation thread for this brain dump session and save raw text
+    const thread = await conversationController.createThread(userId, 'Brain Dump', null, token, [
+      { role: 'user', content: text }
+    ]);
+    await conversationController.addMessage(thread.id, text, 'user', { source: 'brain_dump' }, token);
+
+    // 2) Process with Gemini via service to parse items and classify
+    const items = await geminiService.processBrainDump(text, userId);
+    return res.json({ threadId: thread.id, items });
+  } catch (error) {
+    console.error('AI BrainDump Error:', error);
+    return res.status(500).json({ error: 'Failed to process brain dump' });
+  }
+});
+
 // Create new conversation thread
 router.post('/threads', requireAuth, async (req, res) => {
   try {
