@@ -5,7 +5,7 @@ import { spacing } from '../../themes/spacing';
 import { skeletonAnimation } from '../../utils/animations';
 
 interface LoadingSkeletonProps {
-  type: 'event' | 'task' | 'list';
+  type: 'event' | 'task' | 'list' | 'profile';
   count?: number;
 }
 
@@ -52,6 +52,31 @@ export const LoadingSkeleton: React.FC<LoadingSkeletonProps> = ({
     </View>
   );
 
+  const renderProfileSkeleton = () => (
+    <View>
+      {/* Header */}
+      <View style={{ marginBottom: spacing.lg }}>
+        <Animated.View style={[styles.titleSkeleton, { height: 24, width: '60%', opacity }]} />
+        <Animated.View style={[styles.descriptionSkeleton, { width: '40%', marginTop: spacing.xs, opacity }]} />
+        <Animated.View style={[styles.descriptionSkeleton, { width: '30%', marginTop: spacing.xs, opacity }]} />
+      </View>
+      {/* Sections */}
+      <View style={styles.listSkeleton}>
+        <Animated.View style={[styles.listItemSkeleton, { height: 48, opacity }]} />
+      </View>
+      <View style={[styles.listSkeleton, { marginTop: spacing.md }]}>
+        <Animated.View style={[styles.listItemSkeleton, { height: 48, marginBottom: spacing.sm, opacity }]} />
+        <Animated.View style={[styles.listItemSkeleton, { height: 48, marginBottom: spacing.sm, opacity }]} />
+        <Animated.View style={[styles.listItemSkeleton, { height: 48, opacity }]} />
+      </View>
+      <View style={[styles.listSkeleton, { marginTop: spacing.md }]}>
+        <Animated.View style={[styles.listItemSkeleton, { height: 44, marginBottom: spacing.sm, opacity }]} />
+        <Animated.View style={[styles.listItemSkeleton, { height: 44, marginBottom: spacing.sm, opacity }]} />
+        <Animated.View style={[styles.listItemSkeleton, { height: 44, opacity }]} />
+      </View>
+    </View>
+  );
+
   const renderSkeleton = () => {
     switch (type) {
       case 'event':
@@ -60,6 +85,8 @@ export const LoadingSkeleton: React.FC<LoadingSkeletonProps> = ({
         return renderTaskSkeleton();
       case 'list':
         return renderListSkeleton();
+      case 'profile':
+        return renderProfileSkeleton();
       default:
         return renderEventSkeleton();
     }

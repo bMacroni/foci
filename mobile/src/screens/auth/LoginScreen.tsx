@@ -8,6 +8,7 @@ import { typography } from '../../themes/typography';
 import { spacing, borderRadius } from '../../themes/spacing';
 import { Input, PasswordInput, Button, ApiToggle } from '../../components/common';
 import { configService, ApiConfig } from '../../services/config';
+import { authService } from '../../services/auth';
 
 export default function LoginScreen({ navigation }: any) {
   const [email, setEmail] = useState('');
@@ -24,8 +25,16 @@ export default function LoginScreen({ navigation }: any) {
         email,
         password,
       });
-      const { token } = response.data;
-      await AsyncStorage.setItem('authToken', token);
+      const { token, user } = response.data;
+      // Clear any stale session before storing the new one
+      await AsyncStorage.multiRemove(['auth_token', 'authToken', 'auth_user', 'authUser']);
+      await AsyncStorage.multiSet([
+        ['auth_token', token],
+        ['authToken', token],
+        ['auth_user', JSON.stringify(user || {})],
+        ['authUser', JSON.stringify(user || {})],
+      ]);
+      try { await authService.debugReinitialize(); } catch {}
       setLoading(false);
       navigation.replace('Main');
     } catch (err: any) {

@@ -8,9 +8,11 @@ import { typography } from '../../themes/typography';
 import { spacing, borderRadius } from '../../themes/spacing';
 import { Input, PasswordInput, Button, ApiToggle } from '../../components/common';
 import { configService } from '../../services/config';
+import { authService } from '../../services/auth';
 
 export default function SignupScreen({ navigation }: any) {
   const [email, setEmail] = useState('');
+  const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -23,10 +25,19 @@ export default function SignupScreen({ navigation }: any) {
       const response = await axios.post(`${baseUrl}/auth/signup`, {
         email,
         password,
+        full_name: fullName,
       });
       // If auto-login is successful, token will be present
       if (response.data.token) {
-        await AsyncStorage.setItem('authToken', response.data.token);
+        // Clear any stale session before storing the new one
+        await AsyncStorage.multiRemove(['auth_token', 'authToken', 'auth_user', 'authUser']);
+        await AsyncStorage.multiSet([
+          ['auth_token', response.data.token],
+          ['authToken', response.data.token],
+          ['auth_user', JSON.stringify(response.data.user || {})],
+          ['authUser', JSON.stringify(response.data.user || {})],
+        ]);
+        try { await authService.debugReinitialize(); } catch {}
         setLoading(false);
         navigation.replace('Main');
       } else {
@@ -71,6 +82,12 @@ export default function SignupScreen({ navigation }: any) {
         
         <ApiToggle />
         
+        <Input
+          placeholder="Full Name"
+          value={fullName}
+          onChangeText={setFullName}
+        />
+
         <Input
           placeholder="Email"
           value={email}

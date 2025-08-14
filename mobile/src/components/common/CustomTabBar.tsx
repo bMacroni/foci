@@ -26,6 +26,8 @@ export const CustomTabBar: React.FC<CustomTabBarProps> = ({ state, descriptors, 
         return 'checklist';
       case 'Calendar':
         return 'calendar';
+      case 'Profile':
+        return 'person';
       default:
         return 'comment-discussion';
     }

@@ -5,11 +5,14 @@ import {
   StyleSheet,
   Animated,
   TouchableOpacity,
+  Platform,
+  StatusBar,
 } from 'react-native';
 import { colors } from '../../themes/colors';
 import { spacing, borderRadius } from '../../themes/spacing';
 import { typography } from '../../themes/typography';
 import Icon from 'react-native-vector-icons/Octicons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface SuccessToastProps {
   visible: boolean;
@@ -32,6 +35,7 @@ export const SuccessToast: React.FC<SuccessToastProps> = ({
   actionLabel,
   onActionPress,
 }) => {
+  const insets = useSafeAreaInsets();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(-100)).current;
 
@@ -101,6 +105,11 @@ export const SuccessToast: React.FC<SuccessToastProps> = ({
         {
           opacity: fadeAnim,
           transform: [{ translateY: slideAnim }],
+          top: Platform.select({
+            android: (StatusBar.currentHeight || 0) + spacing.sm,
+            ios: Math.max(spacing.sm, insets.top) + spacing.sm,
+            default: spacing.sm,
+          }),
         },
       ]}
     >
@@ -147,27 +156,26 @@ export const SuccessToast: React.FC<SuccessToastProps> = ({
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    top: 60,
     left: spacing.md,
     right: spacing.md,
     zIndex: 1000,
   },
   toast: {
-    backgroundColor: colors.background.primary,
+    backgroundColor: '#F2F2F2',
     borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: colors.border.light,
-    shadowColor: colors.primary,
+    borderColor: '#E5E5E5',
+    shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 4,
+      height: 2,
     },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 6,
     flexDirection: 'row',
     alignItems: 'flex-start',
-    padding: spacing.md,
+    padding: spacing.sm,
   },
   iconContainer: {
     marginRight: spacing.sm,

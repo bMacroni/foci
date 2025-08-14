@@ -6,6 +6,7 @@ import BrainDumpRefinementScreen from '../screens/brain/BrainDumpRefinementScree
 import GoalsScreen from '../screens/goals/GoalsScreen';
 import { TasksScreen } from '../screens/tasks/TasksScreen';
 import CalendarScreen from '../screens/calendar/CalendarScreen';
+import ProfileScreen from '../screens/profile/ProfileScreen';
 import { CustomTabBar } from '../components/common/CustomTabBar';
 import { MainTabParamList } from './types';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -52,6 +53,11 @@ export default function TabNavigator() {
         name="Calendar" 
         component={CalendarScreen}
         options={{ title: 'Calendar' }}
+      />
+      <Tab.Screen 
+        name="Profile" 
+        component={ProfileScreen}
+        options={{ title: 'Profile' }}
       />
     </Tab.Navigator>
   );

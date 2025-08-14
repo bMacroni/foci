@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Platform, Animated, Dimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native';
 import Icon from 'react-native-vector-icons/Octicons';
 import axios from 'axios';
@@ -229,10 +230,7 @@ export default function AIChatScreen({ navigation, route }: any) {
     setOnboardingTimer(timer);
   }, [currentConversationId, hasUserInteracted, showOnboarding, sendOnboardingFollowUp]);
 
-  const handleSignOut = useCallback(async () => {
-    await AsyncStorage.removeItem('authToken');
-    navigation.replace('Login');
-  }, [navigation]);
+  // Sign out is handled from Profile screen now
 
   // Detect if a message contains schedule content
   const isScheduleContent = (text: string): boolean => {
@@ -749,6 +747,7 @@ export default function AIChatScreen({ navigation, route }: any) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <StatusBar barStyle="dark-content" backgroundColor={colors.secondary} animated />
                      <View style={styles.header}>
           <TouchableOpacity onPress={toggleSidebar} style={styles.menuButton}>
             <Icon name="three-bars" size={20} color={colors.text.primary} />
@@ -759,9 +758,6 @@ export default function AIChatScreen({ navigation, route }: any) {
           <View style={styles.headerActions}>
             <TouchableOpacity style={styles.helpButton} onPress={handleHelpPress}>
               <Icon name="question" size={20} color={colors.text.primary} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleSignOut} style={styles.signOutBtn}>
-              <Text style={styles.signOutText}>Sign Out</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -965,15 +961,7 @@ const styles = StyleSheet.create({
     color: colors.error,
     marginTop: spacing.sm,
   },
-  signOutBtn: {
-    padding: spacing.sm,
-    borderRadius: borderRadius.sm,
-    backgroundColor: colors.background.surface,
-  },
-  signOutText: {
-    color: colors.error,
-    fontWeight: typography.fontWeight.bold as any,
-  },
+  // sign out styles removed; sign out handled via Profile screen
   overlay: {
     position: 'absolute',
     top: 0,
