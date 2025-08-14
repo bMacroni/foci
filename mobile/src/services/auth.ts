@@ -269,8 +269,8 @@ class AuthService {
   // Logout user
   public async logout(): Promise<void> {
     try {
-      await AsyncStorage.removeItem('auth_token');
-      await AsyncStorage.removeItem('auth_user');
+      // Clear all possible keys to avoid stale sessions
+      await AsyncStorage.multiRemove(['auth_token', 'authToken', 'auth_user', 'authUser']);
       
       this.authState = {
         user: null,

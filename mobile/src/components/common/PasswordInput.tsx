@@ -58,6 +58,8 @@ const styles = StyleSheet.create({
   container: {
     position: 'relative',
     width: '100%',
+    maxWidth: 320,
+    alignSelf: 'center',
   },
   input: {
     paddingRight: 50, // Make room for the eye icon
@@ -65,7 +67,9 @@ const styles = StyleSheet.create({
   eyeIcon: {
     position: 'absolute',
     right: spacing.md,
-    top: 14, // Center vertically (48px height - 20px icon) / 2
-    zIndex: 1,
+    height: 48,
+    width: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 }); 

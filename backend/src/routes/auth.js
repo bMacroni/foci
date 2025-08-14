@@ -7,7 +7,7 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 // Signup endpoint
 router.post('/signup', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, full_name } = req.body;
     console.log('Signup attempt for email:', email);
 
     if (!email || !password) {
@@ -56,6 +56,21 @@ router.post('/signup', async (req, res) => {
           });
         }
 
+        // If we have a session, set initial profile fields (e.g., full_name) in public.users
+        try {
+          if (full_name) {
+            const authedSupabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+              global: { headers: { Authorization: `Bearer ${sessionData.session.access_token}` } }
+            });
+            await authedSupabase
+              .from('users')
+              .update({ full_name })
+              .eq('id', sessionData.user.id);
+          }
+        } catch (profileErr) {
+          console.warn('Failed to set initial full_name after signup:', profileErr?.message || profileErr);
+        }
+
         res.json({
           message: 'User created and logged in successfully',
           token: sessionData.session.access_token,
@@ -95,6 +110,19 @@ router.post('/login', async (req, res) => {
     if (error) {
       console.error('Login error:', error);
       return res.status(400).json({ error: error.message });
+    }
+
+    // Update last_login in users table for this user
+    try {
+      const authedSupabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+        global: { headers: { Authorization: `Bearer ${data.session.access_token}` } }
+      });
+      await authedSupabase
+        .from('users')
+        .update({ last_login: new Date().toISOString() })
+        .eq('id', data.user.id);
+    } catch (e) {
+      console.warn('Failed to update last_login:', e?.message || e);
     }
 
     res.json({

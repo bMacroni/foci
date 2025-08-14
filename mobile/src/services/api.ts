@@ -877,3 +877,26 @@ async function getAuthToken(): Promise<string> {
   }
   return token;
 }
+
+// Users API for profile endpoints
+export const usersAPI = {
+  getMe: async (): Promise<any> => {
+    const token = await getAuthToken();
+    const response = await fetch(`${configService.getBaseUrl()}/user/me`, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return response.json();
+  },
+  updateMe: async (payload: Partial<{ full_name: string; avatar_url: string; geographic_location: string; theme_preference: 'light'|'dark'; notification_preferences: any; }>): Promise<any> => {
+    const token = await getAuthToken();
+    const response = await fetch(`${configService.getBaseUrl()}/user/me`, {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return response.json();
+  }
+};
