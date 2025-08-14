@@ -250,7 +250,10 @@ export default function ProfileScreen({ navigation }: any) {
               await authService.logout();
               setToastMessage('Signed out');
               setToastVisible(true);
-              navigation.replace('Login');
+              // Allow toast to render before resetting navigation to Login
+              setTimeout(() => {
+                navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+              }, 900);
             } catch {}
           }}
         >
