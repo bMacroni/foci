@@ -13,7 +13,7 @@ interface QuickActionsProps {
 }
 
 export default function QuickActions({ actions, onActionPress, visible }: QuickActionsProps) {
-  if (!visible) return null;
+  if (!visible) {return null;}
 
   return (
     <View style={styles.container}>

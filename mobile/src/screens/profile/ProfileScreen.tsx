@@ -71,7 +71,7 @@ export default function ProfileScreen({ navigation }: any) {
   }, [load]);
 
   const toggleTheme = useCallback(async () => {
-    if (!profile) return;
+    if (!profile) {return;}
     setSaving(true);
     try {
       const next = profile.theme_preference === 'dark' ? 'light' : 'dark';

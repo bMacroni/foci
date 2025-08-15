@@ -106,7 +106,7 @@ export default function GoalFormScreen({ navigation, route }: any) {
   };
 
   const handleAiSubmit = async () => {
-    if (!title.trim()) return;
+    if (!title.trim()) {return;}
     
     setLoading(true);
     

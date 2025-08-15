@@ -22,7 +22,7 @@ export default function GoalTitlesDisplay({ text, onAction }: GoalTitlesDisplayP
       // Prefer JSON code block first
       const jsonBlock = input.match(/```json\s*(\{[\s\S]*?\})\s*```/i);
       const candidate = jsonBlock ? jsonBlock[1] : (input.match(/\{[\s\S]*\}/)?.[0] || null);
-      if (!candidate) return null;
+      if (!candidate) {return null;}
       const data = JSON.parse(candidate);
       if (data && data.category === 'goal' && Array.isArray(data.goals)) {
         const titles = data.goals.filter((g: any) => typeof g === 'string');
@@ -46,7 +46,7 @@ export default function GoalTitlesDisplay({ text, onAction }: GoalTitlesDisplayP
 
   const parsed = useMemo(() => parseTitles(text), [text]);
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
-  if (!parsed) return null;
+  if (!parsed) {return null;}
 
   return (
     <View style={styles.container}>

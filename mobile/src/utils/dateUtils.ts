@@ -172,7 +172,7 @@ export const isThisWeek = (date: Date): boolean => {
  * Check if a task is overdue
  */
 export const isOverdue = (dueDate: Date, status?: string): boolean => {
-  if (status === 'completed') return false;
+  if (status === 'completed') {return false;}
   return dueDate < new Date();
 };
 

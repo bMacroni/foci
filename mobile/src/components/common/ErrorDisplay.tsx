@@ -26,7 +26,7 @@ export const ErrorDisplay: React.FC<ErrorDisplayProps> = ({
   onAction,
   style,
 }) => {
-  if (!error) return null;
+  if (!error) {return null;}
 
   const getErrorStyle = () => {
     switch (error.severity) {
@@ -214,7 +214,7 @@ export const ErrorBanner: React.FC<ErrorDisplayProps> = ({
   onDismiss,
   onAction,
 }) => {
-  if (!error) return null;
+  if (!error) {return null;}
 
   return (
     <View style={bannerStyles.bannerContainer}>
@@ -253,7 +253,7 @@ export const ErrorModal: React.FC<ErrorDisplayProps & { visible: boolean }> = ({
   onDismiss,
   onAction,
 }) => {
-  if (!visible || !error) return null;
+  if (!visible || !error) {return null;}
 
   return (
     <View style={modalStyles.overlay}>

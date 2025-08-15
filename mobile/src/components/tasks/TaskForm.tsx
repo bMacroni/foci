@@ -220,7 +220,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
   };
 
   const getCategoryLabel = (category?: string) => {
-    if (!category) return 'Select category';
+    if (!category) {return 'Select category';}
     const option = categoryOptions.find(opt => opt.value === category);
     return option?.label || category;
   };
@@ -231,7 +231,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
   };
 
   const getGoalLabel = (goalId?: string) => {
-    if (!goalId) return 'Select a goal';
+    if (!goalId) {return 'Select a goal';}
     const goal = goals.find(g => g.id === goalId);
     return goal?.title || 'Unknown Goal';
   };

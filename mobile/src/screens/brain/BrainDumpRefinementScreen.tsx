@@ -55,9 +55,9 @@ export default function BrainDumpRefinementScreen({ navigation, route }: any) {
   }
 
   const createFocusTask = async (item: Item) => {
-    if (saving) return;
+    if (saving) {return;}
     const key = normalizeKey(item.text);
-    if (inFlightKeys.has(key)) return;
+    if (inFlightKeys.has(key)) {return;}
     setInFlightKeys(prev => new Set(prev).add(key));
     setSaving(true);
     try {
@@ -75,7 +75,7 @@ export default function BrainDumpRefinementScreen({ navigation, route }: any) {
         .filter(t => t.text !== item.text)
         .reduce((acc: Item[], cur) => {
           const k = normalizeKey(cur.text);
-          if (!acc.some(x => normalizeKey(x.text) === k)) acc.push(cur);
+          if (!acc.some(x => normalizeKey(x.text) === k)) {acc.push(cur);}
           return acc;
         }, []);
       if (remainder.length > 0) {
@@ -135,13 +135,13 @@ export default function BrainDumpRefinementScreen({ navigation, route }: any) {
   };
 
   const saveRemainderToInbox = async () => {
-    if (saving) return;
+    if (saving) {return;}
     setSaving(true);
     try {
       // De-dupe within the list on normalized title
       const uniqueTasks = tasks.reduce((acc: Item[], cur) => {
         const k = normalizeKey(cur.text);
-        if (!acc.some(x => normalizeKey(x.text) === k)) acc.push(cur);
+        if (!acc.some(x => normalizeKey(x.text) === k)) {acc.push(cur);}
         return acc;
       }, []);
       const savedCount = uniqueTasks.length;
@@ -175,7 +175,7 @@ export default function BrainDumpRefinementScreen({ navigation, route }: any) {
   };
 
   const setType = (target: Item, newType: 'task'|'goal') => {
-    if (target.type === newType) return;
+    if (target.type === newType) {return;}
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setEditedItems(prev => prev.map(it => {
       if (it.text === target.text) {
