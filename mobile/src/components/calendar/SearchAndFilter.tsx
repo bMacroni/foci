@@ -326,17 +326,17 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
 
   const getActiveFiltersCount = () => {
     let count = 0;
-    if (searchText) count++;
-    if (filterOptions.eventType !== 'all') count++;
-    if (filterOptions.priority !== 'all') count++;
-    if (filterOptions.status !== 'all') count++;
-    if (filterOptions.dateRange !== 'all') count++;
-    if (filterOptions.category) count++;
-    if (filterOptions.timeOfDay !== 'all') count++;
-    if (filterOptions.duration !== 'all') count++;
-    if (filterOptions.location !== 'all') count++;
-    if (filterOptions.recurring !== 'all') count++;
-    if (filterOptions.urgency !== 'all') count++;
+    if (searchText) {count++;}
+    if (filterOptions.eventType !== 'all') {count++;}
+    if (filterOptions.priority !== 'all') {count++;}
+    if (filterOptions.status !== 'all') {count++;}
+    if (filterOptions.dateRange !== 'all') {count++;}
+    if (filterOptions.category) {count++;}
+    if (filterOptions.timeOfDay !== 'all') {count++;}
+    if (filterOptions.duration !== 'all') {count++;}
+    if (filterOptions.location !== 'all') {count++;}
+    if (filterOptions.recurring !== 'all') {count++;}
+    if (filterOptions.urgency !== 'all') {count++;}
     return count;
   };
 

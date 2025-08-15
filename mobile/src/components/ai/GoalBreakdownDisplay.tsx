@@ -195,7 +195,7 @@ export default function GoalBreakdownDisplay({ text }: GoalBreakdownDisplayProps
             newMilestoneTitle = null;
           }
         }
-        if (newMilestoneTitle) break;
+        if (newMilestoneTitle) {break;}
       }
 
       if (newMilestoneTitle) {
@@ -310,7 +310,7 @@ const SM_LINE_HEIGHT = Math.round(typography.fontSize.sm * 1.6);
 
 // Local date formatting helper
 function formatDate(input?: string) {
-  if (!input) return '';
+  if (!input) {return '';}
   try {
     const d = new Date(input);
     if (!isNaN(d.getTime())) {

@@ -114,7 +114,7 @@ export default function ScheduleDisplay({ text }: ScheduleDisplayProps) {
           break; // Found a match, move to next line
         }
       }
-      if (matched) continue;
+      if (matched) {continue;}
 
       // Capture a standalone date line and associate it with subsequent items
       const dateLine = line.match(/^(?:on\s+)?([A-Za-z]+\s+\d{1,2},\s+\d{4})\b/i);
@@ -140,9 +140,9 @@ export default function ScheduleDisplay({ text }: ScheduleDisplayProps) {
 
   // Format time for display
   const formatTime = (time: string) => {
-    if (!time) return '';
+    if (!time) {return '';}
     // If time already looks like 12:34 PM keep it
-    if (/(AM|PM)$/i.test(time)) return time.toUpperCase();
+    if (/(AM|PM)$/i.test(time)) {return time.toUpperCase();}
     // Otherwise try to parse ISO
     const date = new Date(time);
     if (!isNaN(date.getTime())) {
@@ -152,14 +152,14 @@ export default function ScheduleDisplay({ text }: ScheduleDisplayProps) {
   };
 
   const parseDate = (dateStr?: string): Date | undefined => {
-    if (!dateStr) return undefined;
+    if (!dateStr) {return undefined;}
     const cleaned = String(dateStr)
       .replace(/^on\s+/i, '')
       .replace(/[,\.]\s*$/g, '')
       .trim();
     // Try native first
     const native = new Date(cleaned);
-    if (!isNaN(native.getTime())) return native;
+    if (!isNaN(native.getTime())) {return native;}
     // Manual parse: Month Day, Year (with optional comma or ordinal)
     const m = cleaned.match(/^(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$/i);
     if (m) {
@@ -181,7 +181,7 @@ export default function ScheduleDisplay({ text }: ScheduleDisplayProps) {
         december: 11, dec: 11,
       };
       const month = monthMap[monthName];
-      if (month !== undefined) return new Date(year, month, day);
+      if (month !== undefined) {return new Date(year, month, day);}
     }
     return undefined;
   };
@@ -189,15 +189,15 @@ export default function ScheduleDisplay({ text }: ScheduleDisplayProps) {
   const combineDateTime = (dateLabel: string | undefined, timeStr: string): Date | undefined => {
     // If time is ISO, just return parsed date
     const iso = new Date(timeStr);
-    if (!isNaN(iso.getTime())) return iso;
+    if (!isNaN(iso.getTime())) {return iso;}
     const d = parseDate(dateLabel);
-    if (!d) return undefined;
+    if (!d) {return undefined;}
     const [_, hrStr, minStr, ampm] = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i) || [];
-    if (!hrStr) return undefined;
+    if (!hrStr) {return undefined;}
     let hour = parseInt(hrStr, 10);
     const minute = parseInt(minStr, 10);
     const isPM = /PM/i.test(ampm);
-    if (hour === 12) hour = isPM ? 12 : 0; else if (isPM) hour += 12;
+    if (hour === 12) {hour = isPM ? 12 : 0;} else if (isPM) {hour += 12;}
     const combined = new Date(d.getFullYear(), d.getMonth(), d.getDate(), hour, minute, 0);
     return combined;
   };

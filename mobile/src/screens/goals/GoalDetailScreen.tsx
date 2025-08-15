@@ -37,11 +37,11 @@ export default function GoalDetailScreen({ navigation, route }: any) {
   }, [goalId, navigation]);
 
   const toggleMilestone = async (milestoneId: string) => {
-    if (!goal || !goal.milestones) return;
+    if (!goal || !goal.milestones) {return;}
     
     try {
       const milestone = goal.milestones.find((m: any) => m.id === milestoneId);
-      if (!milestone) return;
+      if (!milestone) {return;}
 
       const newCompleted = !milestone.completed;
       
@@ -62,11 +62,11 @@ export default function GoalDetailScreen({ navigation, route }: any) {
   };
 
   const toggleStep = async (milestoneId: string, stepId: string) => {
-    if (!goal || !goal.milestones) return;
+    if (!goal || !goal.milestones) {return;}
     try {
       const milestone = goal.milestones.find(m => m.id === milestoneId);
       const step = milestone?.steps?.find(s => s.id === stepId);
-      if (!step) return;
+      if (!step) {return;}
 
       const newCompleted = !step.completed;
       
@@ -96,7 +96,7 @@ export default function GoalDetailScreen({ navigation, route }: any) {
   };
 
   const calculateProgress = () => {
-    if (!goal || !goal.milestones) return { completedMilestones: 0, totalMilestones: 0, completedSteps: 0, totalSteps: 0 };
+    if (!goal || !goal.milestones) {return { completedMilestones: 0, totalMilestones: 0, completedSteps: 0, totalSteps: 0 };}
     
     const totalMilestones = goal.milestones.length;
     const completedMilestones = goal.milestones.filter(m => m.completed).length;

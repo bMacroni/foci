@@ -978,7 +978,7 @@ export const usersAPI = {
       method: 'GET',
       headers: { 'Authorization': `Bearer ${token}` },
     });
-    if (!response.ok) throw new Error(await response.text());
+    if (!response.ok) {throw new Error(await response.text());}
     return response.json();
   },
   updateMe: async (payload: Partial<{ full_name: string; avatar_url: string; geographic_location: string; theme_preference: 'light'|'dark'; notification_preferences: any; }>): Promise<any> => {
@@ -988,7 +988,7 @@ export const usersAPI = {
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    if (!response.ok) throw new Error(await response.text());
+    if (!response.ok) {throw new Error(await response.text());}
     return response.json();
   }
 };

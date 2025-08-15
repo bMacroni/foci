@@ -450,7 +450,7 @@ export default function AIChatScreen({ navigation, route }: any) {
   };
 
   const handleSend = useCallback(async () => {
-    if (!input.trim() || loading || !currentConversation) return;
+    if (!input.trim() || loading || !currentConversation) {return;}
     
     const userMessage = input.trim();
     setInput('');
@@ -546,13 +546,13 @@ export default function AIChatScreen({ navigation, route }: any) {
           /^please (help|assist) (me\s*)?(with\s*)?/i,
         ];
         let text = cleaned;
-        for (const p of prefixes) text = text.replace(p, '');
+        for (const p of prefixes) {text = text.replace(p, '');}
         // Remove trailing question marks/periods and limit length
         text = text.replace(/[?.!\s]+$/g, '').trim();
         // If it still contains leading "goal:" or quotes, strip them
         text = text.replace(/^goal:\s*/i, '').replace(/^"|"$/g, '').trim();
         // Shorten to ~32 chars if very long
-        if (text.length > 32) text = text.slice(0, 32).trim() + '…';
+        if (text.length > 32) {text = text.slice(0, 32).trim() + '…';}
         return text || 'Goal Help';
       };
       const inferredTitle = deriveTitle(initialMessage);

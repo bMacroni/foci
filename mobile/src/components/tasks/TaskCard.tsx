@@ -55,7 +55,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const [_isDeleting, _setIsDeleting] = React.useState(false);
 
   // helpers retained for future UI variants
-  /* eslint-disable @typescript-eslint/no-unused-vars */
+   
   const _getStatusColor = (status: string) => {
     switch (status) {
       case 'completed':
@@ -90,12 +90,12 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   };
 
   const _getPriorityText = (priority: string) => {
-    if (!priority) return 'Low';
+    if (!priority) {return 'Low';}
     return priority.charAt(0).toUpperCase() + priority.slice(1);
   };
 
   const formatDueDate = (dueDate?: string) => {
-    if (!dueDate) return null;
+    if (!dueDate) {return null;}
     const date = new Date(dueDate);
     const today = new Date();
     const tomorrow = new Date(today);
@@ -111,7 +111,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   };
 
   const formatScheduledTime = (dueDate?: string) => {
-    if (!dueDate) return null;
+    if (!dueDate) {return null;}
     const date = new Date(dueDate);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
@@ -159,7 +159,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         return 'not_started';
     }
   };
-  /* eslint-enable @typescript-eslint/no-unused-vars */
+   
 
   const handleToggleAutoSchedule = () => {
     if (onToggleAutoSchedule) {

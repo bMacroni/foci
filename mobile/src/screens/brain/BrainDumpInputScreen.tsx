@@ -37,7 +37,7 @@ export default function BrainDumpInputScreen({ navigation }: any) {
   const sanitizeText = (s: string) => String(s || '').replace(/\r?\n|\r/g, ' ').replace(/\s+/g, ' ').trim();
 
   const onSubmit = async () => {
-    if (!text.trim() || loading) return;
+    if (!text.trim() || loading) {return;}
     setLoading(true);
     setError('');
     try {
@@ -50,11 +50,11 @@ export default function BrainDumpInputScreen({ navigation }: any) {
         const map = new Map<string, any>();
         existing.forEach((it) => {
           const key = normalizeKey(it?.text);
-          if (key) map.set(key, { ...it, text: sanitizeText(it?.text) });
+          if (key) {map.set(key, { ...it, text: sanitizeText(it?.text) });}
         });
         (Array.isArray(items) ? (items as IncomingItem[]) : []).forEach((it) => {
           const key = normalizeKey(it?.text);
-          if (!key) return;
+          if (!key) {return;}
           if (!map.has(key)) {
             map.set(key, {
               text: sanitizeText(it?.text),

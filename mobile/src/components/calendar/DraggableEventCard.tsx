@@ -142,7 +142,7 @@ export const EventCard: React.FC<EventCardProps> = ({
   };
 
   const handleLongPress = () => {
-    if (!onReschedule) return;
+    if (!onReschedule) {return;}
     
     hapticFeedback.medium();
     const options = getRescheduleOptions();
@@ -229,7 +229,7 @@ export const EventCard: React.FC<EventCardProps> = ({
   };
 
   const handleCompleteTask = async () => {
-    if (!isTask) return;
+    if (!isTask) {return;}
     
     hapticFeedback.success();
     setCompleting(true);

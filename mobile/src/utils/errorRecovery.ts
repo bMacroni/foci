@@ -92,7 +92,7 @@ class ErrorRecoveryService {
   // Check if circuit breaker should transition to half-open
   private shouldTransitionToHalfOpen(endpoint: string): boolean {
     const state = this.getCircuitBreakerState(endpoint);
-    if (state !== CircuitBreakerState.OPEN) return false;
+    if (state !== CircuitBreakerState.OPEN) {return false;}
 
     const lastFailureTime = this.lastFailureTimes.get(endpoint) || 0;
     const timeSinceLastFailure = Date.now() - lastFailureTime;
@@ -198,7 +198,7 @@ class ErrorRecoveryService {
 
   // Classify error type
   private classifyError(error: any): ErrorType {
-    if (!error) return ErrorType.UNKNOWN;
+    if (!error) {return ErrorType.UNKNOWN;}
 
     const message = error.message || error.toString();
     const status = error.status || error.response?.status || 0;

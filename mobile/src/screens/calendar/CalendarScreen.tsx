@@ -582,7 +582,7 @@ export default function CalendarScreen() {
     const currentYear = state.selectedDate.getFullYear();
     
     return state.goals.filter(goal => {
-      if (!goal.target_completion_date) return false;
+      if (!goal.target_completion_date) {return false;}
       
       try {
         const goalDate = new Date(goal.target_completion_date);

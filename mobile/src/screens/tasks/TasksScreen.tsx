@@ -103,7 +103,7 @@ export const TasksScreen: React.FC = () => {
         // Dismiss spinner immediately; we will refresh in background
         setLoading(false);
       } else {
-        if (!silent) setLoading(true);
+        if (!silent) {setLoading(true);}
       }
 
       // Fetch fresh in parallel
@@ -434,20 +434,20 @@ export const TasksScreen: React.FC = () => {
   // End-of-day prompt logic: once per day if focus exists and is not completed
   useEffect(() => {
     const maybePromptEndOfDay = async () => {
-      if (loading) return;
+      if (loading) {return;}
       const focus = getFocusTask();
-      if (!focus) return;
+      if (!focus) {return;}
       const todayStr = new Date().toISOString().slice(0, 10);
       try {
         const lastPrompt = await AsyncStorage.getItem('lastEODPromptDate');
-        if (lastPrompt === todayStr) return;
+        if (lastPrompt === todayStr) {return;}
         if (focus.status !== 'completed') {
           setShowEodPrompt(true);
         }
       } catch {}
     };
     maybePromptEndOfDay();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [loading, tasks]);
 
   const markEodPrompted = async () => {
@@ -609,9 +609,9 @@ export const TasksScreen: React.FC = () => {
         }
         ListEmptyComponent={showInbox ? renderEmptyState : undefined}
         ListFooterComponent={() => {
-          if (!showInbox) return null;
+          if (!showInbox) {return null;}
           const completedTasks = getCompletedTasks();
-          if (completedTasks.length === 0) return null;
+          if (completedTasks.length === 0) {return null;}
           
           return (
             <View style={styles.completedSection}>
@@ -678,7 +678,7 @@ export const TasksScreen: React.FC = () => {
             <Text style={styles.eodSubtitle}>No pressure—want to mark it done, roll it over to today, or choose something new?</Text>
             {(() => {
               const focus = getFocusTask();
-              if (!focus) return null;
+              if (!focus) {return null;}
               return (
                 <View style={[styles.focusCard, { marginTop: spacing.sm }]}> 
                   <Text style={styles.focusTaskTitle}>{focus.title}</Text>

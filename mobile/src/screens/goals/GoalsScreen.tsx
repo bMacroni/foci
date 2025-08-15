@@ -61,6 +61,9 @@ export default function GoalsScreen({ navigation }: any) {
     isAuthenticated: false,
   });
   const [aiInput, setAiInput] = useState('');
+  const [aiFeedback, setAiFeedback] = useState('');
+  const [isRefinementMode, setIsRefinementMode] = useState(false);
+  const [aiInputHeights, setAiInputHeights] = useState<{ main?: number; feedback?: number }>({});
   const [showAiInput, setShowAiInput] = useState(false);
   const [showAiReview, setShowAiReview] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState<{
@@ -224,7 +227,7 @@ export default function GoalsScreen({ navigation }: any) {
         Alert.alert('Error', 'Failed to load goals. Please try again.');
       }
     } finally {
-      if (!paintedFromCache) setGoalsLoading(false);
+      if (!paintedFromCache) {setGoalsLoading(false);}
     }
   }, [navigation]);
 
@@ -265,14 +268,14 @@ export default function GoalsScreen({ navigation }: any) {
   }, [loadGoals]);
 
   const handleAiSubmit = async () => {
-    if (!aiInput.trim()) return;
+    if (!aiInput.trim()) {return;}
     
     setLoading(true);
     
     try {
       // Extract goal title and description from user input
       const goalTitle = aiInput.trim();
-      const goalDescription = ''; // Could be extracted from user input if they provide more details
+      const goalDescription = isRefinementMode && aiFeedback.trim() ? `User feedback for refinement: ${aiFeedback.trim()}` : '';
       
       // Call the AI breakdown generation API
       const breakdown = await goalsAPI.generateBreakdown({
@@ -298,6 +301,7 @@ export default function GoalsScreen({ navigation }: any) {
       setLoading(false);
       setShowAiInput(false);
       setShowAiReview(true);
+      setIsRefinementMode(false);
     } catch (error) {
       // error generating AI breakdown
       setLoading(false);
@@ -325,7 +329,7 @@ export default function GoalsScreen({ navigation }: any) {
   };
 
   const handleAcceptSuggestion = React.useCallback(async (options?: { openEdit?: boolean; goalOnly?: boolean }) => {
-    if (!aiSuggestion) return;
+    if (!aiSuggestion) {return;}
     
     try {
       setLoading(true);
@@ -399,13 +403,17 @@ export default function GoalsScreen({ navigation }: any) {
   const handleRedoSuggestion = () => {
     setShowAiReview(false);
     setShowAiInput(true);
-    // Keep the original input for refinement
+    // Keep the original input and invite user feedback
+    setAiFeedback('');
+    setIsRefinementMode(true);
   };
 
   const handleCancelSuggestion = () => {
     setAiSuggestion(null);
     setShowAiReview(false);
     setAiInput('');
+    setAiFeedback('');
+    setIsRefinementMode(false);
   };
 
   const handleGoalPress = (goalId: string) => {
@@ -466,7 +474,7 @@ export default function GoalsScreen({ navigation }: any) {
 
   const saveEditDate = async (goalId: string, pickedDate?: Date) => {
     const draft = pickedDate || dateDrafts[goalId];
-    if (!draft) return;
+    if (!draft) {return;}
     try {
       setLoading(true);
       await goalsAPI.updateGoal(goalId, { target_completion_date: draft.toISOString() } as any);
@@ -513,9 +521,9 @@ export default function GoalsScreen({ navigation }: any) {
 
   const saveEdits = async (goalId: string) => {
     const drafts = editDrafts[goalId];
-    if (!drafts) return;
+    if (!drafts) {return;}
     const original = goals.find((g) => g.id === goalId);
-    if (!original) return;
+    if (!original) {return;}
 
     try {
       setLoading(true);
@@ -537,10 +545,10 @@ export default function GoalsScreen({ navigation }: any) {
 
       // Update local state to reflect edits
       setGoals((prev) => prev.map((g) => {
-        if (g.id !== goalId) return g;
+        if (g.id !== goalId) {return g;}
         const updatedMilestones = g.milestones.map((m) => {
           const draft = drafts.find((dm) => dm.id === m.id);
-          if (!draft) return m;
+          if (!draft) {return m;}
           return {
             ...m,
             title: draft.title,
@@ -569,7 +577,7 @@ export default function GoalsScreen({ navigation }: any) {
     // Optimistic UI update
     let newCompleted = false;
     setGoals((prev) => prev.map((g) => {
-      if (g.id !== goalId) return g;
+      if (g.id !== goalId) {return g;}
       let completedSteps = 0;
       const updatedMilestones = g.milestones.map((m) => {
         if (m.id !== milestoneId) {
@@ -577,7 +585,7 @@ export default function GoalsScreen({ navigation }: any) {
           return m;
         }
         const updatedSteps = m.steps.map((s) => {
-          if (s.id !== stepId) return s;
+          if (s.id !== stepId) {return s;}
           newCompleted = !s.completed;
           return { ...s, completed: newCompleted };
         });
@@ -644,9 +652,9 @@ export default function GoalsScreen({ navigation }: any) {
   };
 
   const formatTargetDate = (date?: Date): { text: string; tone: 'muted' | 'warn' | 'danger' } => {
-    if (!date) return { text: 'No target', tone: 'muted' };
-    if (isPast(date) && !isToday(date)) return { text: 'Past target — tap to reschedule', tone: 'warn' };
-    if (isToday(date)) return { text: 'Due today', tone: 'warn' };
+    if (!date) {return { text: 'No target', tone: 'muted' };}
+    if (isPast(date) && !isToday(date)) {return { text: 'Past target — tap to reschedule', tone: 'warn' };}
+    if (isToday(date)) {return { text: 'Due today', tone: 'warn' };}
     const distance = formatDistanceToNow(date, { addSuffix: true });
     // If within ~7 days, keep relative string; else show absolute
     const withinWeek = /\b(day|hour|minute|week)\b/.test(distance);
@@ -663,7 +671,7 @@ export default function GoalsScreen({ navigation }: any) {
     return [...arr].sort((a, b) => {
       const aDate = a.targetDate ? a.targetDate.getTime() : Number.MAX_SAFE_INTEGER;
       const bDate = b.targetDate ? b.targetDate.getTime() : Number.MAX_SAFE_INTEGER;
-      if (aDate !== bDate) return aDate - bDate;
+      if (aDate !== bDate) {return aDate - bDate;}
       const aCreated = a.createdAt ? new Date(a.createdAt).getTime() : 0;
       const bCreated = b.createdAt ? new Date(b.createdAt).getTime() : 0;
       return aCreated - bCreated;
@@ -1108,43 +1116,44 @@ export default function GoalsScreen({ navigation }: any) {
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Checking authentication...</Text>
           <Text style={styles.debugText}>Debug: {authState.isAuthenticated ? 'Authenticated' : 'Not Authenticated'}</Text>
-          <Button
-            title="Debug: Force Not Authenticated"
-            onPress={() => {
-              // debug: forcing not authenticated
-              setAuthState({
-                user: null,
-                token: null,
-                isLoading: false,
-                isAuthenticated: false,
-              });
-            }}
-            variant="secondary"
-            style={styles.debugButton}
-          />
-                                  <Button
-                          title="Debug: Force Authenticated"
-                          onPress={() => {
-                            // debug: forcing authenticated
-                            setAuthState({
-                              user: { id: 'debug-user', email: 'debug@test.com' },
-                              token: 'debug-token',
-                              isLoading: false,
-                              isAuthenticated: true,
-                            });
-                          }}
-                          variant="secondary"
-                          style={styles.debugButton}
-                        />
-                        <Button
-                          title="Debug: Re-initialize Auth"
-                          onPress={async () => {
-                            // debug: re-initializing auth
-                            await authService.debugReinitialize();
-                          }}
-                          variant="secondary"
-                          style={styles.debugButton}
-                        />
+          {__DEV__ && (
+            <>
+              <Button
+                title="Debug: Force Not Authenticated"
+                onPress={() => {
+                  setAuthState({
+                    user: null,
+                    token: null,
+                    isLoading: false,
+                    isAuthenticated: false,
+                  });
+                }}
+                variant="secondary"
+                style={styles.debugButton}
+              />
+              <Button
+                title="Debug: Force Authenticated"
+                onPress={() => {
+                  setAuthState({
+                    user: { id: 'debug-user', email: 'debug@test.com' },
+                    token: 'debug-token',
+                    isLoading: false,
+                    isAuthenticated: true,
+                  });
+                }}
+                variant="secondary"
+                style={styles.debugButton}
+              />
+              <Button
+                title="Debug: Re-initialize Auth"
+                onPress={async () => {
+                  await authService.debugReinitialize();
+                }}
+                variant="secondary"
+                style={styles.debugButton}
+              />
+            </>
+          )}
         </View>
       </SafeAreaView>
     );
@@ -1295,14 +1304,43 @@ export default function GoalsScreen({ navigation }: any) {
                 onChangeText={setAiInput}
                 multiline
                 numberOfLines={3}
-                style={styles.aiInput}
+                textAlignVertical="top"
+                style={[
+                  styles.aiInput,
+                  aiInputHeights.main ? { height: aiInputHeights.main } : null,
+                ]}
+                onContentSizeChange={(e: any) => {
+                  const h = e?.nativeEvent?.contentSize?.height || 0;
+                  const clamped = Math.max(64, Math.min(h + 12, 220));
+                  setAiInputHeights((p) => ({ ...p, main: clamped }));
+                }}
               />
+              {isRefinementMode && (
+                <Input
+                  placeholder="Tell me what you didn't like about the previous breakdown and what to adjust..."
+                  value={aiFeedback}
+                  onChangeText={setAiFeedback}
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                  style={[
+                    styles.aiInput,
+                    aiInputHeights.feedback ? { height: aiInputHeights.feedback } : null,
+                  ]}
+                  onContentSizeChange={(e: any) => {
+                    const h = e?.nativeEvent?.contentSize?.height || 0;
+                    const clamped = Math.max(64, Math.min(h + 12, 220));
+                    setAiInputHeights((p) => ({ ...p, feedback: clamped }));
+                  }}
+                />
+              )}
               <View style={styles.aiInputActions}>
                 <Button
                   title="Cancel"
                   onPress={() => {
                     setShowAiInput(false);
                     setAiInput('');
+                    setAiFeedback('');
                   }}
                   variant="secondary"
                   style={styles.aiCancelButton}
@@ -1345,11 +1383,23 @@ export default function GoalsScreen({ navigation }: any) {
                 ))}
               </View>
               <View style={styles.aiReviewActions}>
-                <Button title="Accept & Edit" onPress={() => handleAcceptSuggestion({ openEdit: true })} style={styles.acceptButton} />
-                <Button title="Accept As-Is" onPress={() => handleAcceptSuggestion()} variant="outline" style={styles.acceptAsIsButton} />
-                <Button title="Accept Goal Only" onPress={() => handleAcceptSuggestion({ goalOnly: true, openEdit: true })} variant="outline" style={styles.redoButton} />
-                <Button title="Re-do" onPress={handleRedoSuggestion} variant="outline" style={styles.redoButton} />
-                <Button title="Cancel" onPress={handleCancelSuggestion} variant="secondary" style={styles.cancelButton} />
+                <View style={styles.fullWidth}>
+                  <Button title="Accept & Edit" onPress={() => handleAcceptSuggestion({ openEdit: true })} variant="primary" style={[styles.acceptButtonPrimary, styles.buttonFull]} />
+                </View>
+                <View style={styles.fullWidth}>
+                  <Button title="Accept As-Is" onPress={() => handleAcceptSuggestion()} variant="primary" style={[styles.acceptAsIsGold, styles.buttonFull]} />
+                </View>
+                <View style={styles.rowTwo}>
+                  <View style={styles.half}> 
+                    <Button title="Accept Goal Only" onPress={() => handleAcceptSuggestion({ goalOnly: true, openEdit: true })} variant="outline" style={styles.buttonFull} />
+                  </View>
+                  <View style={styles.half}>
+                    <Button title="Re-do" onPress={handleRedoSuggestion} variant="outline" style={styles.buttonFull} />
+                  </View>
+                </View>
+                <View style={styles.fullWidth}>
+                  <Button title="Cancel" onPress={handleCancelSuggestion} variant="secondary" style={[styles.buttonFull, styles.cancelButton]} />
+                </View>
               </View>
             </View>
           ) : null}
@@ -1500,7 +1550,8 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.base,
     color: colors.text.secondary,
     marginBottom: spacing.xs,
-    textAlign: 'center',
+    textAlign: 'left',
+    alignSelf: 'stretch',
   },
   aiButton: {
     minWidth: 120,
@@ -1603,18 +1654,26 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   aiReviewActions: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     gap: spacing.sm,
-    flexWrap: 'wrap',
   },
   acceptButton: {
     flex: 1,
-    backgroundColor: colors.success,
     minWidth: '45%',
   },
   acceptAsIsButton: {
     flex: 1,
     minWidth: '45%',
+  },
+  acceptButtonPrimary: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: colors.primary,
+  },
+  acceptAsIsGold: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: colors.accent?.gold || '#D4AF37',
   },
   redoButton: {
     flex: 1,
@@ -1623,6 +1682,20 @@ const styles = StyleSheet.create({
   cancelButton: {
     flex: 1,
     minWidth: '45%',
+  },
+  rowTwo: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  half: {
+    flex: 1,
+  },
+  fullWidth: {
+    width: '100%',
+  },
+  buttonFull: {
+    width: '100%',
+    maxWidth: '100%',
   },
   goalsSection: {
     marginBottom: spacing.lg,
