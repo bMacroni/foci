@@ -450,7 +450,7 @@ export default function AIChatScreen({ navigation, route }: any) {
   };
 
   const handleSend = useCallback(async () => {
-    if (!input.trim() || loading || !currentConversation) return;
+    if (!input.trim() || loading || !currentConversation) {return;}
     
     const userMessage = input.trim();
     setInput('');
@@ -546,13 +546,13 @@ export default function AIChatScreen({ navigation, route }: any) {
           /^please (help|assist) (me\s*)?(with\s*)?/i,
         ];
         let text = cleaned;
-        for (const p of prefixes) text = text.replace(p, '');
+        for (const p of prefixes) {text = text.replace(p, '');}
         // Remove trailing question marks/periods and limit length
         text = text.replace(/[?.!\s]+$/g, '').trim();
         // If it still contains leading "goal:" or quotes, strip them
         text = text.replace(/^goal:\s*/i, '').replace(/^"|"$/g, '').trim();
         // Shorten to ~32 chars if very long
-        if (text.length > 32) text = text.slice(0, 32).trim() + '…';
+        if (text.length > 32) {text = text.slice(0, 32).trim() + '…';}
         return text || 'Goal Help';
       };
       const inferredTitle = deriveTitle(initialMessage);
@@ -747,7 +747,7 @@ export default function AIChatScreen({ navigation, route }: any) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.secondary} animated />
+      <StatusBar barStyle="dark-content" backgroundColor={colors.background.primary} translucent={false} animated />
                      <View style={styles.header}>
           <TouchableOpacity onPress={toggleSidebar} style={styles.menuButton}>
             <Icon name="three-bars" size={20} color={colors.text.primary} />
@@ -861,7 +861,7 @@ export default function AIChatScreen({ navigation, route }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background.surface,
+    backgroundColor: colors.background.primary,
   },
   header: {
     flexDirection: 'row',

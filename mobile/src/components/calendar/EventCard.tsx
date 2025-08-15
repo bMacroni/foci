@@ -157,7 +157,7 @@ export const EventCard = React.memo<EventCardProps>(({
   };
 
   const handleLongPress = () => {
-    if (!onReschedule) return;
+    if (!onReschedule) {return;}
     
     hapticFeedback.medium();
     const options = getRescheduleOptions();
@@ -272,7 +272,7 @@ export const EventCard = React.memo<EventCardProps>(({
   };
 
   const handleCompleteTask = async () => {
-    if (!isTask) return;
+    if (!isTask) {return;}
     
     const isCurrentlyCompleted = task?.status === 'completed';
     const actionText = isCurrentlyCompleted ? 'uncompleting' : 'completing';

@@ -96,7 +96,7 @@ export const SuccessToast: React.FC<SuccessToastProps> = ({
     }
   };
 
-  if (!visible) return null;
+  if (!visible) {return null;}
 
   return (
     <Animated.View

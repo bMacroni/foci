@@ -88,7 +88,7 @@ export default function TaskDisplay({ text }: TaskDisplayProps) {
 
   // Format date for display
   const formatDate = (dateString?: string) => {
-    if (!dateString) return '';
+    if (!dateString) {return '';}
     try {
       const date = new Date(dateString);
       return date.toLocaleDateString('en-US', { 
@@ -117,9 +117,9 @@ export default function TaskDisplay({ text }: TaskDisplayProps) {
 
   const handleToggleComplete = async (taskId: string) => {
     const index = items.findIndex(t => t.id === taskId);
-    if (index === -1) return;
+    if (index === -1) {return;}
     const current = items[index];
-    if (!current?.id) return;
+    if (!current?.id) {return;}
     const newStatus: Task['status'] = current.status === 'completed' ? 'not_started' : 'completed';
     // Optimistic update by id (avoids filtered index mismatch)
     setItems(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));

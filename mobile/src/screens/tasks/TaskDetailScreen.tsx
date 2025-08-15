@@ -65,7 +65,7 @@ export const TaskDetailScreen: React.FC<TaskDetailScreenProps> = ({
   }, [taskId, loadTask]);
 
   const handleToggleStatus = async () => {
-    if (!task) return;
+    if (!task) {return;}
 
     try {
       setUpdating(true);
@@ -145,13 +145,13 @@ export const TaskDetailScreen: React.FC<TaskDetailScreenProps> = ({
   };
 
   const formatDueDate = (dueDate?: string) => {
-    if (!dueDate) return 'No due date';
+    if (!dueDate) {return 'No due date';}
     const date = new Date(dueDate);
     return date.toLocaleDateString();
   };
 
   const formatDuration = (minutes?: number) => {
-    if (!minutes) return 'Not specified';
+    if (!minutes) {return 'Not specified';}
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
     if (hours > 0) {

@@ -106,7 +106,7 @@ class OfflineService {
   async getCachedEvents(): Promise<CalendarEvent[] | null> {
     try {
       const cached = await AsyncStorage.getItem(STORAGE_KEYS.EVENTS_CACHE);
-      if (!cached) return null;
+      if (!cached) {return null;}
 
       const cacheData: CacheData<CalendarEvent[]> = JSON.parse(cached);
       const isExpired = Date.now() - cacheData.timestamp > CACHE_EXPIRATION;
@@ -135,7 +135,7 @@ class OfflineService {
   async getCachedTasks(): Promise<Task[] | null> {
     try {
       const cached = await AsyncStorage.getItem(STORAGE_KEYS.TASKS_CACHE);
-      if (!cached) return null;
+      if (!cached) {return null;}
 
       const cacheData: CacheData<Task[]> = JSON.parse(cached);
       const isExpired = Date.now() - cacheData.timestamp > CACHE_EXPIRATION;
@@ -164,7 +164,7 @@ class OfflineService {
   async getCachedGoals(): Promise<Goal[] | null> {
     try {
       const cached = await AsyncStorage.getItem(STORAGE_KEYS.GOALS_CACHE);
-      if (!cached) return null;
+      if (!cached) {return null;}
 
       const cacheData: CacheData<Goal[]> = JSON.parse(cached);
       const isExpired = Date.now() - cacheData.timestamp > CACHE_EXPIRATION;
@@ -238,7 +238,7 @@ class OfflineService {
 
   // Sync offline queue when back online
   async syncOfflineQueue(): Promise<void> {
-    if (this.isSyncing || !this.isOnline) return;
+    if (this.isSyncing || !this.isOnline) {return;}
 
     this.isSyncing = true;
     this.notifyListeners();

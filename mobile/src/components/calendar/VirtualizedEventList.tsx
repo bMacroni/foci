@@ -93,7 +93,7 @@ export const VirtualizedEventList: React.FC<VirtualizedEventListProps> = React.m
 
   // Render footer with load more button
   const renderFooter = useCallback(() => {
-    if (!showLoadMore || events.length === 0) return null;
+    if (!showLoadMore || events.length === 0) {return null;}
     
     return (
       <View style={styles.footer}>
