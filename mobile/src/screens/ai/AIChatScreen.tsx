@@ -747,7 +747,7 @@ export default function AIChatScreen({ navigation, route }: any) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.secondary} animated />
+      <StatusBar barStyle="dark-content" backgroundColor={colors.background.primary} translucent={false} animated />
                      <View style={styles.header}>
           <TouchableOpacity onPress={toggleSidebar} style={styles.menuButton}>
             <Icon name="three-bars" size={20} color={colors.text.primary} />
@@ -861,7 +861,7 @@ export default function AIChatScreen({ navigation, route }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background.surface,
+    backgroundColor: colors.background.primary,
   },
   header: {
     flexDirection: 'row',

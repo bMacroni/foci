@@ -85,6 +85,98 @@ export const goalsAPI = {
     }
   },
 
+  // Create a milestone under a goal
+  createMilestone: async (
+    goalId: string,
+    payload: { title: string; order: number }
+  ): Promise<{ id: string; title: string; order: number; steps: any[] }> => {
+    try {
+      const token = await getAuthToken();
+      const response = await fetch(`${configService.getBaseUrl()}/goals/${goalId}/milestones`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, body: ${text}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('🔍 API: Error creating milestone:', error);
+      throw error;
+    }
+  },
+
+  // Delete a milestone
+  deleteMilestone: async (milestoneId: string): Promise<void> => {
+    try {
+      const token = await getAuthToken();
+      const response = await fetch(`${configService.getBaseUrl()}/goals/milestones/${milestoneId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, body: ${text}`);
+      }
+    } catch (error) {
+      console.error('🔍 API: Error deleting milestone:', error);
+      throw error;
+    }
+  },
+
+  // Create a step under a milestone
+  createStep: async (
+    milestoneId: string,
+    payload: { text: string; order: number }
+  ): Promise<{ id: string; text: string; order: number }> => {
+    try {
+      const token = await getAuthToken();
+      const response = await fetch(`${configService.getBaseUrl()}/goals/milestones/${milestoneId}/steps`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, body: ${text}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('🔍 API: Error creating step:', error);
+      throw error;
+    }
+  },
+
+  // Delete a step
+  deleteStep: async (stepId: string): Promise<void> => {
+    try {
+      const token = await getAuthToken();
+      const response = await fetch(`${configService.getBaseUrl()}/goals/steps/${stepId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, body: ${text}`);
+      }
+    } catch (error) {
+      console.error('🔍 API: Error deleting step:', error);
+      throw error;
+    }
+  },
+
   // Create a new goal using real backend
   createGoal: async (goalData: Goal): Promise<Goal> => {
     try {
