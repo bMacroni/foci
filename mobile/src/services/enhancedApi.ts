@@ -98,6 +98,10 @@ class EnhancedAPI {
     endTime: string;
     timeZone?: string;
     location?: string;
+    eventType?: 'event'|'task'|'goal';
+    taskId?: string;
+    goalId?: string;
+    isAllDay?: boolean;
   }): Promise<any> {
     return this.makeRequest(
       `${configService.getBaseUrl()}/calendar/events`,
@@ -107,6 +111,10 @@ class EnhancedAPI {
         body: JSON.stringify({
           ...eventData,
           useSupabase: true,
+          eventType: eventData.eventType,
+          taskId: eventData.taskId,
+          goalId: eventData.goalId,
+          isAllDay: eventData.isAllDay,
         }),
       },
       ErrorCategory.CALENDAR,
@@ -121,6 +129,10 @@ class EnhancedAPI {
     endTime: string;
     timeZone?: string;
     location?: string;
+    eventType?: 'event'|'task'|'goal';
+    taskId?: string;
+    goalId?: string;
+    isAllDay?: boolean;
   }): Promise<any> {
     return this.makeRequest(
       `${configService.getBaseUrl()}/calendar/events/${eventId}`,
@@ -130,6 +142,10 @@ class EnhancedAPI {
         body: JSON.stringify({
           ...eventData,
           useSupabase: true,
+          eventType: eventData.eventType,
+          taskId: eventData.taskId,
+          goalId: eventData.goalId,
+          isAllDay: eventData.isAllDay,
         }),
       },
       ErrorCategory.CALENDAR,
