@@ -60,3 +60,10 @@
 
 ## Terminal
 - write all terminal commands for powershell
+
+## Branch Rules for Feature Branches (`feature_*`)
+- For all work on branches named `feature_*`:
+  - Always anchor scope and acceptance to a PRD in `C:\Users\bmcor\MindGarden\mindgarden\FeaturePRD`.
+  - In every proposal, code edit summary, and commit message, include a PRD citation by path and either heading or line range.
+  - Include a “Refs: FeaturePRDs/<file>.md Lx–Ly” line in commit messages and PR descriptions.
+  - If multiple PRDs apply, state precedence (north star first). If anything is ambiguous, call out the exact PRD lines and document the assumption before proceeding.
