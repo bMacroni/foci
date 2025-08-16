@@ -22,4 +22,6 @@ LEFT JOIN public.task_scheduling_history tsh ON u.id = tsh.user_id
 GROUP BY u.id, u.email, u.full_name, usp.auto_scheduling_enabled, usp.max_tasks_per_day;
 
 -- Grant permissions
-GRANT ALL ON public.auto_scheduling_dashboard TO anon, authenticated; 
+GRANT ALL ON public.auto_scheduling_dashboard TO anon, authenticated;
+
+

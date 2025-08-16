@@ -71,4 +71,6 @@ $$ LANGUAGE plpgsql;
 
 COMMENT ON TABLE public.user_notifications IS 'Stores user notifications for auto-scheduling events and other system notifications';
 COMMENT ON COLUMN public.user_notifications.type IS 'Type of notification: auto_scheduling_completed, auto_scheduling_error, weather_conflict, calendar_conflict, generic';
-COMMENT ON COLUMN public.user_notifications.details IS 'Additional JSON data for the notification (e.g., task lists, error details)'; 
+COMMENT ON COLUMN public.user_notifications.details IS 'Additional JSON data for the notification (e.g., task lists, error details)';
+
+

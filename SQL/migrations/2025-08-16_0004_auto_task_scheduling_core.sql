@@ -138,4 +138,6 @@ COMMENT ON COLUMN public.tasks.weather_dependent IS 'Whether this task depends o
 COMMENT ON COLUMN public.tasks.location IS 'Task location for weather and travel time calculations';
 COMMENT ON COLUMN public.tasks.preferred_time_windows IS 'Preferred time windows for scheduling this task';
 COMMENT ON COLUMN public.tasks.max_daily_tasks IS 'Maximum number of tasks per day for this user';
-COMMENT ON COLUMN public.tasks.buffer_time_minutes IS 'Buffer time in minutes between tasks'; 
+COMMENT ON COLUMN public.tasks.buffer_time_minutes IS 'Buffer time in minutes between tasks';
+
+

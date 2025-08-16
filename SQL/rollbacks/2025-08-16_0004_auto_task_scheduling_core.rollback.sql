@@ -48,4 +48,6 @@ DROP COLUMN IF EXISTS buffer_time_minutes,
 DROP COLUMN IF EXISTS task_type;
 
 -- Drop the task_type enum
-DROP TYPE IF EXISTS task_type; 
+DROP TYPE IF EXISTS task_type;
+
+

@@ -91,4 +91,6 @@ CREATE INDEX idx_milestones_goal_id ON public.milestones(goal_id);
 CREATE INDEX idx_milestones_order ON public.milestones("order");
 CREATE INDEX idx_steps_milestone_id ON public.steps(milestone_id);
 CREATE INDEX idx_steps_order ON public.steps("order");
-CREATE INDEX idx_steps_completed ON public.steps(completed); 
+CREATE INDEX idx_steps_completed ON public.steps(completed);
+
+
