@@ -757,24 +757,7 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
         </Animated.View>
       </View>
 
-      {/* Quick Filters */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickFiltersContainer}>
-        {renderFilterChip('Today', 'today', () => 
-          setFilterOptions(prev => ({ ...prev, dateRange: 'today' }))
-        )}
-        {renderFilterChip('Upcoming', 'upcoming', () => 
-          setFilterOptions(prev => ({ ...prev, dateRange: 'upcoming' }))
-        )}
-        {renderFilterChip('Urgent', 'urgent', () => 
-          setFilterOptions(prev => ({ ...prev, urgency: 'urgent' }))
-        )}
-        {renderFilterChip('Online', 'online', () => 
-          setFilterOptions(prev => ({ ...prev, location: 'online' }))
-        )}
-        {renderFilterChip('Short', 'short', () => 
-          setFilterOptions(prev => ({ ...prev, duration: 'short' }))
-        )}
-      </ScrollView>
+      {/* Quick Filters removed per design update */}
 
       {renderFilterModal()}
     </View>

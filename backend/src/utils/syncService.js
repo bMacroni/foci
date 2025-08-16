@@ -42,6 +42,7 @@ export async function syncGoogleCalendarEvents(userId) {
           start_time: startTime,
           end_time: endTime,
           location: location || '',
+          event_type: 'event',
           updated_at: new Date().toISOString()
         }
       ], { onConflict: 'google_calendar_id,user_id' });
@@ -102,22 +103,21 @@ export async function getCalendarEventsFromDB(userId, maxResults = 100, timeMin 
       throw error;
     }
 
-    // Transform database format to match Google Calendar API format
+    // Transform database format to match frontend shape and include new fields
     return data.map(event => ({
-      id: event.id, // Use the database ID instead of google_calendar_id
+      id: event.id,
       summary: event.title,
       description: event.description,
-      start: {
-        dateTime: event.start_time,
-        timeZone: 'UTC' // We store in UTC, frontend will handle timezone conversion
-      },
-      end: {
-        dateTime: event.end_time,
-        timeZone: 'UTC'
-      },
+      start: { dateTime: event.start_time, timeZone: 'UTC' },
+      end: { dateTime: event.end_time, timeZone: 'UTC' },
       location: event.location,
       created: event.created_at,
-      updated: event.updated_at
+      updated: event.updated_at,
+      // Extra fields for client classification
+      event_type: event.event_type,
+      task_id: event.task_id,
+      goal_id: event.goal_id,
+      is_all_day: event.is_all_day
     }));
   } catch (error) {
     console.error('Error getting calendar events from database:', error);
