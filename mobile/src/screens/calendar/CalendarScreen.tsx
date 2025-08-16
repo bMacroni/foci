@@ -15,6 +15,7 @@ import { spacing } from '../../themes/spacing';
 import { Button } from '../../components/common/Button';
 import { EventCard } from '../../components/calendar/EventCard';
 import { EventFormModal } from '../../components/calendar/EventFormModal';
+import { GoalDueCard } from '../../components/goals/GoalDueCard';
 // import { VirtualizedEventList } from '../../components/calendar/VirtualizedEventList';
 import { OfflineIndicator } from '../../components/common/OfflineIndicator';
 import { ErrorDisplay, ErrorBanner } from '../../components/common/ErrorDisplay';
@@ -30,18 +31,21 @@ import {
   WeekViewEvent,
 } from '../../types/calendar';
 // import { Goal } from '../../services/api';
-import { formatDateToYYYYMMDD } from '../../utils/dateUtils';
+import { formatDateToYYYYMMDD, getLocalDateKey } from '../../utils/dateUtils';
 import { hapticFeedback } from '../../utils/hapticFeedback';
 import { LoadingSkeleton } from '../../components/common/LoadingSkeleton';
 import { 
   useFadeAnimation, 
   useScaleAnimation 
 } from '../../utils/animations';
+import { useNavigation } from '@react-navigation/native';
+import Icon from 'react-native-vector-icons/Octicons';
 
 // const { width } = Dimensions.get('window');
 
 export default function CalendarScreen() {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<any>();
   const dayViewScrollRef = useRef<ScrollView>(null);
   
   // Animation hooks
@@ -504,14 +508,32 @@ export default function CalendarScreen() {
     loadCalendarData(1, false);
   }, [loadCalendarData]);
 
+  // Compute lapsed goals (overdue target date and not completed)
+  const getLapsedGoals = useCallback(() => {
+    const todayKey = formatDateToYYYYMMDD(new Date());
+    return state.goals.filter((goal: any) => {
+      if (!goal?.target_completion_date) {return false;}
+      try {
+        const goalKey = formatDateToYYYYMMDD(new Date(goal.target_completion_date));
+        const isOverdue = goalKey < todayKey;
+        const isCompleted = goal?.status === 'completed' || (Array.isArray(goal?.milestones) && goal.milestones.length > 0 && goal.milestones.every((m: any) => m.completed || ((m.steps || []).every((s: any) => s.completed))));
+        return isOverdue && !isCompleted;
+      } catch {
+        return false;
+      }
+    });
+  }, [state.goals]);
+
   // Get events for selected date
   const getEventsForSelectedDate = useCallback(() => {
     const selectedDateStr = formatDateToYYYYMMDD(state.selectedDate);
     const dayEvents: DayViewEvent[] = [];
+    const goalsDueToday: any[] = [];
 
-    // Add calendar events
+    // Add calendar events (skip goal markers)
     filteredEvents.forEach((event) => {
       try {
+        if ((event as any).event_type === 'goal') {return;}
         // Handle both database format and Google Calendar API format
         let eventStartTime: string;
         let eventEndTime: string;
@@ -532,7 +554,7 @@ export default function CalendarScreen() {
         }
 
         const eventDate = new Date(eventStartTime);
-        const eventDateStr = formatDateToYYYYMMDD(eventDate);
+        const eventDateStr = getLocalDateKey(eventDate);
         
         if (eventDateStr === selectedDateStr) {
           const dayEvent = {
@@ -542,7 +564,7 @@ export default function CalendarScreen() {
             endTime: new Date(eventEndTime),
             type: 'event' as const,
             data: event,
-            color: colors.primary,
+            color: colors.info,
           };
           dayEvents.push(dayEvent);
         }
@@ -556,7 +578,7 @@ export default function CalendarScreen() {
       if (task.due_date) {
         try {
           const taskDate = new Date(task.due_date);
-          if (formatDateToYYYYMMDD(taskDate) === selectedDateStr) {
+          if (getLocalDateKey(taskDate) === selectedDateStr) {
             dayEvents.push({
               id: task.id,
               title: task.title,
@@ -572,6 +594,20 @@ export default function CalendarScreen() {
         }
       }
     });
+
+    // Collect goals due today for a lightweight summary card in Day view
+    state.goals.forEach(goal => {
+      if (!goal.target_completion_date) {return;}
+      try {
+        const goalDate = new Date(goal.target_completion_date);
+        if (getLocalDateKey(goalDate) === selectedDateStr) {
+          goalsDueToday.push(goal);
+        }
+      } catch {}
+    });
+
+    // Attach as property for renderDayView to read (avoid prop threading for now)
+    (getEventsForSelectedDate as any)._goalsDueToday = goalsDueToday;
 
     return dayEvents.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
   }, [filteredEvents, filteredTasks, state.selectedDate]);
@@ -604,84 +640,57 @@ export default function CalendarScreen() {
 
   // Get marked dates for calendar
   const getMarkedDates = useCallback(() => {
-    const marked: any = {};
-    
-    // Mark dates with events
+    const marked: Record<string, { marked: boolean; dots: Array<{ color: string }> }> = {};
+
+    const ensureEntry = (date: string) => {
+      if (!marked[date]) {
+        marked[date] = { marked: true, dots: [] };
+      }
+      return marked[date];
+    };
+
+    // Events → blue dot (info) to match EventCard accents; skip goal markers
     filteredEvents.forEach(event => {
       try {
-        // Handle both database format and Google Calendar API format
-        let eventStartTime: string;
-        
+        let eventStartTime: string | undefined;
         if (event.start_time) {
-          // Database format
           eventStartTime = event.start_time;
         } else if (event.start?.dateTime) {
-          // Google Calendar API format
           eventStartTime = event.start.dateTime;
-        } else {
-          // invalid event format for marking
-          return;
         }
-
-        const date = formatDateToYYYYMMDD(new Date(eventStartTime));
-        if (!marked[date]) {
-          marked[date] = { marked: true, dotColor: colors.primary };
+        if (!eventStartTime) {return;}
+        // Skip goal markers in events array
+        if ((event as any).event_type === 'goal') {return;}
+        const date = getLocalDateKey(new Date(eventStartTime));
+        const entry = ensureEntry(date);
+        if (!entry.dots.some(d => d.color === colors.info)) {
+          entry.dots.push({ color: colors.info });
         }
-      } catch (error) {
-        // invalid event date
-      }
+      } catch {}
     });
 
-    // Mark dates with tasks
+    // Tasks → green dot (success)
     filteredTasks.forEach(task => {
-      if (task.due_date) {
-        try {
-          const date = formatDateToYYYYMMDD(new Date(task.due_date));
-          if (!marked[date]) {
-            marked[date] = { marked: true, dotColor: colors.success };
-          } else {
-            // If both event and task on same date, use different styling
-            marked[date] = { 
-              marked: true, 
-              dotColor: colors.primary,
-              dots: [
-                { color: colors.primary },
-                { color: colors.success }
-              ]
-            };
-          }
-        } catch (error) {
-          // invalid task date
+      if (!task.due_date) {return;}
+      try {
+        const date = getLocalDateKey(new Date(task.due_date));
+        const entry = ensureEntry(date);
+        if (!entry.dots.some(d => d.color === colors.success)) {
+          entry.dots.push({ color: colors.success });
         }
-      }
+      } catch {}
     });
 
-    // Mark dates with goals
+    // Goals → amber dot (warning)
     state.goals.forEach(goal => {
-      if (goal.target_completion_date) {
-        try {
-          const date = formatDateToYYYYMMDD(new Date(goal.target_completion_date));
-          if (!marked[date]) {
-            marked[date] = { marked: true, dotColor: colors.warning };
-          } else {
-            // If multiple items on same date, add to dots array
-            if (marked[date].dots) {
-              marked[date].dots.push({ color: colors.warning });
-            } else {
-              marked[date] = { 
-                marked: true, 
-                dotColor: colors.primary,
-                dots: [
-                  { color: colors.primary },
-                  { color: colors.warning }
-                ]
-              };
-            }
-          }
-        } catch (error) {
-          // invalid goal date
+      if (!goal.target_completion_date) {return;}
+      try {
+        const date = getLocalDateKey(new Date(goal.target_completion_date));
+        const entry = ensureEntry(date);
+        if (!entry.dots.some(d => d.color === colors.warning)) {
+          entry.dots.push({ color: colors.warning });
         }
-      }
+      } catch {}
     });
 
     return marked;
@@ -692,6 +701,7 @@ export default function CalendarScreen() {
     
     // Get events for the selected date
     const dayEvents = getEventsForSelectedDate();
+    const goalsDueToday: any[] = (getEventsForSelectedDate as any)._goalsDueToday || [];
     // day view rendering
     
     // Group events by time blocks (6-hour segments)
@@ -775,7 +785,19 @@ export default function CalendarScreen() {
           })}
         </Text>
         
-        {dayEvents.length === 0 ? (
+        {/* Goals due today (show at top before time blocks) */}
+        {goalsDueToday.length > 0 && (
+          <View style={{ marginBottom: spacing.md }}>
+            <Text style={styles.timeBlockTitle}>Goals Due</Text>
+            <View style={{ marginTop: spacing.xs }}>
+              {goalsDueToday.map(goal => (
+                <GoalDueCard key={goal.id} goal={goal} />
+              ))}
+            </View>
+          </View>
+        )}
+
+        {dayEvents.length === 0 && goalsDueToday.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateText}>No events scheduled for this day</Text>
             <Button
@@ -819,6 +841,8 @@ export default function CalendarScreen() {
             </View>
           ))
         )}
+
+        
       </ScrollView>
     );
   }, [handleCreateEvent, handleEventDelete, handleEventEdit, handleReschedule, handleTaskComplete, onRefresh, refreshing, state.selectedDate, getEventsForSelectedDate]);
@@ -841,7 +865,7 @@ export default function CalendarScreen() {
     for (let i = 0; i < 7; i++) {
       const currentDate = new Date(weekStart);
       currentDate.setDate(currentDate.getDate() + i);
-      const dateStr = formatDateToYYYYMMDD(currentDate);
+      const dateStr = getLocalDateKey(currentDate);
       
       dateGroups.push({
         date: currentDate,
@@ -856,7 +880,7 @@ export default function CalendarScreen() {
       try {
         // Handle both database format and Google Calendar API format
         const eventDate = new Date(event.start_time || event.start?.dateTime || '');
-        const eventDateStr = formatDateToYYYYMMDD(eventDate);
+        const eventDateStr = getLocalDateKey(eventDate);
         
         const group = dateGroups.find(g => g.dateString === eventDateStr);
         if (group) {
@@ -881,7 +905,7 @@ export default function CalendarScreen() {
       if (task.due_date) {
         try {
           const taskDate = new Date(task.due_date);
-          const taskDateStr = formatDateToYYYYMMDD(taskDate);
+          const taskDateStr = getLocalDateKey(taskDate);
           
           const group = dateGroups.find(g => g.dateString === taskDateStr);
           if (group) {
@@ -907,6 +931,35 @@ export default function CalendarScreen() {
       group.events.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
     });
     
+    // Add a compact goal-due entry into each group's end if any goal is due that day
+    state.goals.forEach(goal => {
+      if (!goal.target_completion_date) {return;}
+      try {
+        const goalDateStr = getLocalDateKey(new Date(goal.target_completion_date));
+        const group = dateGroups.find(g => g.dateString === goalDateStr);
+        if (group) {
+          group.events.push({
+            id: `goal-${goal.id}`,
+            title: `Goal Due: ${goal.title}`,
+            startTime: group.date,
+            endTime: group.date,
+            day: group.date.getDay(),
+            type: 'event' as const,
+            // Pass a minimal CalendarEvent shape so types are satisfied
+            data: {
+              id: `goal-${goal.id}`,
+              title: `Goal Due: ${goal.title}`,
+              description: goal.description,
+              start_time: group.date.toISOString(),
+              end_time: group.date.toISOString(),
+              location: undefined,
+            } as any,
+            color: colors.warning,
+          });
+        }
+      } catch {}
+    });
+
     // Filter out empty date groups or show them with empty state
     const nonEmptyGroups = dateGroups.filter(group => group.events.length > 0);
     const hasAnyEvents = nonEmptyGroups.length > 0;
@@ -980,14 +1033,35 @@ export default function CalendarScreen() {
   // Render month view
   const renderMonthView = () => {
     const monthGoals = getGoalsForCurrentMonth();
-    // month view rendering
-    
+    // Determine the next upcoming goal (by target date or created date), and derive current milestone and next step
+    const nextGoal = monthGoals
+      .filter(g => !!g)
+      .sort((a, b) => {
+        const aDate = a.target_completion_date ? new Date(a.target_completion_date).getTime() : Number.MAX_SAFE_INTEGER;
+        const bDate = b.target_completion_date ? new Date(b.target_completion_date).getTime() : Number.MAX_SAFE_INTEGER;
+        if (aDate !== bDate) {return aDate - bDate;}
+        const aCreated = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const bCreated = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return bCreated - aCreated;
+      })[0];
+
+    let currentMilestoneTitle: string | undefined;
+    let nextStepText: string | undefined;
+    if (nextGoal && (nextGoal as any).milestones?.length) {
+      const milestones = (nextGoal as any).milestones as Array<any>;
+      const activeMilestone = milestones.find(m => (m.steps || []).some((s: any) => !s.completed)) || milestones[0];
+      currentMilestoneTitle = activeMilestone?.title;
+      const step = (activeMilestone?.steps || []).find((s: any) => !s.completed) || (activeMilestone?.steps || [])[0];
+      nextStepText = step?.text || step?.title;
+    }
+
     return (
       <ScrollView style={styles.monthViewContainer}>
         <Calendar
           current={formatDateToYYYYMMDD(state.selectedDate)}
           onDayPress={handleDateSelect}
           markedDates={getMarkedDates()}
+          markingType="multi-dot"
           theme={{
             backgroundColor: colors.background.primary,
             calendarBackground: colors.background.primary,
@@ -1010,43 +1084,71 @@ export default function CalendarScreen() {
             textDayHeaderFontSize: typography.fontSize.sm,
           }}
         />
-        
-        {/* Month Goals Section */}
-        {monthGoals.length > 0 && (
-          <View style={styles.monthGoalsSection}>
-            <Text style={styles.monthGoalsTitle}>This Month's Goals</Text>
-            {monthGoals.map(goal => (
-              <View key={goal.id} style={styles.goalCard}>
-                <Text style={styles.goalTitle}>{goal.title}</Text>
-                {goal.description && (
-                  <Text style={styles.goalDescription}>{goal.description}</Text>
-                )}
-              </View>
-            ))}
+
+        {/* Dot legend */}
+        <View style={styles.legendContainer}>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: colors.info }]} />
+            <Text style={styles.legendLabel}>Events</Text>
           </View>
-        )}
-        
-        {/* Quick Actions */}
-        <View style={styles.quickActionsSection}>
-          <Text style={styles.quickActionsTitle}>Quick Actions</Text>
-          <View style={styles.quickActionsGrid}>
-            <TouchableOpacity
-              style={styles.quickActionButton}
-              onPress={handleCreateEvent}
-            >
-              <Text style={styles.quickActionButtonText}>Create Event</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.quickActionButton}
-              onPress={() => {
-                // Navigate to tasks screen or create task modal
-                // TODO: navigate to create task
-              }}
-            >
-              <Text style={styles.quickActionButtonText}>Create Task</Text>
-            </TouchableOpacity>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: colors.success }]} />
+            <Text style={styles.legendLabel}>Tasks</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: colors.warning }]} />
+            <Text style={styles.legendLabel}>Goals</Text>
           </View>
         </View>
+
+        {/* This Month's Focus (single upcoming goal) */}
+        {nextGoal && (
+          <View style={styles.monthGoalsSection}>
+            <Text style={styles.monthGoalsTitle}>This Month's Goal</Text>
+            <View style={styles.goalCard}>
+              <Text style={styles.goalTitle}>{nextGoal.title}</Text>
+              {nextGoal.description ? (
+                <Text style={styles.goalDescription}>{nextGoal.description}</Text>
+              ) : null}
+              {currentMilestoneTitle ? (
+                <View>
+                  <Text style={styles.goalProgressText}>Current Milestone</Text>
+                  <Text style={styles.goalTitle}>{currentMilestoneTitle}</Text>
+                </View>
+              ) : null}
+              {nextStepText ? (
+                <View style={{ marginTop: spacing.xs }}>
+                  <Text style={styles.goalProgressText}>Next Step</Text>
+                  <Text style={styles.goalDescription}>{nextStepText}</Text>
+                </View>
+              ) : null}
+            </View>
+
+            {/* Lapsed goals banner moved here */}
+            {(() => {
+              const lapsed = getLapsedGoals();
+              const count = lapsed.length;
+              if (count <= 0) {return null;}
+              return (
+                <View style={[styles.lapsedBanner, { marginTop: spacing.md }]}> 
+                  <View style={styles.lapsedLeft}>
+                    <Text style={styles.lapsedTitle}>Lapsed goals</Text>
+                    <Text style={styles.lapsedSubtitle}>{count} {count === 1 ? 'goal needs review' : 'goals need review'}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.lapsedButton}
+                    onPress={() => {
+                      try { navigation.navigate('Goals', { focus: 'needsReview' }); } catch {}
+                    }}
+                    activeOpacity={0.9}
+                  >
+                    <Text style={styles.lapsedButtonText}>Review</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })()}
+          </View>
+        )}
       </ScrollView>
     );
   };
@@ -1137,13 +1239,23 @@ export default function CalendarScreen() {
         ))}
       </View>
 
-      {/* Today Button */}
-      <TouchableOpacity
-        style={styles.todayButton}
-        onPress={handleTodayPress}
-      >
-        <Text style={styles.todayButtonText}>Today</Text>
-      </TouchableOpacity>
+      {/* Today + inline add (right) in the whitespace below view tabs and above filter */}
+      <View style={styles.topActionsRow}>
+        <TouchableOpacity
+          style={styles.todayButton}
+          onPress={handleTodayPress}
+        >
+          <Text style={styles.todayButtonText}>Today</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={handleCreateEvent}
+          style={styles.inlineAddTop}
+          activeOpacity={0.7}
+          accessibilityLabel="Create event"
+        >
+          <Icon name="plus" size={20} color={colors.text.secondary} />
+        </TouchableOpacity>
+      </View>
 
       {/* Search and Filter */}
       <SearchAndFilter
@@ -1155,6 +1267,7 @@ export default function CalendarScreen() {
 
       {/* Content with Animation */}
       <View style={styles.content}>
+        {/* Lapsed goals banner moved into month section above */}
         {state.error ? (
           <View style={styles.errorContainer}>
             <Text style={styles.errorText}>{state.error}</Text>
@@ -1192,14 +1305,7 @@ export default function CalendarScreen() {
         />
       )}
 
-      {/* Floating Action Button */}
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={handleCreateEvent}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.fabText}>+</Text>
-      </TouchableOpacity>
+      {/* Floating Action Button removed in favor of inline add icon */}
 
       {/* Event Form Modal */}
       <EventFormModal
@@ -1246,6 +1352,7 @@ const styles = StyleSheet.create({
   },
   viewSelector: {
     flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
@@ -1270,8 +1377,15 @@ const styles = StyleSheet.create({
   viewButtonTextActive: {
     color: colors.secondary,
   },
+  inlineAddButton: {
+    marginLeft: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: spacing.xs,
+    backgroundColor: 'transparent',
+  },
   todayButton: {
-    alignSelf: 'center',
+    alignSelf: 'flex-start',
     marginVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
@@ -1353,29 +1467,22 @@ const styles = StyleSheet.create({
   createButton: {
     marginTop: spacing.sm,
   },
-  fab: {
-    position: 'absolute',
-    bottom: spacing.xl,
-    right: spacing.xl,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  fabText: {
-    fontSize: typography.fontSize.xl,
-    fontWeight: typography.fontWeight.bold as any,
-    color: colors.secondary,
-  },
+  // Removed fab styles (inlineAddButton replaces it)
   eventsContainer: {
     marginTop: spacing.md,
+  },
+
+  // New row under tabs: Today on left, subtle add on right
+  topActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+  },
+  inlineAddTop: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: spacing.xs,
   },
 
   timeBlock: {
@@ -1551,6 +1658,69 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.primary,
     borderTopWidth: 1,
     borderTopColor: colors.border.light,
+  },
+  legendContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legendLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    fontWeight: typography.fontWeight.medium as any,
+  },
+  lapsedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
+    backgroundColor: colors.background.surface,
+    borderRadius: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+  },
+  lapsedLeft: {
+    flex: 1,
+    paddingRight: spacing.sm,
+  },
+  lapsedTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold as any,
+    color: colors.text.primary,
+    marginBottom: 2,
+  },
+  lapsedSubtitle: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+  },
+  lapsedButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: spacing.xs,
+  },
+  lapsedButtonText: {
+    color: colors.secondary,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium as any,
   },
   monthGoalsTitle: {
     fontSize: typography.fontSize.lg,

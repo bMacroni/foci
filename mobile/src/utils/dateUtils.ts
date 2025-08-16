@@ -11,6 +11,19 @@ export const formatDateToYYYYMMDD = (date: Date): string => {
 };
 
 /**
+ * Get a stable YYYY-MM-DD key for a given timestamp interpreted in the device's local timezone.
+ * This avoids subtle mismatches when comparing server UTC timestamps to local calendar days.
+ */
+export const getLocalDateKey = (input: string | Date): string => {
+  const d = typeof input === 'string' ? new Date(input) : input;
+  // Using local getters ensures the key matches UI local-day selection
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+/**
  * Get the start of a week (Sunday) for a given date
  */
 export const getWeekStart = (date: Date): Date => {

@@ -9,6 +9,7 @@ import { spacing, borderRadius } from '../../themes/spacing';
 import { Input, PasswordInput, Button, ApiToggle } from '../../components/common';
 import { configService, ApiConfig } from '../../services/config';
 import { authService } from '../../services/auth';
+import OwlLogo from '../../assets/icon.svg';
 
 export default function LoginScreen({ navigation }: any) {
   const [email, setEmail] = useState('');
@@ -50,9 +51,9 @@ export default function LoginScreen({ navigation }: any) {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
-        {/* Logo placeholder */}
+        {/* Logo */}
         <View style={styles.logoContainer}>
-          <Text style={styles.logoIcon}>📖</Text>
+          <OwlLogo width={220} height={220} />
         </View>
         <Text style={styles.title}>Welcome Back</Text>
         <Text style={styles.subtitle}>Sign in to your Foci account</Text>
@@ -115,9 +116,6 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     marginBottom: spacing.lg,
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.xl,
-    padding: spacing.md,
   },
   logoIcon: {
     fontSize: 32,

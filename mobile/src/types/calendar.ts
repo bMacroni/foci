@@ -6,6 +6,11 @@ export interface CalendarEvent {
   title?: string; // Database format
   summary?: string; // Google Calendar API format
   description?: string;
+  // Classification
+  event_type?: 'event' | 'task' | 'goal';
+  task_id?: string;
+  goal_id?: string;
+  is_all_day?: boolean;
   // Database format
   start_time?: string;
   end_time?: string;

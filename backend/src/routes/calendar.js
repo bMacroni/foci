@@ -123,7 +123,7 @@ router.get('/events/date', requireAuth, async (req, res) => {
 // Create a new calendar event (supports both Google Calendar and direct Supabase)
 router.post('/events', requireAuth, async (req, res) => {
   try {
-    const { summary, description, startTime, endTime, timeZone, location, useSupabase = false } = req.body;
+    const { summary, description, startTime, endTime, timeZone, location, useSupabase = false, eventType, taskId, goalId, isAllDay } = req.body;
 
     console.log('Creating calendar event:', { summary, startTime, endTime, useSupabase });
 
@@ -152,6 +152,10 @@ router.post('/events', requireAuth, async (req, res) => {
           start_time: startTime,
           end_time: endTime,
           location: location || '',
+          event_type: eventType || 'event',
+          task_id: taskId || null,
+          goal_id: goalId || null,
+          is_all_day: !!isAllDay,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
@@ -198,7 +202,7 @@ router.post('/events', requireAuth, async (req, res) => {
 router.put('/events/:eventId', requireAuth, async (req, res) => {
   try {
     const { eventId } = req.params;
-    const { summary, description, startTime, endTime, timeZone, location, useSupabase = false } = req.body;
+    const { summary, description, startTime, endTime, timeZone, location, useSupabase = false, eventType, taskId, goalId, isAllDay } = req.body;
 
     if (!summary || !startTime || !endTime) {
       return res.status(400).json({ 
@@ -216,6 +220,10 @@ router.put('/events/:eventId', requireAuth, async (req, res) => {
           start_time: startTime,
           end_time: endTime,
           location: location || '',
+          event_type: eventType || 'event',
+          task_id: taskId || null,
+          goal_id: goalId || null,
+          is_all_day: !!isAllDay,
           updated_at: new Date().toISOString(),
         })
         .eq('id', eventId)

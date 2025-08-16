@@ -85,10 +85,12 @@ export const EventCard = React.memo<EventCardProps>(({
         case 'low':
           return colors.success;
         default:
-          return colors.info;
+          // If no priority is set, default tasks to green to match calendar dots
+          return colors.success;
       }
     }
-    return colors.primary;
+    // Calendar events: use info color to distinguish from tasks
+    return colors.info;
   };
 
   const getEventTime = () => {
