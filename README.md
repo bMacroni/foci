@@ -1,6 +1,6 @@
-# Foci - AI-Powered Mental Health Productivity Platform
+# Foci - AI-Powered Productivity Platform
 
-Foci is an intelligent productivity platform designed to support users with anxiety and depression by providing AI-assisted goal setting, task management, and calendar integration with advanced automatic scheduling capabilities.
+Foci is an intelligent productivity platform designed to support users with ADHD by providing AI-assisted goal setting, task management, and calendar integration with advanced automatic scheduling capabilities.
 
 ## 🚀 Features
 
