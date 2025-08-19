@@ -9,6 +9,7 @@ import Icon from 'react-native-vector-icons/Octicons';
 import { SuccessToast } from '../../components/common/SuccessToast';
 import { tasksAPI } from '../../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useBrainDump } from '../../contexts/BrainDumpContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -155,15 +156,19 @@ const DropZone: React.FC<DropZoneProps> = ({ priority, children, isHighlighted, 
 
 export default function BrainDumpPrioritizationScreen({ navigation, route }: any) {
   const incomingTasks = (route?.params?.tasks as Array<{ text: string; priority: Priority; category?: string|null }> | undefined) ?? [];
+  const { items, clearSession } = useBrainDump();
   const seeded = React.useMemo<TaskItem[]>(() => {
     const now = Date.now();
-    return (Array.isArray(incomingTasks) ? incomingTasks : []).map((t, i) => ({
+    const source = (Array.isArray(incomingTasks) && incomingTasks.length > 0)
+      ? incomingTasks
+      : (Array.isArray(items) ? (items as any[]).filter((i: any) => (i?.type || '').toLowerCase() === 'task') : []);
+    return source.map((t: any, i: number) => ({
       id: `${now}-${i}-${t.text}`,
       text: t.text,
       priority: t.priority,
       category: t.category ?? null,
     }));
-  }, [incomingTasks]);
+  }, [incomingTasks, items]);
   
   const [tasks, setTasks] = useState<TaskItem[]>(seeded);
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -326,6 +331,7 @@ export default function BrainDumpPrioritizationScreen({ navigation, route }: any
       
       try { await AsyncStorage.multiRemove(['lastBrainDumpThreadId', 'lastBrainDumpItems', 'brainDumpPrioritizedTasks']); } catch {}
       try { await AsyncStorage.setItem('needsTasksRefresh', '1'); } catch {}
+      try { await clearSession(); } catch {}
       
       // Clear the UI on successful save
       setTasks([]);

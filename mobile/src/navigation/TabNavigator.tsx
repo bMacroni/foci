@@ -13,6 +13,8 @@ import ProfileScreen from '../screens/profile/ProfileScreen';
 import { CustomTabBar } from '../components/common/CustomTabBar';
 import { MainTabParamList } from './types';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { BrainDumpProvider } from '../contexts/BrainDumpContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
@@ -29,15 +31,35 @@ export default function TabNavigator() {
       <Tab.Screen 
         name="BrainDump" 
         options={{ title: 'Brain Dump' }}
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            (async () => {
+              try {
+                const [sessionStr, lastItemsStr] = await AsyncStorage.multiGet(['brainDumpSession', 'lastBrainDumpItems']).then(entries => entries.map(e => e[1]));
+                const sessionHasItems = (() => {
+                  try { const parsed = sessionStr ? JSON.parse(sessionStr) : null; return Array.isArray(parsed?.items) && parsed.items.length > 0; } catch { return false; }
+                })();
+                const lastHasItems = (() => {
+                  try { const parsed = lastItemsStr ? JSON.parse(lastItemsStr) : []; return Array.isArray(parsed) && parsed.length > 0; } catch { return false; }
+                })();
+                if (!sessionHasItems && !lastHasItems) {
+                  navigation.navigate('BrainDump', { screen: 'BrainDumpInput' });
+                }
+              } catch {}
+            })();
+          },
+        })}
       >
         {() => (
-          <BrainStack.Navigator screenOptions={{ headerShown: false }}>
-            <BrainStack.Screen name="BrainDumpEntry" component={BrainDumpEntryScreen} />
-            <BrainStack.Screen name="BrainDumpOnboarding" component={BrainDumpOnboardingScreen} />
-            <BrainStack.Screen name="BrainDumpInput" component={BrainDumpInputScreen} />
-            <BrainStack.Screen name="BrainDumpRefinement" component={BrainDumpRefinementScreen} />
-            <BrainStack.Screen name="BrainDumpPrioritization" component={BrainDumpPrioritizationScreen} />
-          </BrainStack.Navigator>
+          <BrainDumpProvider>
+            <BrainStack.Navigator screenOptions={{ headerShown: false }}>
+              <BrainStack.Screen name="BrainDumpEntry" component={BrainDumpEntryScreen} />
+              <BrainStack.Screen name="BrainDumpOnboarding" component={BrainDumpOnboardingScreen} />
+              <BrainStack.Screen name="BrainDumpInput" component={BrainDumpInputScreen} />
+              <BrainStack.Screen name="BrainDumpRefinement" component={BrainDumpRefinementScreen} />
+              <BrainStack.Screen name="BrainDumpPrioritization" component={BrainDumpPrioritizationScreen} />
+            </BrainStack.Navigator>
+          </BrainDumpProvider>
         )}
       </Tab.Screen>
       <Tab.Screen 

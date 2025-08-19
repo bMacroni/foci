@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, LayoutAnimation, Platform, UIManager, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BrainDumpSubNav from './BrainDumpSubNav';
@@ -8,13 +8,15 @@ import { spacing, borderRadius } from '../../themes/spacing';
 import { typography } from '../../themes/typography';
 import { tasksAPI } from '../../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useBrainDump } from '../../contexts/BrainDumpContext';
 import { SuccessToast } from '../../components/common/SuccessToast';
+import { useFocusEffect } from '@react-navigation/native';
 
 type Item = { text: string; type: 'task'|'goal'; confidence?: number; category?: string | null; stress_level: 'low'|'medium'|'high'; priority: 'low'|'medium'|'high' };
 
 export default function BrainDumpRefinementScreen({ navigation, route }: any) {
   const params = route?.params || {};
-  const [threadId, setThreadId] = useState<string>(params?.threadId || '');
+  const { threadId, setThreadId, items, setItems } = useBrainDump();
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState<'task'|'goal'>('task');
   const sanitizeText = (text: string): string => {
@@ -27,12 +29,13 @@ export default function BrainDumpRefinementScreen({ navigation, route }: any) {
 
   // Initialize with sanitized items if provided via route; otherwise we'll load from storage
   const [editedItems, setEditedItems] = useState<Item[]>(() =>
-    (Array.isArray(params?.items) ? (params.items as Item[]) : [])
-      .map(it => ({ ...it, text: sanitizeText(it.text) }))
-      .filter(it => it.text.length > 0)
+    (Array.isArray(params?.items) ? (params.items as Item[]) : (items as unknown as Item[]))
+      .map((it: Item) => ({ ...it, text: sanitizeText(it.text) }))
+      .filter((it: Item) => it.text.length > 0)
   );
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+  const [initialToastShown, setInitialToastShown] = useState(false);
   const [inFlightKeys, setInFlightKeys] = useState<Set<string>>(new Set());
 
   const list = useMemo(()=> Array.isArray(editedItems) ? editedItems : [], [editedItems]);
@@ -47,7 +50,7 @@ export default function BrainDumpRefinementScreen({ navigation, route }: any) {
         const [tid, itemsStr] = await AsyncStorage.multiGet(['lastBrainDumpThreadId', 'lastBrainDumpItems']).then(entries => entries.map(e => e[1]));
         const parsed = itemsStr ? JSON.parse(itemsStr) : [];
         if (tid) { setThreadId(tid); }
-        if (Array.isArray(parsed) && parsed.length > 0 && editedItems.length === 0) {
+        if (Array.isArray(parsed) && parsed.length > 0 && editedItems.length === 0 && (items?.length ?? 0) === 0) {
           setEditedItems(parsed.map((it: Item) => ({ ...it, text: sanitizeText((it as any)?.text) } as Item)).filter((it: Item) => it.text.length > 0));
         }
       } catch {}
@@ -55,17 +58,53 @@ export default function BrainDumpRefinementScreen({ navigation, route }: any) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Show toast if duplicates were removed on entry
+  useEffect(() => {
+    const count = Number(params?.duplicatesRemovedCount || 0);
+    if (!initialToastShown && count > 0) {
+      setToastMessage(count === 1 ? '1 item was already in your Tasks and was skipped.' : `${count} items were already in your Tasks and were skipped.`);
+      setToastVisible(true);
+      setInitialToastShown(true);
+    }
+  }, [params?.duplicatesRemovedCount, initialToastShown]);
+
   // Persist latest refinement session so user can return later
   useEffect(() => {
-    (async () => {
-      try {
-        await AsyncStorage.multiSet([
-          ['lastBrainDumpThreadId', threadId],
-          ['lastBrainDumpItems', JSON.stringify(editedItems)],
-        ]);
-      } catch {}
-    })();
-  }, [threadId, editedItems]);
+    setItems(editedItems as any);
+  }, [editedItems, setItems]);
+
+  // If the shared session is cleared (e.g., after Save & Finish), clear local list
+  useEffect(() => {
+    if ((items?.length ?? 0) === 0 && editedItems.length > 0) {
+      setEditedItems([]);
+    }
+  }, [items, editedItems.length]);
+
+  // On focus, re-check storage; if nothing is saved, clear local list
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        try {
+          const [sessionStr, lastItemsStr] = await AsyncStorage.multiGet(['brainDumpSession', 'lastBrainDumpItems']).then(entries => entries.map(e => e[1]));
+          const sessionHasItems = (() => {
+            try {
+              const parsed = sessionStr ? JSON.parse(sessionStr) : null;
+              return Array.isArray(parsed?.items) && parsed.items.length > 0;
+            } catch { return false; }
+          })();
+          const lastHasItems = (() => {
+            try {
+              const parsed = lastItemsStr ? JSON.parse(lastItemsStr) : [];
+              return Array.isArray(parsed) && parsed.length > 0;
+            } catch { return false; }
+          })();
+          if (!sessionHasItems && !lastHasItems) {
+            setEditedItems([]);
+          }
+        } catch {}
+      })();
+    }, [])
+  );
 
   // LayoutAnimation enabling is a no-op in the New Architecture; avoid calling to prevent warnings.
 
@@ -240,43 +279,41 @@ export default function BrainDumpRefinementScreen({ navigation, route }: any) {
         contentContainerStyle={{ padding: spacing.md }}
         renderItem={({ item }) => (
           <View style={styles.card}>
-            <View style={styles.row}>
-              {editingKey === item.text ? (
-                <TextInput
-                  style={styles.input}
-                  value={item.text}
-                  onChangeText={(t)=>onChangeItemText(item, t)}
-                  onBlur={()=>setEditingKey(null)}
-                  autoFocus
-                />
-              ) : (
-                <Text onPress={()=>setEditingKey(item.text)} style={styles.text} numberOfLines={3} ellipsizeMode="tail">{sanitizeText(item.text)}</Text>
-              )}
-              <View style={styles.badges}>
-                <View style={styles.segmented}>
-                  <TouchableOpacity
-                    onPress={() => setType(item, 'task')}
-                    activeOpacity={0.8}
-                    style={[styles.segment, item.type==='task' && styles.segmentActive]}
-                  >
-                    <Icon name="checklist" size={12} color={item.type==='task' ? colors.secondary : colors.text.secondary} style={{ marginRight: 4 }} />
-                    <Text style={[styles.segmentLabel, item.type==='task' && styles.segmentLabelActive]}>Task</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => setType(item, 'goal')}
-                    activeOpacity={0.8}
-                    style={[styles.segment, item.type==='goal' && styles.segmentActive]}
-                  >
-                    <Icon name="milestone" size={12} color={item.type==='goal' ? colors.secondary : colors.text.secondary} style={{ marginRight: 4 }} />
-                    <Text style={[styles.segmentLabel, item.type==='goal' && styles.segmentLabelActive]}>Goal</Text>
-                  </TouchableOpacity>
-                </View>
-                {!!item.category && (
-                  <View style={styles.badge}><Text style={styles.badgeText}>{item.category}</Text></View>
-                )}
-                <View style={[styles.badge, styles[item.priority]]}><Text style={[styles.badgeText, styles.badgeTextDark]}>{item.priority}</Text></View>
+            <View style={styles.badges}>
+              <View style={styles.segmented}>
+                <TouchableOpacity
+                  onPress={() => setType(item, 'task')}
+                  activeOpacity={0.8}
+                  style={[styles.segment, item.type==='task' && styles.segmentActive]}
+                >
+                  <Icon name="checklist" size={12} color={item.type==='task' ? colors.secondary : colors.text.secondary} style={{ marginRight: 4 }} />
+                  <Text style={[styles.segmentLabel, item.type==='task' && styles.segmentLabelActive]}>Task</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setType(item, 'goal')}
+                  activeOpacity={0.8}
+                  style={[styles.segment, item.type==='goal' && styles.segmentActive]}
+                >
+                  <Icon name="milestone" size={12} color={item.type==='goal' ? colors.secondary : colors.text.secondary} style={{ marginRight: 4 }} />
+                  <Text style={[styles.segmentLabel, item.type==='goal' && styles.segmentLabelActive]}>Goal</Text>
+                </TouchableOpacity>
               </View>
+              {!!item.category && (
+                <View style={styles.badge}><Text style={styles.badgeText}>{item.category}</Text></View>
+              )}
+              <View style={[styles.badge, styles[item.priority]]}><Text style={[styles.badgeText, styles.badgeTextDark]}>{item.priority}</Text></View>
             </View>
+            {editingKey === item.text ? (
+              <TextInput
+                style={[styles.input, { marginTop: spacing.xs }]}
+                value={item.text}
+                onChangeText={(t)=>onChangeItemText(item, t)}
+                onBlur={()=>setEditingKey(null)}
+                autoFocus
+              />
+            ) : (
+              <Text onPress={()=>setEditingKey(item.text)} style={styles.titleText} ellipsizeMode="tail">{sanitizeText(item.text)}</Text>
+            )}
             {item.type==='goal' ? (
               <TouchableOpacity onPress={() => startGoalBreakdown(item)}>
                 <Text style={styles.hint}>Tap to break this goal into tiny steps</Text>
@@ -316,9 +353,13 @@ const styles = StyleSheet.create({
   tabBtnActive: { backgroundColor: colors.primary },
   tabText: { color: colors.text.primary },
   tabTextActive: { color: colors.secondary, fontWeight: typography.fontWeight.bold },
+  tipBox: { marginHorizontal: spacing.md, marginTop: spacing.sm, padding: spacing.sm, backgroundColor: colors.secondary, borderWidth: 1, borderColor: colors.border.light, borderRadius: borderRadius.md },
+  tipText: { color: colors.text.secondary, fontSize: typography.fontSize.xs },
   card: { borderWidth: 1, borderColor: colors.border.light, backgroundColor: colors.secondary, borderRadius: borderRadius.md, padding: spacing.md, marginBottom: spacing.sm },
   row: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
   text: { color: colors.text.primary, fontSize: typography.fontSize.base, flex: 1, paddingRight: spacing.sm },
+  titleText: { color: colors.text.primary, fontSize: typography.fontSize.base, marginTop: spacing.xs },
+  input: { color: colors.text.primary, fontSize: typography.fontSize.base, flex: 1, paddingRight: spacing.sm, borderWidth: 1, borderColor: colors.border.light, backgroundColor: colors.secondary, borderRadius: borderRadius.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   badges: { flexDirection: 'row', alignItems: 'center' },
   badge: { borderWidth: 1, borderColor: colors.border.light, borderRadius: 999, paddingVertical: 2, paddingHorizontal: 8, marginLeft: spacing.xs },
   badgeType: { backgroundColor: '#E6E6E6', borderColor: '#D0D0D0' },

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BrainDumpSubNav from './BrainDumpSubNav';
@@ -6,8 +6,10 @@ import Icon from 'react-native-vector-icons/Octicons';
 import { colors } from '../../themes/colors';
 import { spacing, borderRadius } from '../../themes/spacing';
 import { typography } from '../../themes/typography';
-import { brainDumpAPI } from '../../services/api';
+import { brainDumpAPI, tasksAPI } from '../../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useBrainDump } from '../../contexts/BrainDumpContext';
+import { useFocusEffect } from '@react-navigation/native';
 
 type IncomingItem = {
   text: string;
@@ -23,6 +25,7 @@ export default function BrainDumpInputScreen({ navigation }: any) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [hasSavedRefinement, setHasSavedRefinement] = useState<boolean>(false);
+  const { items: sessionItems, setItems: setSessionItems, setThreadId } = useBrainDump();
 
   useEffect(() => {
     (async () => {
@@ -33,6 +36,20 @@ export default function BrainDumpInputScreen({ navigation }: any) {
       } catch {}
     })();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        try {
+          const tid = await AsyncStorage.getItem('lastBrainDumpThreadId');
+          const items = await AsyncStorage.getItem('lastBrainDumpItems');
+          setHasSavedRefinement(Boolean(tid && items));
+        } catch {
+          setHasSavedRefinement(false);
+        }
+      })();
+    }, [])
+  );
 
   const normalizeKey = (s: string) => String(s || '').replace(/\r?\n|\r/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
   const sanitizeText = (s: string) => String(s || '').replace(/\r?\n|\r/g, ' ').replace(/\s+/g, ' ').trim();
@@ -82,14 +99,37 @@ export default function BrainDumpInputScreen({ navigation }: any) {
           ),
         }));
       }
+      let duplicatesRemovedCount = 0;
       try {
+        // Remove items that already exist as tasks (by normalized title, excluding completed)
+        const existingTasks = await tasksAPI.getTasks();
+        const existingActiveTitles = new Set(
+          (Array.isArray(existingTasks) ? existingTasks : [])
+            .filter((t: any) => String(t?.status || '').toLowerCase() !== 'completed')
+            .map((t: any) => normalizeKey(t?.title))
+            .filter(Boolean)
+        );
+        const beforeCount = mergedItems.length;
+        mergedItems = mergedItems.filter((it: any) => {
+          const key = normalizeKey(it?.text);
+          // Only treat tasks as duplicates; keep goals
+          const isTask = (String(it?.type || 'task').toLowerCase() === 'task');
+          return !(isTask && existingActiveTitles.has(key));
+        });
+        duplicatesRemovedCount = Math.max(0, beforeCount - mergedItems.length);
+
         await AsyncStorage.multiSet([
           ['lastBrainDumpThreadId', threadId],
           ['lastBrainDumpItems', JSON.stringify(mergedItems)],
         ]);
         setHasSavedRefinement(true);
       } catch {}
-      navigation.navigate('BrainDumpRefinement', { threadId, items: mergedItems });
+      // Update shared session so SubNav enables Refine/Prioritize immediately
+      try {
+        setThreadId(threadId);
+        setSessionItems(mergedItems as any);
+      } catch {}
+      navigation.navigate('BrainDumpRefinement', { threadId, items: mergedItems, duplicatesRemovedCount });
     } catch (e: any) {
       setError(e?.message || 'Failed to process brain dump. Please try again.');
     } finally {
@@ -121,7 +161,12 @@ export default function BrainDumpInputScreen({ navigation }: any) {
           <View style={styles.headerRow}>
             <Text style={styles.title}>Guided Brain Dump</Text>
           </View>
-          <BrainDumpSubNav active="dump" navigation={navigation} canRefine={false} canPrioritize={false} />
+          <BrainDumpSubNav
+            active="dump"
+            navigation={navigation}
+            canRefine={(Array.isArray(sessionItems) && sessionItems.some((it: any) => (it?.type || '').toLowerCase() === 'task' || (it?.type || '').toLowerCase() === 'goal')) || hasSavedRefinement}
+            canPrioritize={(Array.isArray(sessionItems) && sessionItems.some((it: any) => (it?.type || '').toLowerCase() === 'task')) || hasSavedRefinement}
+          />
           <Text style={styles.subtitle}>Type anything that’s on your mind. We’ll gently help you turn it into one small, doable step.</Text>
           <TextInput
             style={styles.textarea}
