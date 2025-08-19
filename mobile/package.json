@@ -33,6 +33,7 @@
     "react-native-screens": "^4.13.0",
     "react-native-svg": "^15.12.1",
     "react-native-vector-icons": "^10.3.0",
+    "react-native-draggable-flatlist": "^4.0.1",
     "react-native-worklets": "^0.4.0",
     "yup": "^1.6.1"
   },
@@ -70,6 +71,7 @@
     "2025-08-14 CST: added dependency 'react-native-svg' to render circular progress ring in Goals screen redesign",
     "2025-08-14 CST: added dependency 'date-fns' for due-date formatting in Goals screen redesign",
     "2025-08-15 CST: upgraded devDependency 'eslint' to v9 flat config and added devDependency '@typescript-eslint/parser' for TS parsing",
-    "2025-08-16 CST: added devDependency 'react-native-svg-transformer' to enable importing .svg files as React components"
+    "2025-08-16 CST: added devDependency 'react-native-svg-transformer' to enable importing .svg files as React components",
+    "2025-08-18 CST: added dependency 'react-native-draggable-flatlist' for Brain Dump Prioritization draggable tasks list"
   ]
 }
