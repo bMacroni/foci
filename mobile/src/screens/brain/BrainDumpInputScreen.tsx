@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import BrainDumpSubNav from './BrainDumpSubNav';
 import Icon from 'react-native-vector-icons/Octicons';
 import { colors } from '../../themes/colors';
 import { spacing, borderRadius } from '../../themes/spacing';
@@ -119,19 +120,8 @@ export default function BrainDumpInputScreen({ navigation }: any) {
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.headerRow}>
             <Text style={styles.title}>Guided Brain Dump</Text>
-            {(navigation.canGoBack() || hasSavedRefinement) && (
-              <TouchableOpacity
-                style={styles.backRefineBtn}
-                onPress={handleBackToRefinement}
-                accessibilityRole="button"
-                accessibilityLabel="Back to refinement"
-                activeOpacity={0.8}
-              >
-                <Icon name="arrow-left" size={14} color={colors.text.primary} style={{ marginRight: spacing.xs }} />
-                <Text style={styles.backRefineText}>Back to Refinement</Text>
-              </TouchableOpacity>
-            )}
           </View>
+          <BrainDumpSubNav active="dump" navigation={navigation} canRefine={false} canPrioritize={false} />
           <Text style={styles.subtitle}>Type anything that’s on your mind. We’ll gently help you turn it into one small, doable step.</Text>
           <TextInput
             style={styles.textarea}

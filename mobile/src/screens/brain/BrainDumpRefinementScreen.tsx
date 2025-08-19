@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, LayoutAnimation, Platform, UIManager } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, LayoutAnimation, Platform, UIManager, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import BrainDumpSubNav from './BrainDumpSubNav';
 import Icon from 'react-native-vector-icons/Octicons';
 import { colors } from '../../themes/colors';
 import { spacing, borderRadius } from '../../themes/spacing';
@@ -12,7 +13,8 @@ import { SuccessToast } from '../../components/common/SuccessToast';
 type Item = { text: string; type: 'task'|'goal'; confidence?: number; category?: string | null; stress_level: 'low'|'medium'|'high'; priority: 'low'|'medium'|'high' };
 
 export default function BrainDumpRefinementScreen({ navigation, route }: any) {
-  const { items, threadId } = route.params as { items: Item[]; threadId: string };
+  const params = route?.params || {};
+  const [threadId, setThreadId] = useState<string>(params?.threadId || '');
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState<'task'|'goal'>('task');
   const sanitizeText = (text: string): string => {
@@ -23,9 +25,9 @@ export default function BrainDumpRefinementScreen({ navigation, route }: any) {
   };
   const normalizeKey = (text: string): string => sanitizeText(text).toLowerCase();
 
-  // Initialize with sanitized items (collapse newlines/whitespace, drop empties)
+  // Initialize with sanitized items if provided via route; otherwise we'll load from storage
   const [editedItems, setEditedItems] = useState<Item[]>(() =>
-    (Array.isArray(items) ? items : [])
+    (Array.isArray(params?.items) ? (params.items as Item[]) : [])
       .map(it => ({ ...it, text: sanitizeText(it.text) }))
       .filter(it => it.text.length > 0)
   );
@@ -36,6 +38,22 @@ export default function BrainDumpRefinementScreen({ navigation, route }: any) {
   const list = useMemo(()=> Array.isArray(editedItems) ? editedItems : [], [editedItems]);
   const tasks = useMemo(()=> list.filter(i=>i.type==='task'), [list]);
   const goals = useMemo(()=> list.filter(i=>i.type==='goal'), [list]);
+
+  // If navigated without params, try loading last session from AsyncStorage
+  useEffect(() => {
+    (async () => {
+      if ((params?.items && Array.isArray(params.items)) && params?.threadId) { return; }
+      try {
+        const [tid, itemsStr] = await AsyncStorage.multiGet(['lastBrainDumpThreadId', 'lastBrainDumpItems']).then(entries => entries.map(e => e[1]));
+        const parsed = itemsStr ? JSON.parse(itemsStr) : [];
+        if (tid) { setThreadId(tid); }
+        if (Array.isArray(parsed) && parsed.length > 0 && editedItems.length === 0) {
+          setEditedItems(parsed.map((it: Item) => ({ ...it, text: sanitizeText((it as any)?.text) } as Item)).filter((it: Item) => it.text.length > 0));
+        }
+      } catch {}
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Persist latest refinement session so user can return later
   useEffect(() => {
@@ -49,10 +67,7 @@ export default function BrainDumpRefinementScreen({ navigation, route }: any) {
     })();
   }, [threadId, editedItems]);
 
-  // Enable layout animation on Android for smoother toggle feedback
-  if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-    try { UIManager.setLayoutAnimationEnabledExperimental(true); } catch {}
-  }
+  // LayoutAnimation enabling is a no-op in the New Architecture; avoid calling to prevent warnings.
 
   const createFocusTask = async (item: Item) => {
     if (saving) {return;}
@@ -187,23 +202,25 @@ export default function BrainDumpRefinementScreen({ navigation, route }: any) {
     setToastVisible(true);
   };
 
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+
+  const onChangeItemText = (target: Item, text: string) => {
+    const sanitized = sanitizeText(text);
+    setEditedItems(prev => prev.map(it => (it === target || it.text === target.text) ? { ...it, text: sanitized } : it));
+  };
+
+  const goToPrioritize = () => {
+    if (tasks.length === 0) {return;}
+    const payload = tasks.map(t => ({ text: sanitizeText(t.text), priority: t.priority, category: t.category ?? undefined }));
+    navigation.navigate('BrainDumpPrioritization', { tasks: payload });
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.headerRow}>
         <Text style={styles.title}>Let’s pick one small step</Text>
-        <TouchableOpacity
-          style={styles.newDumpBtn}
-          onPress={() => {
-            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-            navigation.navigate('BrainDumpInput');
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Start a new brain dump"
-        >
-          <Icon name="plus" size={14} color={colors.text.primary} style={{ marginRight: 6 }} />
-          <Text style={styles.newDumpText}>New Brain Dump</Text>
-        </TouchableOpacity>
       </View>
+      <BrainDumpSubNav active="refine" navigation={navigation} canRefine={true} canPrioritize={tasks.length>0} />
       <View style={styles.tabs}>
         <TouchableOpacity style={[styles.tabBtn, tab==='task' && styles.tabBtnActive]} onPress={()=>setTab('task')}>
           <Text style={[styles.tabText, tab==='task' && styles.tabTextActive]}>Tasks ({tasks.length})</Text>
@@ -213,14 +230,28 @@ export default function BrainDumpRefinementScreen({ navigation, route }: any) {
         </TouchableOpacity>
       </View>
 
+      <View style={styles.tipBox}>
+        <Text style={styles.tipText}>Tip: Don't worry about getting it perfect. You can edit all details later.</Text>
+      </View>
+
       <FlatList
         data={tab==='task' ? tasks : goals}
         keyExtractor={(it, idx)=>`${idx}-${it.text}`}
         contentContainerStyle={{ padding: spacing.md }}
         renderItem={({ item }) => (
-          <TouchableOpacity style={styles.card} activeOpacity={0.8} onPress={() => (item.type==='task' ? createFocusTask(item) : startGoalBreakdown(item))}>
+          <View style={styles.card}>
             <View style={styles.row}>
-              <Text style={styles.text} numberOfLines={3} ellipsizeMode="tail">{sanitizeText(item.text)}</Text>
+              {editingKey === item.text ? (
+                <TextInput
+                  style={styles.input}
+                  value={item.text}
+                  onChangeText={(t)=>onChangeItemText(item, t)}
+                  onBlur={()=>setEditingKey(null)}
+                  autoFocus
+                />
+              ) : (
+                <Text onPress={()=>setEditingKey(item.text)} style={styles.text} numberOfLines={3} ellipsizeMode="tail">{sanitizeText(item.text)}</Text>
+              )}
               <View style={styles.badges}>
                 <View style={styles.segmented}>
                   <TouchableOpacity
@@ -246,22 +277,20 @@ export default function BrainDumpRefinementScreen({ navigation, route }: any) {
                 <View style={[styles.badge, styles[item.priority]]}><Text style={[styles.badgeText, styles.badgeTextDark]}>{item.priority}</Text></View>
               </View>
             </View>
-            {item.type==='task' ? (
-              <Text style={styles.hint}>Tap to make this Today’s Focus</Text>
+            {item.type==='goal' ? (
+              <TouchableOpacity onPress={() => startGoalBreakdown(item)}>
+                <Text style={styles.hint}>Tap to break this goal into tiny steps</Text>
+              </TouchableOpacity>
             ) : (
-              <Text style={styles.hint}>Tap to break this goal into tiny steps</Text>
+              <Text style={styles.hint}>Tap text to edit. Use toggles to mark as Task or Goal.</Text>
             )}
-          </TouchableOpacity>
+          </View>
         )}
       />
 
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.secondaryBtn} onPress={saveRemainderToInbox}>
-          <Icon name="inbox" size={16} color={colors.text.primary} style={{ marginRight: spacing.xs }} />
-          <Text style={styles.secondaryBtnText}>Save all to Inbox</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => navigation.navigate('AIChat', { threadId })}>
-          <Text style={styles.primaryBtnText}>Open Chat</Text>
+        <TouchableOpacity testID="nextPrioritizeButton" style={[styles.primaryBtn, (tasks.length===0) && { opacity: 0.6 }]} disabled={tasks.length===0} onPress={goToPrioritize}>
+          <Text style={styles.primaryBtnText}>Next: Prioritize Tasks</Text>
         </TouchableOpacity>
       </View>
 

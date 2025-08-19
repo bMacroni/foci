@@ -3,6 +3,9 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import AIChatScreen from '../screens/ai/AIChatScreen';
 import BrainDumpInputScreen from '../screens/brain/BrainDumpInputScreen';
 import BrainDumpRefinementScreen from '../screens/brain/BrainDumpRefinementScreen';
+import BrainDumpOnboardingScreen from '../screens/brain/BrainDumpOnboardingScreen';
+import BrainDumpPrioritizationScreen from '../screens/brain/BrainDumpPrioritizationScreen';
+import BrainDumpEntryScreen from '../screens/brain/BrainDumpEntryScreen';
 import GoalsScreen from '../screens/goals/GoalsScreen';
 import { TasksScreen } from '../screens/tasks/TasksScreen';
 import CalendarScreen from '../screens/calendar/CalendarScreen';
@@ -29,8 +32,11 @@ export default function TabNavigator() {
       >
         {() => (
           <BrainStack.Navigator screenOptions={{ headerShown: false }}>
+            <BrainStack.Screen name="BrainDumpEntry" component={BrainDumpEntryScreen} />
+            <BrainStack.Screen name="BrainDumpOnboarding" component={BrainDumpOnboardingScreen} />
             <BrainStack.Screen name="BrainDumpInput" component={BrainDumpInputScreen} />
             <BrainStack.Screen name="BrainDumpRefinement" component={BrainDumpRefinementScreen} />
+            <BrainStack.Screen name="BrainDumpPrioritization" component={BrainDumpPrioritizationScreen} />
           </BrainStack.Navigator>
         )}
       </Tab.Screen>
