@@ -77,7 +77,7 @@ const DraggableTask: React.FC<DraggableTaskProps> = ({ item, onDragStart, onDrag
   return (
     <Animated.View 
       {...panResponder.panHandlers}
-      style={[animatedStyle, { opacity: isDragging ? 0.8 : 1 }]}
+      style={[animatedStyle, { opacity: isDragging ? 0 : 1 }]}
     >
       <View style={[
         styles.card,
@@ -172,6 +172,7 @@ export default function BrainDumpPrioritizationScreen({ navigation, route }: any
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [showOverlay, setShowOverlay] = useState(false);
+  const [ghostPosition, setGhostPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   
   const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
   const zoneHeight = SCREEN_HEIGHT / 3;
@@ -276,6 +277,7 @@ export default function BrainDumpPrioritizationScreen({ navigation, route }: any
     }
     
     setHighlightedZone(targetZone);
+    setGhostPosition({ x: dropX, y: dropY });
   };
 
   // Group tasks by priority
@@ -285,6 +287,11 @@ export default function BrainDumpPrioritizationScreen({ navigation, route }: any
       medium: tasks.filter(t => t.priority === 'medium'),
       low: tasks.filter(t => t.priority === 'low')
     };
+  }, [tasks]);
+
+  const sortedTasks = useMemo(() => {
+    const weight: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
+    return [...tasks].sort((a, b) => weight[a.priority] - weight[b.priority]);
   }, [tasks]);
 
   const onSave = async () => {
@@ -347,12 +354,27 @@ export default function BrainDumpPrioritizationScreen({ navigation, route }: any
         <Text style={styles.infoText}>Drag tasks to the colored zones to set priority</Text>
       </View>
 
+      <View style={styles.legendRow}>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendSwatch, { backgroundColor: '#F44336' }]} />
+          <Text style={styles.legendText}>High</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendSwatch, { backgroundColor: '#FF9800' }]} />
+          <Text style={styles.legendText}>Medium</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendSwatch, { backgroundColor: '#4CAF50' }]} />
+          <Text style={styles.legendText}>Low</Text>
+        </View>
+      </View>
+
       <ScrollView 
         style={styles.zonesContainer}
         contentContainerStyle={styles.zonesContentContainer}
         showsVerticalScrollIndicator={false}
       >
-        {tasks.map(task => (
+        {sortedTasks.map(task => (
           <DraggableTask
             key={task.id}
             item={task}
@@ -377,6 +399,50 @@ export default function BrainDumpPrioritizationScreen({ navigation, route }: any
             <Text style={styles.overlayText}>Low Priority</Text>
           </View>
         </View>
+      )}
+
+      {/* Drag ghost rendered above everything */}
+      {draggingId && (
+        <Modal transparent visible animationType="none" statusBarTranslucent>
+          <View style={styles.ghostContainer} pointerEvents="none">
+            <Animated.View
+              style={{
+                position: 'absolute',
+                width: SCREEN_WIDTH - spacing.md * 2,
+                transform: [
+                  { translateX: ghostPosition.x - (SCREEN_WIDTH - spacing.md * 2) / 2 },
+                  { translateY: ghostPosition.y - 40 },
+                  { scale: 1.05 },
+                ],
+              }}
+            >
+              {(() => {
+                const t = tasks.find(it => it.id === draggingId);
+                if (!t) { return null; }
+                return (
+                  <View style={[
+                    styles.card,
+                    t.priority === 'high' && styles.cardHigh,
+                    t.priority === 'medium' && styles.cardMedium,
+                    t.priority === 'low' && styles.cardLow,
+                    { opacity: 0.95 },
+                  ]}>
+                    <View style={styles.row}>
+                      <View style={[
+                        styles.sectionStripe,
+                        t.priority === 'high' && styles.stripeHigh,
+                        t.priority === 'medium' && styles.stripeMedium,
+                        t.priority === 'low' && styles.stripeLow,
+                      ]} />
+                      <Text style={styles.text} numberOfLines={3} selectable={false}>{t.text}</Text>
+                      <Icon name="grabber" size={16} color={colors.text.secondary} style={{ marginLeft: 8 }} />
+                    </View>
+                  </View>
+                );
+              })()}
+            </Animated.View>
+          </View>
+        </Modal>
       )}
 
       <View style={styles.footer}>
@@ -496,6 +562,33 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs 
   },
   
+  legendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.xs,
+    gap: spacing.md,
+  },
+  
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  
+  legendSwatch: {
+    width: 12,
+    height: 12,
+    borderRadius: 2,
+    marginRight: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+  },
+  
+  legendText: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.xs,
+  },
+  
   infoText: { 
     color: colors.text.secondary, 
     fontSize: typography.fontSize.xs 
@@ -560,5 +653,9 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
+  },
+  
+  ghostContainer: {
+    flex: 1,
   },
 });
