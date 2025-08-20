@@ -1,4 +1,5 @@
 import express from 'express';
+import logger from '../utils/logger.js';
 import { createClient } from '@supabase/supabase-js';
 
 const router = express.Router();
@@ -8,7 +9,7 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 router.post('/signup', async (req, res) => {
   try {
     const { email, password, full_name } = req.body;
-    console.log('Signup attempt for email:', email);
+    logger.info('Signup attempt for email:', email);
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
@@ -20,14 +21,14 @@ router.post('/signup', async (req, res) => {
     });
 
     if (error) {
-      console.error('Signup error:', error);
+      logger.error('Signup error:', error);
       return res.status(400).json({ error: error.message });
     }
 
-    console.log('Supabase signup response:', data);
+    logger.info('Supabase signup response:', data);
 
     if (data.user) {
-      console.log('User created successfully:', data.user.email);
+      logger.info('User created successfully:', data.user.email);
       
       // Try to get the session token
       try {
@@ -37,7 +38,7 @@ router.post('/signup', async (req, res) => {
         });
 
         if (sessionError) {
-          console.error('Auto-login error:', sessionError);
+          logger.error('Auto-login error:', sessionError);
           
           // Check if it's an email confirmation error
           if (sessionError.message.includes('Email not confirmed') || sessionError.code === 'email_not_confirmed') {
@@ -68,7 +69,7 @@ router.post('/signup', async (req, res) => {
               .eq('id', sessionData.user.id);
           }
         } catch (profileErr) {
-          console.warn('Failed to set initial full_name after signup:', profileErr?.message || profileErr);
+          logger.warn('Failed to set initial full_name after signup:', profileErr?.message || profileErr);
         }
 
         res.json({
@@ -77,7 +78,7 @@ router.post('/signup', async (req, res) => {
           user: sessionData.user
         });
       } catch (loginError) {
-        console.error('Login attempt error:', loginError);
+        logger.error('Login attempt error:', loginError);
         res.status(200).json({ 
           message: 'User created successfully. Please log in.',
           userCreated: true,
@@ -88,7 +89,7 @@ router.post('/signup', async (req, res) => {
       res.status(400).json({ error: 'Failed to create user' });
     }
   } catch (error) {
-    console.error('Signup error:', error);
+    logger.error('Signup error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -108,7 +109,7 @@ router.post('/login', async (req, res) => {
     });
 
     if (error) {
-      console.error('Login error:', error);
+      logger.error('Login error:', error);
       return res.status(400).json({ error: error.message });
     }
 
@@ -122,7 +123,7 @@ router.post('/login', async (req, res) => {
         .update({ last_login: new Date().toISOString() })
         .eq('id', data.user.id);
     } catch (e) {
-      console.warn('Failed to update last_login:', e?.message || e);
+      logger.warn('Failed to update last_login:', e?.message || e);
     }
 
     res.json({
@@ -131,7 +132,7 @@ router.post('/login', async (req, res) => {
       user: data.user
     });
   } catch (error) {
-    console.error('Login error:', error);
+    logger.error('Login error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -161,7 +162,7 @@ router.get('/profile', async (req, res) => {
       updated_at: user.updated_at
     });
   } catch (error) {
-    console.error('Profile error:', error);
+    logger.error('Profile error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

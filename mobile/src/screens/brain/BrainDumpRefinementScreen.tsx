@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import * as React from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, LayoutAnimation, Platform, UIManager, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BrainDumpSubNav from './BrainDumpSubNav';
@@ -55,7 +56,7 @@ export default function BrainDumpRefinementScreen({ navigation, route }: any) {
         }
       } catch {}
     })();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, []);
 
   // Show toast if duplicates were removed on entry

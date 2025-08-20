@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import * as React from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, PanResponder, Animated, Dimensions, type LayoutChangeEvent, ScrollView, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BrainDumpSubNav from './BrainDumpSubNav';
@@ -65,7 +66,7 @@ const DraggableTask: React.FC<DraggableTaskProps> = ({ item, onDragStart, onDrag
     }
   });
 
-  const animatedStyle = {
+  const animatedStyle: any = {
     transform: [
       { translateX: pan.x },
       { translateY: pan.y },
@@ -103,7 +104,7 @@ const DraggableTask: React.FC<DraggableTaskProps> = ({ item, onDragStart, onDrag
 
 type DropZoneProps = {
   priority: Priority;
-  children: ReactNode;
+  children: React.ReactNode;
   isHighlighted: boolean;
   isDragging: boolean;
   onLayout: (event: LayoutChangeEvent) => void;

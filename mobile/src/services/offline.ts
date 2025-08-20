@@ -251,7 +251,7 @@ class OfflineService {
         return;
       }
 
-      console.log(`Syncing ${queue.length} offline actions...`);
+      console.warn(`Syncing ${queue.length} offline actions...`);
 
       for (const item of queue) {
         try {

@@ -79,7 +79,7 @@ class ErrorRecoveryService {
     const config = this.defaultCircuitBreakerConfig;
     if (newCount >= config.failureThreshold) {
       this.updateCircuitBreakerState(endpoint, CircuitBreakerState.OPEN);
-      console.log(`Circuit breaker opened for ${endpoint} after ${newCount} failures`);
+      console.warn(`Circuit breaker opened for ${endpoint} after ${newCount} failures`);
     }
   }
 
@@ -128,7 +128,7 @@ class ErrorRecoveryService {
     if (circuitState === CircuitBreakerState.OPEN) {
       if (this.shouldTransitionToHalfOpen(circuitBreakerKey)) {
         this.updateCircuitBreakerState(circuitBreakerKey, CircuitBreakerState.HALF_OPEN);
-        console.log(`Circuit breaker transitioning to half-open for ${endpoint}`);
+        console.warn(`Circuit breaker transitioning to half-open for ${endpoint}`);
       } else {
         throw new Error(`Circuit breaker is open for ${endpoint}. Service is temporarily unavailable.`);
       }
@@ -164,7 +164,7 @@ class ErrorRecoveryService {
 
         // Wait before retry
         const delay = this.calculateRetryDelay(attempt, retryStrategy);
-        console.log(`Retrying operation in ${delay}ms (attempt ${attempt + 1}/${retryStrategy.maxRetries + 1})`);
+        console.warn(`Retrying operation in ${delay}ms (attempt ${attempt + 1}/${retryStrategy.maxRetries + 1})`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }

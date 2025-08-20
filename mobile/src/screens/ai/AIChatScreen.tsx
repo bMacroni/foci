@@ -508,7 +508,7 @@ export default function AIChatScreen({ navigation, route }: any) {
         }
         return c;
       }));
-    } catch (err: any) {
+    } catch (_err: any) {
       setError('AI failed to respond. Please try again.');
     } finally {
       setLoading(false);
@@ -601,7 +601,7 @@ export default function AIChatScreen({ navigation, route }: any) {
             }
             return c;
           }));
-        } catch (err) {
+        } catch (_err) {
           setError('AI failed to respond. Please try again.');
         } finally {
           setLoading(false);
@@ -641,10 +641,10 @@ export default function AIChatScreen({ navigation, route }: any) {
     
     // Debug: Log AI messages to see what format they're in
     if (msg.sender === 'ai' && msg.text.includes('schedule')) {
-      console.log('=== AI SCHEDULE RESPONSE DEBUG ===');
-      console.log('Message text:', msg.text);
-      console.log('Has schedule content:', hasScheduleContent);
-      console.log('Message length:', msg.text.length);
+      console.debug('=== AI SCHEDULE RESPONSE DEBUG ===');
+      console.debug('Message text:', msg.text);
+      console.debug('Has schedule content:', hasScheduleContent);
+      console.debug('Message length:', msg.text.length);
     }
     
     // Remove JSON code blocks and (when present) the goal breakdown section

@@ -1,4 +1,5 @@
 import { listCalendarEvents } from './calendarService.js';
+import logger from './logger.js';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
@@ -48,7 +49,7 @@ export async function syncGoogleCalendarEvents(userId) {
       ], { onConflict: 'google_calendar_id,user_id' });
 
     if (error) {
-      console.error('Error upserting event:', error, event);
+      logger.error('Error upserting event:', error, event);
     }
   }
   return { success: true, count: googleEvents.length };
@@ -64,11 +65,11 @@ export async function syncGoogleCalendarEvents(userId) {
  */
 export async function getCalendarEventsFromDB(userId, maxResults = 100, timeMin = null, timeMax = null) {
   try {
-    console.log('=== DATABASE QUERY DEBUG ===');
-    console.log('UserId:', userId);
-    console.log('MaxResults:', maxResults);
-    console.log('TimeMin:', timeMin ? timeMin.toISOString() : 'null');
-    console.log('TimeMax:', timeMax ? timeMax.toISOString() : 'null');
+    logger.debug('=== DATABASE QUERY DEBUG ===');
+    logger.debug('UserId:', userId);
+    logger.debug('MaxResults:', maxResults);
+    logger.debug('TimeMin:', timeMin ? timeMin.toISOString() : 'null');
+    logger.debug('TimeMax:', timeMax ? timeMax.toISOString() : 'null');
 
     let query = supabase
       .from('calendar_events')
@@ -80,17 +81,17 @@ export async function getCalendarEventsFromDB(userId, maxResults = 100, timeMin 
     // Add time filters if provided
     if (timeMin) {
       query = query.gte('start_time', timeMin.toISOString());
-      console.log('Added timeMin filter:', timeMin.toISOString());
+      logger.debug('Added timeMin filter:', timeMin.toISOString());
     }
     if (timeMax) {
       query = query.lte('start_time', timeMax.toISOString());
-      console.log('Added timeMax filter:', timeMax.toISOString());
+      logger.debug('Added timeMax filter:', timeMax.toISOString());
     }
 
     const { data, error } = await query;
-    console.log('Database query result - count:', data ? data.length : 0);
+    logger.debug('Database query result - count:', data ? data.length : 0);
     if (data && data.length > 0) {
-      console.log('Sample events:', data.slice(0, 2).map(e => ({
+      logger.debug('Sample events:', data.slice(0, 2).map(e => ({
         id: e.id,
         title: e.title,
         start_time: e.start_time,
@@ -99,7 +100,7 @@ export async function getCalendarEventsFromDB(userId, maxResults = 100, timeMin 
     }
 
     if (error) {
-      console.error('Error fetching events from database:', error);
+      logger.error('Error fetching events from database:', error);
       throw error;
     }
 
@@ -120,7 +121,7 @@ export async function getCalendarEventsFromDB(userId, maxResults = 100, timeMin 
       is_all_day: event.is_all_day
     }));
   } catch (error) {
-    console.error('Error getting calendar events from database:', error);
+    logger.error('Error getting calendar events from database:', error);
     throw error;
   }
 } 

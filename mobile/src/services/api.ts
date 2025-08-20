@@ -238,7 +238,7 @@ export const goalsAPI = {
       if (offlineService.shouldUseCache()) {
         const cachedGoals = await offlineService.getCachedGoals();
         if (cachedGoals) {
-          console.log('Using cached goals due to offline status');
+          console.warn('Using cached goals due to offline status');
           return cachedGoals;
         }
       }
@@ -424,7 +424,7 @@ export const tasksAPI = {
       if (offlineService.shouldUseCache()) {
         const cachedTasks = await offlineService.getCachedTasks();
         if (cachedTasks) {
-          console.log('Using cached tasks due to offline status');
+          console.warn('Using cached tasks due to offline status');
           return cachedTasks;
         }
       }
@@ -508,7 +508,7 @@ export const tasksAPI = {
           data: taskData,
           id: `temp_${Date.now()}`,
         });
-        console.log('Added task creation to offline queue:', actionId);
+        console.warn('Added task creation to offline queue:', actionId);
         return { id: actionId, offline: true, ...taskData } as Task;
       }
       
@@ -547,7 +547,7 @@ export const tasksAPI = {
           data: taskData,
           id: taskId,
         });
-        console.log('Added task update to offline queue:', actionId);
+        console.warn('Added task update to offline queue:', actionId);
         return { id: taskId, offline: true, ...taskData } as Task;
       }
       
@@ -580,7 +580,7 @@ export const tasksAPI = {
           type: 'DELETE_TASK',
           id: taskId,
         });
-        console.log('Added task deletion to offline queue:', actionId);
+        console.warn('Added task deletion to offline queue:', actionId);
         return;
       }
       
@@ -621,7 +621,7 @@ export const calendarAPI = {
       if (offlineService.shouldUseCache()) {
         const cachedEvents = await offlineService.getCachedEvents();
         if (cachedEvents) {
-          console.log('Using cached events due to offline status');
+          console.warn('Using cached events due to offline status');
           return cachedEvents;
         }
       }
@@ -691,7 +691,7 @@ export const calendarAPI = {
           data: eventData,
           id: `temp_${Date.now()}`,
         });
-        console.log('Added event creation to offline queue:', actionId);
+        console.warn('Added event creation to offline queue:', actionId);
         return { id: actionId, offline: true };
       }
       
@@ -738,7 +738,7 @@ export const calendarAPI = {
           data: eventData,
           id: eventId,
         });
-        console.log('Added event update to offline queue:', actionId);
+        console.warn('Added event update to offline queue:', actionId);
         return { id: actionId, offline: true };
       }
       
@@ -770,7 +770,7 @@ export const calendarAPI = {
           type: 'DELETE_EVENT',
           id: eventId,
         });
-        console.log('Added event deletion to offline queue:', actionId);
+        console.warn('Added event deletion to offline queue:', actionId);
         return;
       }
       

@@ -106,28 +106,14 @@ const AutoScheduledTasksTable = ({ tasks, onTaskUpdate, showSuccess }) => {
         }
       }
       
-             // Handle scheduled time - update calendar event if it exists
-       if (editValues.scheduledTime !== undefined) {
-         if (editValues.scheduledTime === '' || editValues.scheduledTime === 'Not scheduled') {
-           // If clearing scheduled time, we should delete the calendar event
-           if (task.calendar_events && task.calendar_events.length > 0) {
-             // Note: This would require a separate API call to delete calendar events
-             // For now, we'll just update the task's scheduled_time to null
-             updates.scheduled_time = null;
-           } else {
-             updates.scheduled_time = null;
-           }
-         } else {
-           // If setting a new time, we should update the calendar event
-           if (task.calendar_events && task.calendar_events.length > 0) {
-             // Note: This would require a separate API call to update calendar events
-             // For now, we'll just update the task's scheduled_time
-             updates.scheduled_time = new Date(editValues.scheduledTime).toISOString();
-           } else {
-             updates.scheduled_time = new Date(editValues.scheduledTime).toISOString();
-           }
-         }
-       }
+      // Handle scheduled time (update on task; calendar events managed separately)
+      if (editValues.scheduledTime !== undefined) {
+        if (editValues.scheduledTime === '' || editValues.scheduledTime === 'Not scheduled') {
+          updates.scheduled_time = null;
+        } else {
+          updates.scheduled_time = new Date(editValues.scheduledTime).toISOString();
+        }
+      }
        
        // Handle location
        if (editValues.location !== undefined) {

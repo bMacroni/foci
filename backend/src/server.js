@@ -39,9 +39,9 @@ if (supabaseUrl && supabaseKey) {
 
 // Environment check - only log non-sensitive info
 if (process.env.DEBUG_LOGS === 'true') {
-  console.log('NODE_ENV:', process.env.NODE_ENV);
-  console.log('PORT:', process.env.PORT);
-  console.log('Environment variables loaded:', Object.keys(process.env).filter(key =>
+  logger.info('NODE_ENV:', process.env.NODE_ENV);
+  logger.info('PORT:', process.env.PORT);
+  logger.info('Environment variables loaded:', Object.keys(process.env).filter(key =>
     key.includes('URL') || key.includes('GOOGLE') || key.includes('FRONTEND')
   ).length, 'configured');
 } else {
@@ -85,17 +85,17 @@ app.use('/api/tasks', tasksRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/auth/google', googleAuthRoutes);
 
-if (process.env.DEBUG_LOGS === 'true') console.log('Registering calendar router...');
+if (process.env.DEBUG_LOGS === 'true') logger.info('Registering calendar router...');
 app.use('/api/calendar', calendarRouter);
-if (process.env.DEBUG_LOGS === 'true') console.log('Calendar router registered');
+if (process.env.DEBUG_LOGS === 'true') logger.info('Calendar router registered');
 
-if (process.env.DEBUG_LOGS === 'true') console.log('Registering AI router...');
+if (process.env.DEBUG_LOGS === 'true') logger.info('Registering AI router...');
 app.use('/api/ai', aiRouter);
-if (process.env.DEBUG_LOGS === 'true') console.log('AI router registered');
+if (process.env.DEBUG_LOGS === 'true') logger.info('AI router registered');
 
-if (process.env.DEBUG_LOGS === 'true') console.log('Registering conversations router...');
+if (process.env.DEBUG_LOGS === 'true') logger.info('Registering conversations router...');
 app.use('/api/conversations', conversationsRouter);
-if (process.env.DEBUG_LOGS === 'true') console.log('Conversations router registered');
+if (process.env.DEBUG_LOGS === 'true') logger.info('Conversations router registered');
 
 app.use('/api/user', userRouter);
 
@@ -244,12 +244,12 @@ logger.info(`🌐 Network access: http://192.168.1.66:${PORT}/api/health`);
 
 // Add error handlers
 process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception:', err);
+  logger.error('Uncaught Exception:', err);
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
   process.exit(1);
 });
 

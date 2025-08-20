@@ -1,4 +1,5 @@
 import express from 'express';
+import logger from '../utils/logger.js';
 import { requireAuth } from '../middleware/auth.js';
 import {
   listCalendarEvents,
@@ -23,9 +24,9 @@ const supabase = createClient(
 // Test Supabase connection
 router.get('/test-supabase', requireAuth, async (req, res) => {
   try {
-    console.log('Testing Supabase connection...');
-    console.log('SUPABASE_URL:', process.env.SUPABASE_URL ? 'Set' : 'Not set');
-    console.log('SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'Set' : 'Not set');
+    logger.info('Testing Supabase connection...');
+    logger.info('SUPABASE_URL:', process.env.SUPABASE_URL ? 'Set' : 'Not set');
+    logger.info('SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'Set' : 'Not set');
     
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
       return res.status(500).json({ 
@@ -41,21 +42,21 @@ router.get('/test-supabase', requireAuth, async (req, res) => {
       .limit(1);
 
     if (error) {
-      console.error('Supabase test error:', error);
+      logger.error('Supabase test error:', error);
       return res.status(500).json({ 
         error: 'Supabase connection failed',
         details: error.message 
       });
     }
 
-    console.log('Supabase connection successful with service role');
+    logger.info('Supabase connection successful with service role');
     res.json({ 
       success: true, 
       message: 'Supabase connection working with service role',
       tableExists: true 
     });
   } catch (error) {
-    console.error('Error testing Supabase:', error);
+    logger.error('Error testing Supabase:', error);
     res.status(500).json({ 
       error: 'Failed to test Supabase',
       details: error.message 
@@ -69,7 +70,7 @@ router.get('/list', requireAuth, async (req, res) => {
     const calendars = await getCalendarList(req.user.id);
     res.json(calendars);
   } catch (error) {
-    console.error('Error getting calendar list:', error);
+    logger.error('Error getting calendar list:', error);
     res.status(500).json({ error: 'Failed to get calendar list' });
   }
 });
@@ -84,18 +85,18 @@ router.get('/events', requireAuth, async (req, res) => {
     const ninetyDaysAgo = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000));
     const oneYearFromNow = new Date(now.getTime() + (365 * 24 * 60 * 60 * 1000));
     
-    console.log(`[Calendar API] Getting events for user ${req.user.id}, maxResults: ${maxResults}`);
-    console.log(`[Calendar API] Time range: ${ninetyDaysAgo.toISOString()} to ${oneYearFromNow.toISOString()}`);
+    logger.info(`[Calendar API] Getting events for user ${req.user.id}, maxResults: ${maxResults}`);
+    logger.info(`[Calendar API] Time range: ${ninetyDaysAgo.toISOString()} to ${oneYearFromNow.toISOString()}`);
     
     // Get events from local database with expanded time range
     const events = await getCalendarEventsFromDB(req.user.id, maxResults, ninetyDaysAgo, oneYearFromNow);
     
-    console.log(`[Calendar API] Returning ${events.length} events`);
+    logger.info(`[Calendar API] Returning ${events.length} events`);
     
     // Always return 200 with an array (possibly empty)
     res.json(events);
   } catch (error) {
-    console.error('Error getting calendar events from database:', error);
+    logger.error('Error getting calendar events from database:', error);
     res.status(500).json({ error: 'Failed to get calendar events' });
   }
 });
@@ -115,7 +116,7 @@ router.get('/events/date', requireAuth, async (req, res) => {
     const events = await getCalendarEventsFromDB(req.user.id, 100, timeMin, timeMax);
     res.json(events);
   } catch (error) {
-    console.error('Error getting events for date from database:', error);
+    logger.error('Error getting events for date from database:', error);
     res.status(500).json({ error: 'Failed to fetch events for date' });
   }
 });
@@ -125,7 +126,7 @@ router.post('/events', requireAuth, async (req, res) => {
   try {
     const { summary, description, startTime, endTime, timeZone, location, useSupabase = false, eventType, taskId, goalId, isAllDay } = req.body;
 
-    console.log('Creating calendar event:', { summary, startTime, endTime, useSupabase });
+    logger.info('Creating calendar event:', { summary, startTime, endTime, useSupabase });
 
     if (!summary || !startTime || !endTime) {
       return res.status(400).json({ 
@@ -136,11 +137,11 @@ router.post('/events', requireAuth, async (req, res) => {
     if (useSupabase) {
       // Check if Supabase is properly configured
       if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
-        console.error('Supabase environment variables not configured');
+        logger.error('Supabase environment variables not configured');
         return res.status(500).json({ error: 'Supabase not configured' });
       }
 
-      console.log('Attempting to create event in Supabase...');
+      logger.info('Attempting to create event in Supabase...');
       
       // Create event directly in Supabase
       const { data, error } = await supabase
@@ -163,14 +164,14 @@ router.post('/events', requireAuth, async (req, res) => {
         .single();
 
       if (error) {
-        console.error('Supabase error creating calendar event:', error);
+        logger.error('Supabase error creating calendar event:', error);
         return res.status(500).json({ 
           error: 'Failed to create calendar event',
           details: error.message 
         });
       }
 
-      console.log('Successfully created event in Supabase:', data);
+      logger.info('Successfully created event in Supabase:', data);
       return res.status(201).json(data);
     } else {
       // Use existing Google Calendar integration
@@ -186,7 +187,7 @@ router.post('/events', requireAuth, async (req, res) => {
       res.status(201).json(event);
     }
   } catch (error) {
-    console.error('Error creating calendar event:', error);
+    logger.error('Error creating calendar event:', error);
     if (error.message.includes('No Google tokens found')) {
       res.status(401).json({ error: 'Google Calendar not connected. Please connect your Google account first.' });
     } else {
@@ -232,7 +233,7 @@ router.put('/events/:eventId', requireAuth, async (req, res) => {
         .single();
 
       if (error) {
-        console.error('Supabase error updating calendar event:', error);
+        logger.error('Supabase error updating calendar event:', error);
         return res.status(500).json({ error: 'Failed to update calendar event' });
       }
 
@@ -251,7 +252,7 @@ router.put('/events/:eventId', requireAuth, async (req, res) => {
       res.json(event);
     }
   } catch (error) {
-    console.error('Error updating calendar event:', error);
+    logger.error('Error updating calendar event:', error);
     if (error.message.includes('No Google tokens found')) {
       res.status(401).json({ error: 'Google Calendar not connected. Please connect your Google account first.' });
     } else {
@@ -275,7 +276,7 @@ router.delete('/events/:eventId', requireAuth, async (req, res) => {
         .eq('user_id', req.user.id); // Ensure user owns the event
 
       if (error) {
-        console.error('Supabase error deleting calendar event:', error);
+        logger.error('Supabase error deleting calendar event:', error);
         return res.status(500).json({ error: 'Failed to delete calendar event' });
       }
 
@@ -286,7 +287,7 @@ router.delete('/events/:eventId', requireAuth, async (req, res) => {
       res.json({ message: 'Event deleted successfully' });
     }
   } catch (error) {
-    console.error('Error deleting calendar event:', error);
+    logger.error('Error deleting calendar event:', error);
     if (error.message.includes('No Google tokens found')) {
       res.status(401).json({ error: 'Google Calendar not connected. Please connect your Google account first.' });
     } else {
@@ -339,7 +340,7 @@ router.get('/status', requireAuth, async (req, res) => {
       return res.json({ connected: false, error: 'calendar_status_error', details: err.message });
     }
   } catch (error) {
-    console.error('Error checking calendar status:', error);
+    logger.error('Error checking calendar status:', error);
     res.status(500).json({ error: 'Failed to check calendar status' });
   }
 });
@@ -347,7 +348,7 @@ router.get('/status', requireAuth, async (req, res) => {
 // Manual sync endpoint
 router.post('/sync', requireAuth, async (req, res) => {
   try {
-    console.log(`Manual sync requested for user: ${req.user.id}`);
+    logger.info(`Manual sync requested for user: ${req.user.id}`);
     const result = await syncGoogleCalendarEvents(req.user.id);
     res.json({ 
       success: true, 
@@ -355,7 +356,7 @@ router.post('/sync', requireAuth, async (req, res) => {
       count: result.count 
     });
   } catch (error) {
-    console.error('Error during manual sync:', error);
+    logger.error('Error during manual sync:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Failed to sync calendar events',
@@ -373,7 +374,7 @@ router.post('/schedule-task', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Task ID is required' });
     }
 
-    console.log(`Scheduling single task ${taskId} for user ${req.user.id}`);
+    logger.info(`Scheduling single task ${taskId} for user ${req.user.id}`);
     
     // Get the JWT token from the Authorization header
     const token = req.headers.authorization?.split(' ')[1];
@@ -386,7 +387,7 @@ router.post('/schedule-task', requireAuth, async (req, res) => {
       data: result
     });
   } catch (error) {
-    console.error('Error scheduling single task:', error);
+    logger.error('Error scheduling single task:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Failed to schedule task',
