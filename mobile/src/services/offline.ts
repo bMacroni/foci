@@ -62,9 +62,9 @@ class OfflineService {
     this.isOnline = netInfo.isConnected ?? true;
 
     // Listen for network changes
-    NetInfo.addEventListener(state => {
+    NetInfo.addEventListener((_state) => {
       const wasOnline = this.isOnline;
-      this.isOnline = state.isConnected ?? false;
+      this.isOnline = _state.isConnected ?? false;
       
       // If we just came back online, trigger sync
       if (!wasOnline && this.isOnline) {
@@ -117,8 +117,8 @@ class OfflineService {
       }
 
       return cacheData.data;
-    } catch (error) {
-      console.error('Error reading cached events:', error);
+    } catch (_error) {
+      console.error('Error reading cached events:', _error);
       return null;
     }
   }
@@ -146,8 +146,8 @@ class OfflineService {
       }
 
       return cacheData.data;
-    } catch (error) {
-      console.error('Error reading cached tasks:', error);
+    } catch (_error) {
+      console.error('Error reading cached tasks:', _error);
       return null;
     }
   }
@@ -175,8 +175,8 @@ class OfflineService {
       }
 
       return cacheData.data;
-    } catch (error) {
-      console.error('Error reading cached goals:', error);
+    } catch (_error) {
+      console.error('Error reading cached goals:', _error);
       return null;
     }
   }
@@ -197,9 +197,9 @@ class OfflineService {
       
       this.notifyListeners();
       return queueItem.id;
-    } catch (error) {
-      console.error('Error adding to offline queue:', error);
-      throw error;
+    } catch (_error) {
+      console.error('Error adding to offline queue:', _error);
+      throw _error;
     }
   }
 
@@ -207,8 +207,8 @@ class OfflineService {
     try {
       const queue = await AsyncStorage.getItem(STORAGE_KEYS.OFFLINE_QUEUE);
       return queue ? JSON.parse(queue) : [];
-    } catch (error) {
-      console.error('Error reading offline queue:', error);
+    } catch (_error) {
+      console.error('Error reading offline queue:', _error);
       return [];
     }
   }
@@ -219,8 +219,8 @@ class OfflineService {
       const filteredQueue = queue.filter(item => item.id !== itemId);
       await AsyncStorage.setItem(STORAGE_KEYS.OFFLINE_QUEUE, JSON.stringify(filteredQueue));
       this.notifyListeners();
-    } catch (error) {
-      console.error('Error removing from offline queue:', error);
+    } catch (_error) {
+      console.error('Error removing from offline queue:', _error);
     }
   }
 
@@ -231,8 +231,8 @@ class OfflineService {
         item.id === itemId ? { ...item, retryCount } : item
       );
       await AsyncStorage.setItem(STORAGE_KEYS.OFFLINE_QUEUE, JSON.stringify(updatedQueue));
-    } catch (error) {
-      console.error('Error updating queue item retry count:', error);
+    } catch (_error) {
+      console.error('Error updating queue item retry count:', _error);
     }
   }
 
@@ -275,8 +275,8 @@ class OfflineService {
       // Update last sync time
       await AsyncStorage.setItem(STORAGE_KEYS.LAST_SYNC, Date.now().toString());
       
-    } catch (error) {
-      console.error('Error syncing offline queue:', error);
+    } catch (_error) {
+      console.error('Error syncing offline queue:', _error);
     } finally {
       this.isSyncing = false;
       this.notifyListeners();
@@ -338,8 +338,8 @@ class OfflineService {
         AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_QUEUE),
         AsyncStorage.removeItem(STORAGE_KEYS.LAST_SYNC),
       ]);
-    } catch (error) {
-      console.error('Error clearing cache:', error);
+    } catch (_error) {
+      console.error('Error clearing cache:', _error);
     }
   }
 

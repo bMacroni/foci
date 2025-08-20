@@ -640,12 +640,13 @@ export default function AIChatScreen({ navigation, route }: any) {
     const hasTaskContent = isTaskContent(msg.text);
     
     // Debug: Log AI messages to see what format they're in
-    if (msg.sender === 'ai' && msg.text.includes('schedule')) {
-      console.debug('=== AI SCHEDULE RESPONSE DEBUG ===');
-      console.debug('Message text:', msg.text);
-      console.debug('Has schedule content:', hasScheduleContent);
-      console.debug('Message length:', msg.text.length);
-    }
+    // Optional debug retained for development; commented to keep console clean
+    // if (msg.sender === 'ai' && msg.text.includes('schedule')) {
+    //   console.debug('=== AI SCHEDULE RESPONSE DEBUG ===');
+    //   console.debug('Message text:', msg.text);
+    //   console.debug('Has schedule content:', hasScheduleContent);
+    //   console.debug('Message length:', msg.text.length);
+    // }
     
     // Remove JSON code blocks and (when present) the goal breakdown section
     // from AI text for conversational display

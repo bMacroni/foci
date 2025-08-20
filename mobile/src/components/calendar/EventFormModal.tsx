@@ -133,7 +133,7 @@ export const EventFormModal: React.FC<EventFormModalProps> = ({
       hapticFeedback.medium();
       await onSubmit(formData);
       onClose();
-    } catch (error) {
+    } catch (_error) {
       hapticFeedback.error();
       Alert.alert('Error', 'Failed to save event');
     }

@@ -203,11 +203,11 @@ export default function GoalsScreen({ navigation }: any) {
 
       setGoals(transformedGoals);
       try { await offlineService.cacheGoals(fetchedGoals as any); } catch {}
-    } catch (error) {
+    } catch (_error) {
       // error loading goals
       
       // Check if it's an authentication error
-      if (error instanceof Error && error.message.includes('No authentication token')) {
+      if (_error instanceof Error && _error.message.includes('No authentication token')) {
         // User needs to log in
         Alert.alert(
           'Authentication Required',
@@ -287,10 +287,10 @@ export default function GoalsScreen({ navigation }: any) {
       const suggestion = {
         title: goalTitle,
         description: goalDescription || `AI-generated breakdown for: ${goalTitle}`,
-        milestones: breakdown.milestones.map((milestone, index) => ({
+        milestones: breakdown.milestones.map((milestone, _index) => ({
           title: milestone.title,
           description: '',
-          steps: milestone.steps.map((step, stepIndex) => ({
+          steps: milestone.steps.map((step, _stepIndex) => ({
             title: step.text,
             description: '',
           })),
@@ -302,12 +302,12 @@ export default function GoalsScreen({ navigation }: any) {
       setShowAiInput(false);
       setShowAiReview(true);
       setIsRefinementMode(false);
-    } catch (error) {
+    } catch (_error) {
       // error generating AI breakdown
       setLoading(false);
       
       // Check if it's an authentication error
-      if (error instanceof Error && error.message.includes('No authentication token')) {
+      if (_error instanceof Error && _error.message.includes('No authentication token')) {
         Alert.alert(
           'Authentication Required',
           'Please log in to use the AI assistant.',
@@ -338,10 +338,10 @@ export default function GoalsScreen({ navigation }: any) {
       const goalData = {
         title: aiSuggestion.title,
         description: aiSuggestion.description,
-        milestones: options?.goalOnly ? [] : aiSuggestion.milestones.map((milestone, index) => ({
+        milestones: options?.goalOnly ? [] : aiSuggestion.milestones.map((milestone, _index) => ({
           title: milestone.title,
           order: index + 1,
-          steps: milestone.steps.map((step, stepIndex) => ({
+          steps: milestone.steps.map((step, _stepIndex) => ({
             text: step.title,
             order: stepIndex + 1,
           })),
@@ -374,12 +374,12 @@ export default function GoalsScreen({ navigation }: any) {
           setEditDrafts((prev) => ({ ...prev, [created.id]: createdDrafts }));
         } catch {}
       }
-    } catch (error) {
+    } catch (_error) {
       // error creating goal
       setLoading(false);
       
       // Check if it's an authentication error
-      if (error instanceof Error && error.message.includes('No authentication token')) {
+      if (_error instanceof Error && _error.message.includes('No authentication token')) {
         Alert.alert(
           'Authentication Required',
           'Please log in to create goals.',
@@ -439,7 +439,7 @@ export default function GoalsScreen({ navigation }: any) {
                 await goalsAPI.deleteGoal(goalId);
                 await loadGoals();
                 Alert.alert('Success', 'Goal deleted successfully');
-              } catch (error) {
+              } catch (_error) {
                 // error deleting goal
                 Alert.alert('Error', 'Failed to delete goal. Please try again.');
               }
@@ -447,7 +447,7 @@ export default function GoalsScreen({ navigation }: any) {
           },
         ]
       );
-    } catch (error) {
+    } catch (_error) {
       // error deleting goal
       Alert.alert('Error', 'Failed to delete goal. Please try again.');
     }
@@ -1360,8 +1360,8 @@ export default function GoalsScreen({ navigation }: any) {
                 <Text style={styles.suggestionGoalTitle}>{aiSuggestion.title}</Text>
                 <Text style={styles.suggestionGoalDescription}>{aiSuggestion.description}</Text>
                 <Text style={styles.milestonesTitle}>Suggested Milestones & Steps:</Text>
-                {aiSuggestion.milestones.map((milestone, index) => (
-                  <View key={index} style={styles.suggestionMilestone}>
+                {aiSuggestion.milestones.map((milestone, _index) => (
+                  <View key={_index} style={styles.suggestionMilestone}>
                     <Text style={styles.milestoneNumber}>{index + 1}.</Text>
                     <View style={styles.milestoneContent}>
                       <Text style={styles.milestoneTitle}>{milestone.title}</Text>
@@ -1370,8 +1370,8 @@ export default function GoalsScreen({ navigation }: any) {
                       )}
                       {milestone.steps && milestone.steps.length > 0 && (
                         <View style={styles.stepsContainer}>
-                          {milestone.steps.map((step, stepIndex) => (
-                            <View key={stepIndex} style={styles.suggestionStep}>
+                          {milestone.steps.map((step, _stepIndex) => (
+                            <View key={_stepIndex} style={styles.suggestionStep}>
                               <Text style={styles.stepNumber}>•</Text>
                               <Text style={styles.stepTitle}>{step.title}</Text>
                             </View>

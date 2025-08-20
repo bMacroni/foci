@@ -7,7 +7,7 @@ import { spacing, borderRadius } from '../../themes/spacing';
 
 interface GoalTitlesDisplayProps {
   text: string;
-  onAction?: (message: string, sendNow?: boolean) => void;
+  onAction?: (_message: string, _sendNow?: boolean) => void;
 }
 
 interface ParsedTitles {

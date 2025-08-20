@@ -79,9 +79,9 @@ export const goalsAPI = {
       }
 
       return await response.json();
-    } catch (error) {
-      console.error('Error generating goal breakdown:', error);
-      throw error;
+    } catch (_error) {
+      console.error('Error generating goal breakdown:', _error);
+      throw _error;
     }
   },
 
@@ -105,9 +105,9 @@ export const goalsAPI = {
         throw new Error(`HTTP error! status: ${response.status}, body: ${text}`);
       }
       return await response.json();
-    } catch (error) {
-      console.error('🔍 API: Error creating milestone:', error);
-      throw error;
+    } catch (_error) {
+      console.error('🔍 API: Error creating milestone:', _error);
+      throw _error;
     }
   },
 
@@ -125,9 +125,9 @@ export const goalsAPI = {
         const text = await response.text();
         throw new Error(`HTTP error! status: ${response.status}, body: ${text}`);
       }
-    } catch (error) {
-      console.error('🔍 API: Error deleting milestone:', error);
-      throw error;
+    } catch (_error) {
+      console.error('🔍 API: Error deleting milestone:', _error);
+      throw _error;
     }
   },
 
@@ -151,9 +151,9 @@ export const goalsAPI = {
         throw new Error(`HTTP error! status: ${response.status}, body: ${text}`);
       }
       return await response.json();
-    } catch (error) {
-      console.error('🔍 API: Error creating step:', error);
-      throw error;
+    } catch (_error) {
+      console.error('🔍 API: Error creating step:', _error);
+      throw _error;
     }
   },
 
@@ -171,9 +171,9 @@ export const goalsAPI = {
         const text = await response.text();
         throw new Error(`HTTP error! status: ${response.status}, body: ${text}`);
       }
-    } catch (error) {
-      console.error('🔍 API: Error deleting step:', error);
-      throw error;
+    } catch (_error) {
+      console.error('🔍 API: Error deleting step:', _error);
+      throw _error;
     }
   },
 
@@ -194,9 +194,9 @@ export const goalsAPI = {
       }
 
       return await response.json();
-    } catch (error) {
-      console.error('Error creating goal:', error);
-      throw error;
+    } catch (_error) {
+      console.error('Error creating goal:', _error);
+      throw _error;
     }
   },
 
@@ -226,12 +226,12 @@ export const goalsAPI = {
       await offlineService.cacheGoals(data);
       
       return data;
-    } catch (error) {
-      if ((error as any)?.name === 'AbortError') {
+    } catch (_error) {
+      if ((_error as any)?.name === 'AbortError') {
         // Silent for expected timeouts; caller handles gracefully
-        throw error;
+        throw _error;
       }
-      console.error('🔍 API: Error fetching goals:', error);
+      console.error('🔍 API: Error fetching goals:', _error);
       
       // Try to get cached goals if offline
       const { offlineService } = await import('./offline');
@@ -243,7 +243,7 @@ export const goalsAPI = {
         }
       }
       
-      throw error;
+      throw _error;
     }
   },
 
@@ -266,9 +266,9 @@ export const goalsAPI = {
 
       const data = await response.json();
       return data;
-    } catch (error) {
-      console.error('🔍 API: Error fetching goal by ID:', error);
-      throw error;
+    } catch (_error) {
+      console.error('🔍 API: Error fetching goal by ID:', _error);
+      throw _error;
     }
   },
 
@@ -289,9 +289,9 @@ export const goalsAPI = {
         const errorText = await response.text();
         throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
       }
-    } catch (error) {
-      console.error('🔍 API: Error updating milestone:', error);
-      throw error;
+    } catch (_error) {
+      console.error('🔍 API: Error updating milestone:', _error);
+      throw _error;
     }
   },
 
@@ -312,9 +312,9 @@ export const goalsAPI = {
         const errorText = await response.text();
         throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
       }
-    } catch (error) {
-      console.error('🔍 API: Error updating step:', error);
-      throw error;
+    } catch (_error) {
+      console.error('🔍 API: Error updating step:', _error);
+      throw _error;
     }
   },
 
@@ -338,9 +338,9 @@ export const goalsAPI = {
 
       const data = await response.json();
       return data;
-    } catch (error) {
-      console.error('🔍 API: Error updating goal:', error);
-      throw error;
+    } catch (_error) {
+      console.error('🔍 API: Error updating goal:', _error);
+      throw _error;
     }
   },
 
@@ -359,9 +359,9 @@ export const goalsAPI = {
         const errorText = await response.text();
         throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
       }
-    } catch (error) {
-      console.error('🔍 API: Error deleting goal:', error);
-      throw error;
+    } catch (_error) {
+      console.error('🔍 API: Error deleting goal:', _error);
+      throw _error;
     }
   },
 };
@@ -412,12 +412,12 @@ export const tasksAPI = {
       await offlineService.cacheTasks(data);
       
       return data;
-    } catch (error) {
-      if ((error as any)?.name === 'AbortError') {
+    } catch (_error) {
+      if ((_error as any)?.name === 'AbortError') {
         // Silent for expected timeouts; caller handles gracefully
-        throw error;
+        throw _error;
       }
-      console.error('🔍 API: Error fetching tasks:', error);
+      console.error('🔍 API: Error fetching tasks:', _error);
       
       // Try to get cached tasks if offline
       const { offlineService } = await import('./offline');
@@ -429,7 +429,7 @@ export const tasksAPI = {
         }
       }
       
-      throw error;
+      throw _error;
     }
   },
 
@@ -449,9 +449,9 @@ export const tasksAPI = {
         throw new Error(`HTTP error! status: ${response.status}, body: ${text}`);
       }
       return await response.json();
-    } catch (error) {
-      console.error('Error bulk creating tasks:', error);
-      throw error;
+    } catch (_error) {
+      console.error('Error bulk creating tasks:', _error);
+      throw _error;
     }
   },
 
@@ -474,9 +474,9 @@ export const tasksAPI = {
 
       const data = await response.json();
       return data;
-    } catch (error) {
-      console.error('🔍 API: Error fetching task by ID:', error);
-      throw error;
+    } catch (_error) {
+      console.error('🔍 API: Error fetching task by ID:', _error);
+      throw _error;
     }
   },
 
@@ -497,8 +497,8 @@ export const tasksAPI = {
       }
 
       return await response.json();
-    } catch (error) {
-      console.error('Error creating task:', error);
+    } catch (_error) {
+      console.error('Error creating task:', _error);
       
       // Add to offline queue if network error
       const { offlineService } = await import('./offline');
@@ -512,7 +512,7 @@ export const tasksAPI = {
         return { id: actionId, offline: true, ...taskData } as Task;
       }
       
-      throw error;
+      throw _error;
     }
   },
 
@@ -536,8 +536,8 @@ export const tasksAPI = {
 
       const data = await response.json();
       return data;
-    } catch (error) {
-      console.error('🔍 API: Error updating task:', error);
+    } catch (_error) {
+      console.error('🔍 API: Error updating task:', _error);
       
       // Add to offline queue if network error
       const { offlineService } = await import('./offline');
@@ -551,7 +551,7 @@ export const tasksAPI = {
         return { id: taskId, offline: true, ...taskData } as Task;
       }
       
-      throw error;
+      throw _error;
     }
   },
 
@@ -570,8 +570,8 @@ export const tasksAPI = {
         const errorText = await response.text();
         throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
       }
-    } catch (error) {
-      console.error('🔍 API: Error deleting task:', error);
+    } catch (_error) {
+      console.error('🔍 API: Error deleting task:', _error);
       
       // Add to offline queue if network error
       const { offlineService } = await import('./offline');
@@ -584,7 +584,7 @@ export const tasksAPI = {
         return;
       }
       
-      throw error;
+      throw _error;
     }
   },
 };
@@ -613,8 +613,8 @@ export const calendarAPI = {
       await offlineService.cacheEvents(events);
       
       return events;
-    } catch (error) {
-      console.error('Error fetching calendar events:', error);
+    } catch (_error) {
+      console.error('Error fetching calendar events:', _error);
       
       // Try to get cached events if offline
       const { offlineService } = await import('./offline');
@@ -626,7 +626,7 @@ export const calendarAPI = {
         }
       }
       
-      throw error;
+      throw _error;
     }
   },
 
@@ -646,9 +646,9 @@ export const calendarAPI = {
       }
 
       return await response.json();
-    } catch (error) {
-      console.error('Error fetching events for date:', error);
-      throw error;
+    } catch (_error) {
+      console.error('Error fetching events for date:', _error);
+      throw _error;
     }
   },
 
@@ -680,8 +680,8 @@ export const calendarAPI = {
       }
 
       return await response.json();
-    } catch (error) {
-      console.error('Error creating calendar event:', error);
+    } catch (_error) {
+      console.error('Error creating calendar event:', _error);
       
       // Add to offline queue if network error
       const { offlineService } = await import('./offline');
@@ -695,7 +695,7 @@ export const calendarAPI = {
         return { id: actionId, offline: true };
       }
       
-      throw error;
+      throw _error;
     }
   },
 
@@ -727,8 +727,8 @@ export const calendarAPI = {
       }
 
       return await response.json();
-    } catch (error) {
-      console.error('Error updating calendar event:', error);
+    } catch (_error) {
+      console.error('Error updating calendar event:', _error);
       
       // Add to offline queue if network error
       const { offlineService } = await import('./offline');
@@ -742,7 +742,7 @@ export const calendarAPI = {
         return { id: actionId, offline: true };
       }
       
-      throw error;
+      throw _error;
     }
   },
 
@@ -760,8 +760,8 @@ export const calendarAPI = {
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-    } catch (error) {
-      console.error('Error deleting calendar event:', error);
+    } catch (_error) {
+      console.error('Error deleting calendar event:', _error);
       
       // Add to offline queue if network error
       const { offlineService } = await import('./offline');
@@ -774,7 +774,7 @@ export const calendarAPI = {
         return;
       }
       
-      throw error;
+      throw _error;
     }
   },
 
@@ -794,9 +794,9 @@ export const calendarAPI = {
       }
 
       return await response.json();
-    } catch (error) {
-      console.error('Error syncing calendar:', error);
-      throw error;
+    } catch (_error) {
+      console.error('Error syncing calendar:', _error);
+      throw _error;
     }
   },
 };
@@ -823,9 +823,9 @@ export const autoSchedulingAPI = {
 
       const data = await response.json();
       return data;
-    } catch (error) {
-      console.error('🔍 API: Error auto-scheduling tasks:', error);
-      throw error;
+    } catch (_error) {
+      console.error('🔍 API: Error auto-scheduling tasks:', _error);
+      throw _error;
     }
   },
 
@@ -848,9 +848,9 @@ export const autoSchedulingAPI = {
 
       const data = await response.json();
       return data;
-    } catch (error) {
-      console.error('🔍 API: Error fetching scheduling preferences:', error);
-      throw error;
+    } catch (_error) {
+      console.error('🔍 API: Error fetching scheduling preferences:', _error);
+      throw _error;
     }
   },
 
@@ -875,9 +875,9 @@ export const autoSchedulingAPI = {
 
       const data = await response.json();
       return data;
-    } catch (error) {
-      console.error('🔍 API: Error updating scheduling preferences:', error);
-      throw error;
+    } catch (_error) {
+      console.error('🔍 API: Error updating scheduling preferences:', _error);
+      throw _error;
     }
   },
 
@@ -900,9 +900,9 @@ export const autoSchedulingAPI = {
 
       const data = await response.json();
       return data;
-    } catch (error) {
-      console.error('🔍 API: Error fetching task scheduling status:', error);
-      throw error;
+    } catch (_error) {
+      console.error('🔍 API: Error fetching task scheduling status:', _error);
+      throw _error;
     }
   },
 
@@ -924,9 +924,9 @@ export const autoSchedulingAPI = {
         console.error('🔍 API: Error response body:', errorText);
         throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
       }
-    } catch (error) {
-      console.error('🔍 API: Error toggling task auto-scheduling:', error);
-      throw error;
+    } catch (_error) {
+      console.error('🔍 API: Error toggling task auto-scheduling:', _error);
+      throw _error;
     }
   },
 
@@ -953,9 +953,9 @@ export const autoSchedulingAPI = {
         start_time: new Date(slot.start_time),
         end_time: new Date(slot.end_time),
       }));
-    } catch (error) {
-      console.error('🔍 API: Error fetching available time slots:', error);
-      throw error;
+    } catch (_error) {
+      console.error('🔍 API: Error fetching available time slots:', _error);
+      throw _error;
     }
   },
 };

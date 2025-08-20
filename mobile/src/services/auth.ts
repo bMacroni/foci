@@ -226,8 +226,8 @@ class AuthService {
         // Error occurred
         return { success: false, message: data.error || 'Signup failed' };
       }
-    } catch (error) {
-      console.error('Signup error:', error);
+    } catch (_error) {
+      console.error('Signup error:', _error);
       return { success: false, message: 'Network error. Please try again.' };
     } finally {
       this.authState.isLoading = false;
@@ -257,8 +257,8 @@ class AuthService {
       } else {
         return { success: false, message: data.error || 'Login failed' };
       }
-    } catch (error) {
-      console.error('Login error:', error);
+    } catch (_error) {
+      console.error('Login error:', _error);
       return { success: false, message: 'Network error. Please try again.' };
     } finally {
       this.authState.isLoading = false;
@@ -280,8 +280,8 @@ class AuthService {
       };
       
       this.notifyListeners();
-    } catch (error) {
-      console.error('Logout error:', error);
+    } catch (_error) {
+      console.error('Logout error:', _error);
     }
   }
 
@@ -307,8 +307,8 @@ class AuthService {
       } else {
         return { success: false, message: data.error || 'Failed to get profile' };
       }
-    } catch (error) {
-      console.error('Get profile error:', error);
+    } catch (_error) {
+      console.error('Get profile error:', _error);
       return { success: false, message: 'Network error' };
     }
   }
@@ -329,8 +329,8 @@ class AuthService {
         this.notifyListeners();
       }
       return token;
-    } catch (error) {
-      console.error('Error getting auth token:', error);
+    } catch (_error) {
+      console.error('Error getting auth token:', _error);
       return null;
     }
   }
@@ -349,8 +349,8 @@ class AuthService {
       };
       
       this.notifyListeners();
-    } catch (error) {
-      console.error('Error setting auth data:', error);
+    } catch (_error) {
+      console.error('Error setting auth data:', _error);
     }
   }
 
@@ -393,8 +393,8 @@ class AuthService {
         await this.logout();
         return false;
       }
-    } catch (error) {
-      console.error('Token refresh error:', error);
+    } catch (_error) {
+      console.error('Token refresh error:', _error);
       await this.logout();
       return false;
     }

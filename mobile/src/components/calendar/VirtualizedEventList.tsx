@@ -152,7 +152,7 @@ export const VirtualizedEventList: React.FC<VirtualizedEventListProps> = React.m
       maxToRenderPerBatch={10}
       windowSize={10}
       initialNumToRender={10}
-      getItemLayout={compact ? undefined : (data, index) => ({
+      getItemLayout={compact ? undefined : (_data, index) => ({
         length: 120, // Approximate height of event card
         offset: 120 * index,
         index,

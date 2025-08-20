@@ -26,7 +26,7 @@ interface EventCardProps {
   compact?: boolean;
 }
 
-export const EventCard = React.memo<EventCardProps>(({
+export const EventCard = React.memo<EventCardProps>(({ 
   event,
   type,
   onEdit,
@@ -173,11 +173,11 @@ export const EventCard = React.memo<EventCardProps>(({
           message: 'Choose when to reschedule this event or tap Cancel to exit',
           destructiveButtonIndex: undefined, // No destructive action
         },
-        (buttonIndex) => {
+        (_buttonIndex) => {
           // If user cancels (buttonIndex === options.length) or dismisses, do nothing
-          if (buttonIndex < options.length) {
+          if (_buttonIndex < options.length) {
             hapticFeedback.selection();
-            const selectedOption = options[buttonIndex];
+            const selectedOption = options[_buttonIndex];
             if (selectedOption.date) {
               onReschedule(event.id, selectedOption.date);
             } else {
