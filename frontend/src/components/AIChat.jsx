@@ -268,7 +268,7 @@ I'm here to help you:
         tasksAPI.getAll()
       ]);
       
-      // Only update user data, don't trigger any other effects
+      // Only update user data, dont trigger any other effects
       setUserData(prevData => ({
         goals: Array.isArray(goalsResponse.data) ? goalsResponse.data : [],
         tasks: Array.isArray(tasksResponse.data) ? tasksResponse.data : []
@@ -439,7 +439,7 @@ You’re making great strides!
 
   // Refactored handleGeminiResponse for new backend flow
   const handleGeminiResponse = (response) => {
-    console.log('🔍 Raw response from API:', response);
+    console.debug('🔍 Raw response from API:', response);
     try {
       // Extract the actual response data from the axios response
       const responseData = response.data || response;
@@ -513,9 +513,9 @@ You’re making great strides!
         setConversationThreads(prev => [response.data, ...prev]);
       }
       
-      console.log('🚀 Sending message to AI API...');
+      console.debug('🚀 Sending message to AI API...');
       const response = await aiAPI.sendMessage(messageContent, threadId);
-      console.log('✅ Received response from AI API');
+      console.debug('✅ Received response from AI API');
       handleGeminiResponse(response);
       
     } catch (error) {
@@ -594,7 +594,7 @@ You’re making great strides!
 
   // Execute action based on type and operation
   const executeAction = async (action) => {
-    console.log('Executing action:', action);
+    console.debug('Executing action:', action);
     
     try {
       switch (action.type) {
@@ -1692,7 +1692,7 @@ const MessageBubble = ({ message, onQuickAction }) => {
                     </svg>
                   </div>
                   <h3 className="text-lg font-medium text-gray-900 mb-2">No events found</h3>
-                  <p className="text-gray-500">You don't have any events scheduled for this time period.</p>
+                  <p className="text-gray-500">You don&apos;t have any events scheduled for this time period.</p>
                 </div>
               )}
             </div>
@@ -1879,7 +1879,7 @@ const MessageBubble = ({ message, onQuickAction }) => {
                 </svg>
               </div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">No events found</h3>
-              <p className="text-gray-500">You don't have any events scheduled for this time period.</p>
+              <p className="text-gray-500">You don&apos;t have any events scheduled for this time period.</p>
             </div>
           )}
         </div>

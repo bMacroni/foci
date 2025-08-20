@@ -53,7 +53,7 @@ class AuthService {
   private initialized = false;
 
   private constructor() {
-    console.log('🔐 AuthService: Constructor called');
+    console.warn('🔐 AuthService: Constructor called');
     this.initializeAuth();
   }
 
@@ -66,11 +66,11 @@ class AuthService {
 
   // Initialize auth state from storage
   private async initializeAuth() {
-    console.log('🔐 AuthService: Starting initialization...');
+    console.warn('🔐 AuthService: Starting initialization...');
     try {
       // Check all possible storage keys
       const allKeys = await AsyncStorage.getAllKeys();
-      console.log('🔐 AuthService: All AsyncStorage keys:', allKeys);
+      console.warn('🔐 AuthService: All AsyncStorage keys:', allKeys);
       
       // Try both key formats
       let token = await AsyncStorage.getItem('auth_token');
@@ -79,20 +79,20 @@ class AuthService {
       // If not found, try alternative keys
       if (!token) {
         token = await AsyncStorage.getItem('authToken');
-        console.log('🔐 AuthService: Trying authToken key - found:', !!token);
+        console.warn('🔐 AuthService: Trying authToken key - found:', !!token);
       }
       if (!userData) {
         userData = await AsyncStorage.getItem('authUser');
-        console.log('🔐 AuthService: Trying authUser key - found:', !!userData);
+        console.warn('🔐 AuthService: Trying authUser key - found:', !!userData);
       }
       
       // Also try to get the actual value of authToken to see what's stored
       const authTokenValue = await AsyncStorage.getItem('authToken');
-      console.log('🔐 AuthService: authToken value:', authTokenValue);
+      console.warn('🔐 AuthService: authToken value:', authTokenValue);
       
-      console.log('🔐 AuthService: Retrieved from storage - token:', !!token, 'userData:', !!userData);
-      console.log('🔐 AuthService: Token value:', token);
-      console.log('🔐 AuthService: UserData value:', userData);
+      console.warn('🔐 AuthService: Retrieved from storage - token:', !!token, 'userData:', !!userData);
+      console.warn('🔐 AuthService: Token value:', token);
+      console.warn('🔐 AuthService: UserData value:', userData);
       
       if (token) {
         // Try to get user data from storage first
@@ -101,7 +101,7 @@ class AuthService {
         if (userData) {
           try {
             user = JSON.parse(userData);
-            console.log('🔐 AuthService: User data found in storage');
+            console.warn('🔐 AuthService: User data found in storage');
           } catch (error) {
             console.error('🔐 AuthService: Error parsing user data:', error);
           }
@@ -118,7 +118,7 @@ class AuthService {
               created_at: decodedToken.iat ? new Date(decodedToken.iat * 1000).toISOString() : undefined,
               updated_at: decodedToken.iat ? new Date(decodedToken.iat * 1000).toISOString() : undefined,
             };
-            console.log('🔐 AuthService: User data extracted from JWT token');
+            console.warn('🔐 AuthService: User data extracted from JWT token');
           }
         }
         
@@ -129,7 +129,7 @@ class AuthService {
             isLoading: false,
             isAuthenticated: true,
           };
-          console.log('🔐 AuthService: User authenticated - user:', user.email);
+          console.warn('🔐 AuthService: User authenticated - user:', user.email);
         } else {
           this.authState = {
             user: null,
@@ -137,7 +137,7 @@ class AuthService {
             isLoading: false,
             isAuthenticated: false,
           };
-          console.log('🔐 AuthService: Token found but could not extract user data');
+          console.warn('🔐 AuthService: Token found but could not extract user data');
         }
       } else {
         this.authState = {
@@ -146,11 +146,11 @@ class AuthService {
           isLoading: false,
           isAuthenticated: false,
         };
-        console.log('🔐 AuthService: No stored auth data - user not authenticated');
+        console.warn('🔐 AuthService: No stored auth data - user not authenticated');
       }
       
       this.initialized = true;
-      console.log('🔐 AuthService: Initialization complete, notifying listeners');
+      console.warn('🔐 AuthService: Initialization complete, notifying listeners');
       this.notifyListeners();
     } catch (error) {
       console.error('🔐 AuthService: Error initializing auth:', error);
@@ -167,18 +167,18 @@ class AuthService {
 
   // Get current auth state
   public getAuthState(): AuthState {
-    console.log('🔐 AuthService: getAuthState called - state:', this.authState);
+    console.warn('🔐 AuthService: getAuthState called - state:', this.authState);
     return { ...this.authState };
   }
 
   // Subscribe to auth state changes
   public subscribe(listener: (state: AuthState) => void): () => void {
-    console.log('🔐 AuthService: New subscriber added');
+    console.warn('🔐 AuthService: New subscriber added');
     this.listeners.push(listener);
     
     // Immediately notify the new listener with current state
     if (this.initialized) {
-      console.log('🔐 AuthService: Immediately notifying new subscriber');
+      console.warn('🔐 AuthService: Immediately notifying new subscriber');
       listener(this.getAuthState());
     }
     
@@ -187,14 +187,14 @@ class AuthService {
       const index = this.listeners.indexOf(listener);
       if (index > -1) {
         this.listeners.splice(index, 1);
-        console.log('🔐 AuthService: Subscriber removed');
+        console.warn('🔐 AuthService: Subscriber removed');
       }
     };
   }
 
   // Notify all listeners of state changes
   private notifyListeners() {
-    console.log('🔐 AuthService: Notifying', this.listeners.length, 'listeners');
+    console.warn('🔐 AuthService: Notifying', this.listeners.length, 'listeners');
     const currentState = this.getAuthState();
     this.listeners.forEach(listener => listener(currentState));
   }
@@ -226,8 +226,8 @@ class AuthService {
         // Error occurred
         return { success: false, message: data.error || 'Signup failed' };
       }
-    } catch (error) {
-      console.error('Signup error:', error);
+    } catch (_error) {
+      console.error('Signup error:', _error);
       return { success: false, message: 'Network error. Please try again.' };
     } finally {
       this.authState.isLoading = false;
@@ -257,8 +257,8 @@ class AuthService {
       } else {
         return { success: false, message: data.error || 'Login failed' };
       }
-    } catch (error) {
-      console.error('Login error:', error);
+    } catch (_error) {
+      console.error('Login error:', _error);
       return { success: false, message: 'Network error. Please try again.' };
     } finally {
       this.authState.isLoading = false;
@@ -280,8 +280,8 @@ class AuthService {
       };
       
       this.notifyListeners();
-    } catch (error) {
-      console.error('Logout error:', error);
+    } catch (_error) {
+      console.error('Logout error:', _error);
     }
   }
 
@@ -307,8 +307,8 @@ class AuthService {
       } else {
         return { success: false, message: data.error || 'Failed to get profile' };
       }
-    } catch (error) {
-      console.error('Get profile error:', error);
+    } catch (_error) {
+      console.error('Get profile error:', _error);
       return { success: false, message: 'Network error' };
     }
   }
@@ -329,8 +329,8 @@ class AuthService {
         this.notifyListeners();
       }
       return token;
-    } catch (error) {
-      console.error('Error getting auth token:', error);
+    } catch (_error) {
+      console.error('Error getting auth token:', _error);
       return null;
     }
   }
@@ -349,8 +349,8 @@ class AuthService {
       };
       
       this.notifyListeners();
-    } catch (error) {
-      console.error('Error setting auth data:', error);
+    } catch (_error) {
+      console.error('Error setting auth data:', _error);
     }
   }
 
@@ -366,7 +366,7 @@ class AuthService {
 
   // Debug method to re-initialize auth
   public async debugReinitialize(): Promise<void> {
-    console.log('🔐 AuthService: Debug re-initialization triggered');
+    console.warn('🔐 AuthService: Debug re-initialization triggered');
     this.initialized = false;
     await this.initializeAuth();
   }
@@ -393,8 +393,8 @@ class AuthService {
         await this.logout();
         return false;
       }
-    } catch (error) {
-      console.error('Token refresh error:', error);
+    } catch (_error) {
+      console.error('Token refresh error:', _error);
       await this.logout();
       return false;
     }

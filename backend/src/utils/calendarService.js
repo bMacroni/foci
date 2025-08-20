@@ -1,4 +1,5 @@
 import { google } from 'googleapis';
+import logger from './logger.js';
 import { getGoogleTokens } from './googleTokenStorage.js';
 import { dateParser } from './dateParser.js';
 import { getCalendarEventsFromDB } from './syncService.js';
@@ -35,7 +36,7 @@ export async function getCalendarClient(userId) {
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
     return calendar;
   } catch (error) {
-    console.error('Error creating calendar client:', error);
+    logger.error('Error creating calendar client:', error);
     throw error;
   }
 }
@@ -69,7 +70,7 @@ export async function listCalendarEvents(userId, maxResults = 10, timeMin = null
       // Graceful fallback: return empty array if no tokens
       return [];
     }
-    console.error('Error listing calendar events:', error);
+    logger.error('Error listing calendar events:', error);
     throw error;
   }
 }
@@ -272,7 +273,7 @@ export async function getCalendarList(userId) {
     const response = await calendar.calendarList.list();
     return response.data.items;
   } catch (error) {
-    console.error('Error getting calendar list:', error);
+    logger.error('Error getting calendar list:', error);
     throw error;
   }
 } 
@@ -468,17 +469,17 @@ export async function readCalendarEventFromAI(args, userId, userContext) {
   try {
     const DEBUG = process.env.DEBUG_LOGS === 'true';
     if (DEBUG) {
-      console.log('=== READ CALENDAR EVENT DEBUG ===');
-      console.log('Args:', args);
-      console.log('UserId:', userId);
-      console.log('Date parameter:', args.date);
+      logger.debug('=== READ CALENDAR EVENT DEBUG ===');
+      logger.debug('Args:', args);
+      logger.debug('UserId:', userId);
+      logger.debug('Date parameter:', args.date);
     }
 
     // Read calendar event processing
 
     // Parse the date input (could be natural language like "tomorrow", "next week")
   const dateRange = parseDateRange(args.date, userContext?.timeZone || 'America/Chicago');
-    if (DEBUG) console.log('Parsed date range:', dateRange);
+    if (DEBUG) logger.debug('Parsed date range:', dateRange);
     // Date range parsed
 
     let timeMin, timeMax;
@@ -495,19 +496,19 @@ export async function readCalendarEventFromAI(args, userId, userContext) {
     if (dateRange.startDate && dateRange.endDate) {
       timeMin = new Date(dateRange.startDate + 'T00:00:00' + OFFSET);
       timeMax = new Date(dateRange.endDate + 'T23:59:59' + OFFSET);
-      if (DEBUG) console.log('Time range:', { timeMin: timeMin.toISOString(), timeMax: timeMax.toISOString() });
+      if (DEBUG) logger.debug('Time range:', { timeMin: timeMin.toISOString(), timeMax: timeMax.toISOString() });
     } else {
       const now = new Date();
       const nowCST = new Date(now.toLocaleString('en-US', { timeZone: 'America/Chicago' }));
       timeMin = nowCST;
       timeMax = null;
-      if (DEBUG) console.log('No date specified, using current time onwards:', { timeMin: timeMin.toISOString() });
+      if (DEBUG) logger.debug('No date specified, using current time onwards:', { timeMin: timeMin.toISOString() });
     }
 
     // Query the local database for events (DB stores UTC timestamps)
     let dbEvents = await getCalendarEventsFromDB(userId, 50, timeMin, timeMax);
-    if (DEBUG) console.log('Database events found:', dbEvents.length);
-    if (DEBUG) console.log('First few events:', dbEvents.slice(0, 3));
+    if (DEBUG) logger.debug('Database events found:', dbEvents.length);
+    if (DEBUG) logger.debug('First few events:', dbEvents.slice(0, 3));
 
     // Additional filters
     if (args.location) {

@@ -43,7 +43,7 @@ export default function TabNavigator() {
                   try { const parsed = lastItemsStr ? JSON.parse(lastItemsStr) : []; return Array.isArray(parsed) && parsed.length > 0; } catch { return false; }
                 })();
                 if (!sessionHasItems && !lastHasItems) {
-                  navigation.navigate('BrainDump', { screen: 'BrainDumpInput' });
+                  navigation.navigate('BrainDump' as never);
                 }
               } catch {}
             })();

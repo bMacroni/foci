@@ -658,17 +658,17 @@ class ErrorHandlingService {
     const message = error.message || error.toString();
     const isNetworkConnected = await this.getNetworkStatus();
     
-    console.log('=== Error Debug Information ===');
-    console.log('Error Status:', status);
-    console.log('Error Message:', message);
-    console.log('Network Connected:', isNetworkConnected);
-    console.log('Error Category:', category);
-    console.log('Operation:', context.operation);
-    console.log('Endpoint:', context.endpoint);
-    console.log('Retry Count:', context.retryCount);
-    console.log('Timestamp:', new Date(context.timestamp).toISOString());
-    console.log('Full Error Object:', JSON.stringify(error, null, 2));
-    console.log('================================');
+    console.warn('=== Error Debug Information ===');
+    console.warn('Error Status:', status);
+    console.warn('Error Message:', message);
+    console.warn('Network Connected:', isNetworkConnected);
+    console.warn('Error Category:', category);
+    console.warn('Operation:', context.operation);
+    console.warn('Endpoint:', context.endpoint);
+    console.warn('Retry Count:', context.retryCount);
+    console.warn('Timestamp:', new Date(context.timestamp).toISOString());
+    console.warn('Full Error Object:', JSON.stringify(error, null, 2));
+    console.warn('================================');
   }
 
   // Get retry configuration for category

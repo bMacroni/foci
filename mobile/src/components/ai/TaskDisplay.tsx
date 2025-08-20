@@ -64,8 +64,8 @@ const parseTaskData = (taskText: string): TaskData | null => {
     }
     
     return null;
-  } catch (error) {
-    console.error('Failed to parse task data:', error);
+  } catch (_error) {
+    // ignore parse errors; fall back to null
     return null;
   }
 };

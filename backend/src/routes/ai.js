@@ -3,6 +3,7 @@ import { requireAuth } from '../middleware/auth.js';
 import GeminiService from '../utils/geminiService.js';
 // import AIService from '../utils/aiService.js';
 import { conversationController } from '../controllers/conversationController.js';
+import logger from '../utils/logger.js';
 import { sendFeedback } from '../controllers/feedbackController.js';
 import { autoSchedulingController } from '../controllers/autoSchedulingController.js';
 
@@ -36,7 +37,7 @@ router.post('/chat', requireAuth, async (req, res) => {
         await conversationController.addMessage(threadId, message, 'user', { mood: moodHeader }, token);
         await conversationController.addMessage(threadId, response.message, 'assistant', { actions: response.actions }, token);
       } catch (dbError) {
-        console.error('Database save error:', dbError);
+        logger.error('Database save error:', dbError);
         // Continue with response even if database save fails
       }
     }
@@ -49,7 +50,7 @@ router.post('/chat', requireAuth, async (req, res) => {
     res.json(finalResponse);
 
   } catch (error) {
-    console.error('AI Chat Error:', error);
+    logger.error('AI Chat Error:', error);
     res.status(500).json({ 
       error: 'Failed to process message',
       message: 'I\'m sorry, I encountered an error processing your request. Please try again.'
@@ -87,7 +88,7 @@ router.post('/recommend-task', requireAuth, async (req, res) => {
     const result = await geminiService.recommendTaskFromList(userRequest, tasks, userId);
     res.json(result);
   } catch (error) {
-    console.error('Recommend Task Error:', error);
+    logger.error('Recommend Task Error:', error);
     res.status(500).json({ error: 'Failed to recommend a task' });
   }
 });
@@ -116,7 +117,7 @@ router.post('/braindump', requireAuth, async (req, res) => {
     const items = await geminiService.processBrainDump(text, userId);
     return res.json({ threadId: thread.id, items });
   } catch (error) {
-    console.error('AI BrainDump Error:', error);
+    logger.error('AI BrainDump Error:', error);
     return res.status(500).json({ error: 'Failed to process brain dump' });
   }
 });
@@ -130,7 +131,7 @@ router.post('/threads', requireAuth, async (req, res) => {
     const thread = await conversationController.createThread(userId, title || 'New Conversation', summary);
     res.json(thread);
   } catch (error) {
-    console.error('Create Thread Error:', error);
+    logger.error('Create Thread Error:', error);
     res.status(500).json({ error: 'Failed to create conversation thread' });
   }
 });
@@ -142,7 +143,7 @@ router.get('/threads', requireAuth, async (req, res) => {
     const threads = await conversationController.getThreads(userId);
     res.json(threads);
   } catch (error) {
-    console.error('Get Threads Error:', error);
+    logger.error('Get Threads Error:', error);
     res.status(500).json({ error: 'Failed to get conversation threads' });
   }
 });
@@ -160,7 +161,7 @@ router.get('/threads/:threadId', requireAuth, async (req, res) => {
     
     res.json(thread);
   } catch (error) {
-    console.error('Get Thread Error:', error);
+    logger.error('Get Thread Error:', error);
     res.status(500).json({ error: 'Failed to get conversation thread' });
   }
 });
@@ -179,7 +180,7 @@ router.put('/threads/:threadId', requireAuth, async (req, res) => {
     
     res.json(updatedThread);
   } catch (error) {
-    console.error('Update Thread Error:', error);
+    logger.error('Update Thread Error:', error);
     res.status(500).json({ error: 'Failed to update conversation thread' });
   }
 });
@@ -197,7 +198,7 @@ router.delete('/threads/:threadId', requireAuth, async (req, res) => {
     
     res.json({ message: 'Thread deleted successfully' });
   } catch (error) {
-    console.error('Delete Thread Error:', error);
+    logger.error('Delete Thread Error:', error);
     res.status(500).json({ error: 'Failed to delete conversation thread' });
   }
 });
@@ -303,7 +304,7 @@ router.get('/scheduling-preferences', requireAuth, async (req, res) => {
     const preferences = await autoSchedulingController.getSchedulingPreferences(userId, token);
     res.json(preferences);
   } catch (error) {
-    console.error('Get Scheduling Preferences Error:', error);
+    logger.error('Get Scheduling Preferences Error:', error);
     res.status(500).json({ error: 'Failed to get scheduling preferences' });
   }
 });
@@ -318,7 +319,7 @@ router.put('/scheduling-preferences', requireAuth, async (req, res) => {
     const updatedPreferences = await autoSchedulingController.updateSchedulingPreferences(userId, preferences, token);
     res.json(updatedPreferences);
   } catch (error) {
-    console.error('Update Scheduling Preferences Error:', error);
+    logger.error('Update Scheduling Preferences Error:', error);
     res.status(500).json({ error: 'Failed to update scheduling preferences' });
   }
 });
@@ -333,7 +334,7 @@ router.get('/task-scheduling-status/:taskId', requireAuth, async (req, res) => {
     const status = await autoSchedulingController.getTaskSchedulingStatus(userId, taskId, token);
     res.json(status);
   } catch (error) {
-    console.error('Get Task Scheduling Status Error:', error);
+    logger.error('Get Task Scheduling Status Error:', error);
     res.status(500).json({ error: 'Failed to get task scheduling status' });
   }
 });
@@ -349,7 +350,7 @@ router.put('/task-scheduling-toggle/:taskId', requireAuth, async (req, res) => {
     await autoSchedulingController.toggleTaskAutoScheduling(userId, taskId, enabled, token);
     res.json({ message: 'Task auto-scheduling updated successfully' });
   } catch (error) {
-    console.error('Toggle Task Auto-Scheduling Error:', error);
+    logger.error('Toggle Task Auto-Scheduling Error:', error);
     res.status(500).json({ error: 'Failed to toggle task auto-scheduling' });
   }
 });
@@ -363,7 +364,7 @@ router.post('/auto-schedule-tasks', requireAuth, async (req, res) => {
     const result = await autoSchedulingController.autoScheduleTasks(userId, token);
     res.json(result);
   } catch (error) {
-    console.error('Auto-Schedule Tasks Error:', error);
+    logger.error('Auto-Schedule Tasks Error:', error);
     res.status(500).json({ error: 'Failed to auto-schedule tasks' });
   }
 });
@@ -378,7 +379,7 @@ router.get('/available-time-slots/:taskId', requireAuth, async (req, res) => {
     const timeSlots = await autoSchedulingController.getAvailableTimeSlots(userId, taskId, token);
     res.json(timeSlots);
   } catch (error) {
-    console.error('Get Available Time Slots Error:', error);
+    logger.error('Get Available Time Slots Error:', error);
     res.status(500).json({ error: 'Failed to get available time slots' });
   }
 });
@@ -393,7 +394,7 @@ router.post('/schedule-single-task/:taskId', requireAuth, async (req, res) => {
     const result = await autoSchedulingController.scheduleSingleTask(userId, taskId, token);
     res.json(result);
   } catch (error) {
-    console.error('Schedule Single Task Error:', error);
+    logger.error('Schedule Single Task Error:', error);
     res.status(500).json({ error: 'Failed to schedule single task' });
   }
 });

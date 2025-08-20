@@ -8,7 +8,7 @@ import { QuickAction } from '../../types/onboarding';
 
 interface QuickActionsProps {
   actions: QuickAction[];
-  onActionPress: (action: QuickAction) => void;
+  onActionPress: (_action: QuickAction) => void;
   visible: boolean;
 }
 
@@ -18,15 +18,15 @@ export default function QuickActions({ actions, onActionPress, visible }: QuickA
   return (
     <View style={styles.container}>
       {actions.map((action) => (
-                 <TouchableOpacity
-           key={action.id}
-           style={styles.actionButton}
-           onPress={() => onActionPress(action)}
-           activeOpacity={0.7}
-         >
-                       <Icon name={action.icon} size={20} color={colors.primary} />
-           <Text style={styles.actionText}>{action.label}</Text>
-         </TouchableOpacity>
+        <TouchableOpacity
+          key={action.id}
+          style={styles.actionButton}
+          onPress={() => onActionPress(action)}
+          activeOpacity={0.7}
+        >
+          <Icon name={action.icon} size={20} color={colors.primary} />
+          <Text style={styles.actionText}>{action.label}</Text>
+        </TouchableOpacity>
       ))}
     </View>
   );

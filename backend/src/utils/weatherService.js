@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import logger from './logger.js';
 
 // Weather service using Open-Meteo API
 // Open-Meteo is completely free and doesn't require an API key
@@ -83,7 +84,7 @@ export async function getWeatherData(location, date = new Date()) {
     return processedData;
 
   } catch (error) {
-    console.error(`[WeatherService] Error fetching weather data for ${location}:`, error);
+    logger.error(`[WeatherService] Error fetching weather data for ${location}:`, error);
     
     // Return fallback data if API fails
     return {
@@ -130,7 +131,7 @@ async function geocodeLocation(location) {
     // No geocoding results found
     return null;
   } catch (error) {
-    console.error(`[WeatherService] Geocoding error for ${location}:`, error);
+    logger.error(`[WeatherService] Geocoding error for ${location}:`, error);
     return null;
   }
 }
@@ -273,7 +274,7 @@ export async function checkWeatherConditions(location, date) {
     
     // Weather check completed for location
     if (process.env.NODE_ENV === 'development') {
-      console.log(`[WeatherService] Weather check completed for ${location}:`, {
+      logger.debug(`[WeatherService] Weather check completed for ${location}:`, {
         temperature: weatherData.temperature,
         condition: weatherData.condition,
         precipitation_chance: weatherData.precipitation_chance,
@@ -283,7 +284,7 @@ export async function checkWeatherConditions(location, date) {
     
     return weatherData;
   } catch (error) {
-    console.error(`[WeatherService] Error checking weather conditions for ${location}:`, error);
+    logger.error(`[WeatherService] Error checking weather conditions for ${location}:`, error);
     
     // Return fallback data
     return {

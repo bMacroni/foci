@@ -8,7 +8,6 @@ export interface CalendarEvent {
   description?: string;
   // Classification
   event_type?: 'event' | 'task' | 'goal';
-  task_id?: string;
   goal_id?: string;
   is_all_day?: boolean;
   // Database format

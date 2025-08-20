@@ -140,8 +140,8 @@ export const triggerHaptic = (type: 'light' | 'medium' | 'heavy' = 'light') => {
   try {
     const hapticType = type === 'light' ? 'impactLight' : type === 'medium' ? 'impactMedium' : 'impactHeavy';
     HapticFeedback.trigger(hapticType, hapticOptions);
-  } catch (error) {
-    console.log(`Haptic feedback: ${type}`);
+  } catch (_error) {
+    console.warn(`Haptic feedback: ${type}`);
   }
 };
 

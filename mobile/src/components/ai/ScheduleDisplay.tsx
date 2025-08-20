@@ -78,8 +78,8 @@ export default function ScheduleDisplay({ text }: ScheduleDisplayProps) {
           }));
         }
       }
-    } catch (error) {
-      console.error('Failed to parse JSON schedule data:', error);
+    } catch (_error) {
+      // ignore parse errors; fallback below
     }
     
     // Fallback to old parsing method for backward compatibility

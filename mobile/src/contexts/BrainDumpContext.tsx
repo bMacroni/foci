@@ -34,8 +34,8 @@ export function BrainDumpProvider({ children }: { children: React.ReactNode }) {
         if (raw) {
           const parsed = JSON.parse(raw);
           if (parsed && typeof parsed === 'object') {
-            if (typeof parsed.threadId === 'string') setThreadIdState(parsed.threadId);
-            if (Array.isArray(parsed.items)) setItemsState(parsed.items);
+            if (typeof parsed.threadId === 'string') {setThreadIdState(parsed.threadId);}
+            if (Array.isArray(parsed.items)) {setItemsState(parsed.items);}
           }
         }
       } catch {}

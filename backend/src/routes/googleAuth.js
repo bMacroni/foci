@@ -1,4 +1,5 @@
 import express from 'express';
+import logger from '../utils/logger.js';
 import { google } from 'googleapis';
 import oauth2Client from '../utils/googleAuth.js';
 import { createClient } from '@supabase/supabase-js';
@@ -30,7 +31,7 @@ router.get('/callback', async (req, res) => {
   try {
     // 1. Exchange code for tokens
     const { tokens } = await oauth2Client.getToken(code);
-    console.log('Google tokens received successfully');
+    logger.info('Google tokens received successfully');
 
     // 2. Get user info from Google
     oauth2Client.setCredentials(tokens);
@@ -46,7 +47,7 @@ router.get('/callback', async (req, res) => {
     res.redirect(`${frontendUrl}?google=info&email=${encodeURIComponent(googleEmail)}&name=${encodeURIComponent(googleName)}`);
     
   } catch (err) {
-    console.error('Error in Google OAuth callback:', err);
+    logger.error('Error in Google OAuth callback:', err);
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     res.redirect(`${frontendUrl}?google=error&message=${encodeURIComponent('OAuth callback failed')}`);
   }

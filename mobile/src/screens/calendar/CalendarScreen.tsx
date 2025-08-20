@@ -166,18 +166,18 @@ export default function CalendarScreen() {
       setCurrentPage(page);
       setHasMoreEvents((events?.length || 0) >= 50); // Check if we got a full page
       setLoadingMore(false);
-    } catch (error) {
+    } catch (_error) {
       // error loading calendar data
       
       // Handle error with enhanced error handling service
-      if (error && typeof error === 'object' && 'title' in error) {
+      if (_error && typeof _error === 'object' && 'title' in _error) {
         // This is a UserFriendlyError from our enhanced API
-        setCurrentError(error as UserFriendlyError);
+        setCurrentError(_error as UserFriendlyError);
         setErrorVisible(true);
       } else {
         // Fallback error handling
         const userError = await errorHandlingService.handleError(
-          error,
+          _error,
           ErrorCategory.CALENDAR,
           {
             operation: 'loadCalendarData',
@@ -268,17 +268,17 @@ export default function CalendarScreen() {
       // Reload data to reflect changes
       await loadCalendarData();
       hapticFeedback.success();
-    } catch (error) {
+    } catch (_error) {
       // error deleting event
       hapticFeedback.error();
       
       // Handle error with enhanced error handling
-      if (error && typeof error === 'object' && 'title' in error) {
-        setCurrentError(error as UserFriendlyError);
+      if (_error && typeof _error === 'object' && 'title' in _error) {
+        setCurrentError(_error as UserFriendlyError);
         setErrorVisible(true);
       } else {
         const userError = await errorHandlingService.handleError(
-          error,
+          _error,
           event ? ErrorCategory.CALENDAR : ErrorCategory.TASKS,
           {
             operation: 'deleteEvent',
@@ -321,7 +321,7 @@ export default function CalendarScreen() {
       
       // Success - no need to reload, UI is already updated
       hapticFeedback.success();
-    } catch (error) {
+    } catch (_error) {
       // error completing task
       hapticFeedback.error();
       
@@ -336,12 +336,12 @@ export default function CalendarScreen() {
       }));
       
       // Handle error with enhanced error handling
-      if (error && typeof error === 'object' && 'title' in error) {
-        setCurrentError(error as UserFriendlyError);
+      if (_error && typeof _error === 'object' && 'title' in _error) {
+        setCurrentError(_error as UserFriendlyError);
         setErrorVisible(true);
       } else {
         const userError = await errorHandlingService.handleError(
-          error,
+          _error,
           ErrorCategory.TASKS,
           {
             operation: 'completeTask',
@@ -404,17 +404,17 @@ export default function CalendarScreen() {
       // Refresh data
       await loadCalendarData();
       hapticFeedback.success();
-    } catch (error) {
+    } catch (_error) {
       // error rescheduling event
       hapticFeedback.error();
       
       // Handle error with enhanced error handling
-      if (error && typeof error === 'object' && 'title' in error) {
-        setCurrentError(error as UserFriendlyError);
+      if (_error && typeof _error === 'object' && 'title' in _error) {
+        setCurrentError(_error as UserFriendlyError);
         setErrorVisible(true);
       } else {
         const userError = await errorHandlingService.handleError(
-          error,
+          _error,
           event ? ErrorCategory.CALENDAR : ErrorCategory.TASKS,
           {
             operation: 'rescheduleEvent',
@@ -568,7 +568,7 @@ export default function CalendarScreen() {
           };
           dayEvents.push(dayEvent);
         }
-      } catch (error) {
+      } catch (_error) {
         // invalid event date
       }
     });
@@ -623,7 +623,7 @@ export default function CalendarScreen() {
       try {
         const goalDate = new Date(goal.target_completion_date);
         return goalDate.getMonth() === currentMonth && goalDate.getFullYear() === currentYear;
-      } catch (error) {
+      } catch (_error) {
         // invalid goal date
         return false;
       }

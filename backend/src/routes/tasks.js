@@ -1,4 +1,5 @@
 import express from 'express';
+import logger from '../utils/logger.js';
 import { requireAuth } from '../middleware/auth.js';
 import {
   createTask,
@@ -44,7 +45,7 @@ router.get('/notifications', requireAuth, async (req, res) => {
     const notifications = await getUserNotifications(req.user.id, req.query.limit ? parseInt(req.query.limit) : 10);
     res.json(notifications);
   } catch (error) {
-    console.error('Error fetching notifications:', error);
+    logger.error('Error fetching notifications:', error);
     res.status(500).json({ error: 'Failed to fetch notifications' });
   }
 });
@@ -58,7 +59,7 @@ router.put('/notifications/:id/read', requireAuth, async (req, res) => {
       res.status(400).json({ error: result.error });
     }
   } catch (error) {
-    console.error('Error marking notification as read:', error);
+    logger.error('Error marking notification as read:', error);
     res.status(500).json({ error: 'Failed to mark notification as read' });
   }
 });
@@ -72,7 +73,7 @@ router.put('/notifications/read-all', requireAuth, async (req, res) => {
       res.status(400).json({ error: result.error });
     }
   } catch (error) {
-    console.error('Error marking all notifications as read:', error);
+    logger.error('Error marking all notifications as read:', error);
     res.status(500).json({ error: 'Failed to mark all notifications as read' });
   }
 });

@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import logger from './logger.js';
 import { dateParser } from './dateParser.js';
 import {
   allGeminiFunctionDeclarations
@@ -12,7 +13,7 @@ export class GeminiService {
     this.conversationHistory = new Map();
     this.DEBUG = process.env.DEBUG_LOGS === 'true';
     if (!process.env.GOOGLE_AI_API_KEY) {
-      if (this.DEBUG) console.warn('GOOGLE_AI_API_KEY not found. Gemini AI features will be disabled.');
+      if (this.DEBUG) logger.warn('GOOGLE_AI_API_KEY not found. Gemini AI features will be disabled.');
       this.enabled = false;
       return;
     }
@@ -109,19 +110,19 @@ Respond ONLY with a JSON array.`;
       const isServerError = err && (err.status === 500 || err.status === 502 || err.status === 503 || err.status === 504);
       if (attempt < maxAttempts && isServerError) {
         const delay = baseDelayMs * Math.pow(2, attempt - 1);
-        if (this.DEBUG) console.warn(`Gemini generateContent failed (attempt ${attempt}). Retrying in ${delay}ms...`);
+        if (this.DEBUG) logger.warn(`Gemini generateContent failed (attempt ${attempt}). Retrying in ${delay}ms...`);
         await new Promise(res => setTimeout(res, delay));
         return this._generateContentWithRetry(request, attempt + 1);
       }
       // Fallback to a lighter model once before giving up
       if (attempt === maxAttempts) {
         try {
-          if (this.DEBUG) console.warn('Primary model failed after retries. Falling back to gemini-1.5-flash');
+          if (this.DEBUG) logger.warn('Primary model failed after retries. Falling back to gemini-1.5-flash');
           const fallbackModel = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
           const result = await fallbackModel.generateContent(request);
           return await result.response;
         } catch (fallbackErr) {
-          if (this.DEBUG) console.error('Fallback model failed:', fallbackErr);
+          if (this.DEBUG) logger.error('Fallback model failed:', fallbackErr);
         }
       }
       throw err;

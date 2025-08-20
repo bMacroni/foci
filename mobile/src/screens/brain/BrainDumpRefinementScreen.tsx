@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, LayoutAnimation, Platform, UIManager, TextInput } from 'react-native';
+import * as React from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, LayoutAnimation, Platform, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BrainDumpSubNav from './BrainDumpSubNav';
 import Icon from 'react-native-vector-icons/Octicons';
@@ -55,7 +56,7 @@ export default function BrainDumpRefinementScreen({ navigation, route }: any) {
         }
       } catch {}
     })();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, []);
 
   // Show toast if duplicates were removed on entry
@@ -156,7 +157,7 @@ export default function BrainDumpRefinementScreen({ navigation, route }: any) {
         : `Set "${sanitizeText(item.text)}" as Today's Focus.`;
       setToastMessage(message);
       setToastVisible(true);
-    } catch (e) {
+    } catch (_e) {
       setToastMessage('Something went wrong setting Today\'s Focus.');
       setToastVisible(true);
     } finally {

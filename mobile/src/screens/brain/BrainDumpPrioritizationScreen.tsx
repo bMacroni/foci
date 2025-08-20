@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import * as React from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, PanResponder, Animated, Dimensions, type LayoutChangeEvent, ScrollView, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BrainDumpSubNav from './BrainDumpSubNav';
@@ -29,22 +30,22 @@ const DraggableTask: React.FC<DraggableTaskProps> = ({ item, onDragStart, onDrag
   const scale = useRef(new Animated.Value(1)).current;
   
   const panResponder = PanResponder.create({
-    onMoveShouldSetPanResponder: (evt, gestureState) => {
+    onMoveShouldSetPanResponder: (_evt, gestureState) => {
       return Math.abs(gestureState.dx) > 3 || Math.abs(gestureState.dy) > 3;
     },
     onPanResponderGrant: () => {
       onDragStart(item.id);
       Animated.spring(scale, { toValue: 1.05, useNativeDriver: true }).start();
     },
-    onPanResponderMove: (evt, gestureState) => {
-      pan.setValue({ x: gestureState.dx, y: gestureState.dy });
+    onPanResponderMove: (evt, _gestureState) => {
+      pan.setValue({ x: _gestureState.dx, y: _gestureState.dy });
       
       // Use the gesture location relative to the screen
       const dropX = evt.nativeEvent.pageX;
       const dropY = evt.nativeEvent.pageY;
       onDragMove(dropX, dropY);
     },
-    onPanResponderRelease: (evt, gestureState) => {
+    onPanResponderRelease: (evt, _gestureState) => {
       // Calculate the final drop position more accurately
       const dropX = evt.nativeEvent.pageX;
       const dropY = evt.nativeEvent.pageY;
@@ -65,7 +66,7 @@ const DraggableTask: React.FC<DraggableTaskProps> = ({ item, onDragStart, onDrag
     }
   });
 
-  const animatedStyle = {
+  const animatedStyle: any = {
     transform: [
       { translateX: pan.x },
       { translateY: pan.y },
@@ -103,7 +104,7 @@ const DraggableTask: React.FC<DraggableTaskProps> = ({ item, onDragStart, onDrag
 
 type DropZoneProps = {
   priority: Priority;
-  children: ReactNode;
+  children: React.ReactNode;
   isHighlighted: boolean;
   isDragging: boolean;
   onLayout: (event: LayoutChangeEvent) => void;
@@ -340,7 +341,7 @@ export default function BrainDumpPrioritizationScreen({ navigation, route }: any
       
       // Navigate after a short delay so the toast is visible briefly
       setTimeout(() => { navigation.navigate('Tasks'); }, 300);
-    } catch (e) {
+    } catch {
       setToastMessage('Failed to save tasks. Please try again.');
       setToastVisible(true);
     } finally {
