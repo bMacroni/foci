@@ -340,10 +340,10 @@ export default function GoalsScreen({ navigation }: any) {
         description: aiSuggestion.description,
         milestones: options?.goalOnly ? [] : aiSuggestion.milestones.map((milestone, _index) => ({
           title: milestone.title,
-          order: index + 1,
+          order: _index + 1,
           steps: milestone.steps.map((step, _stepIndex) => ({
             text: step.title,
-            order: stepIndex + 1,
+            order: _stepIndex + 1,
           })),
         })),
       };
@@ -1362,7 +1362,7 @@ export default function GoalsScreen({ navigation }: any) {
                 <Text style={styles.milestonesTitle}>Suggested Milestones & Steps:</Text>
                 {aiSuggestion.milestones.map((milestone, _index) => (
                   <View key={_index} style={styles.suggestionMilestone}>
-                    <Text style={styles.milestoneNumber}>{index + 1}.</Text>
+                    <Text style={styles.milestoneNumber}>{_index + 1}.</Text>
                     <View style={styles.milestoneContent}>
                       <Text style={styles.milestoneTitle}>{milestone.title}</Text>
                       {!!milestone.description && (
