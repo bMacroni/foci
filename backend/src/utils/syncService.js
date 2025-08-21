@@ -2,8 +2,8 @@ import { listCalendarEvents } from './calendarService.js';
 import logger from './logger.js';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-
-// Load environment variables
+const env = process.env.NODE_ENV || 'development';
+dotenv.config({ path: `.env.${env}`, override: true });
 dotenv.config();
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);

@@ -1,4 +1,8 @@
 import { google } from 'googleapis';
+import dotenv from 'dotenv';
+const env = process.env.NODE_ENV || 'development';
+dotenv.config({ path: `.env.${env}`, override: true });
+dotenv.config();
 import logger from './logger.js';
 import { getGoogleTokens } from './googleTokenStorage.js';
 import { dateParser } from './dateParser.js';
