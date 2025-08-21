@@ -30,3 +30,4 @@ Apply schema:
 ## Notes
 - Never commit real `.env*` files.
 - Keep dev/production Google OAuth redirect URIs consistent with `FRONTEND_URL`.
+

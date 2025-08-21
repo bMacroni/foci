@@ -1,7 +1,10 @@
 import dotenv from 'dotenv';
 const env = process.env.NODE_ENV || 'development';
-dotenv.config({ path: `.env.${env}`, override: true });
+// Load base, then local, then env-specific, then env-specific local (highest precedence)
 dotenv.config();
+dotenv.config({ path: `.env.local`, override: true });
+dotenv.config({ path: `.env.${env}`, override: true });
+dotenv.config({ path: `.env.${env}.local`, override: true });
 import express from 'express'
 import cors from 'cors'
 import { createClient } from '@supabase/supabase-js'
