@@ -493,7 +493,17 @@ export const tasksAPI = {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { error: errorText };
+        }
+        
+        const error = new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        error.code = errorData.code;
+        throw error;
       }
 
       return await response.json();

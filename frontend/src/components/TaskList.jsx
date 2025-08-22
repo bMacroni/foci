@@ -207,7 +207,7 @@ const TaskList = ({ showSuccess, onTaskChange, tasks: propTasks }) => {
     completed: []
   };
   (Array.isArray(displayTasks) ? displayTasks : []).forEach(task => {
-    if (task.completed || task.status === 'completed') groupedTasks.completed.push(task);
+    if (task.status === 'completed') groupedTasks.completed.push(task);
     else if (task.status === 'in_progress') groupedTasks.in_progress.push(task);
     else groupedTasks.not_started.push(task);
   });
@@ -225,8 +225,8 @@ const TaskList = ({ showSuccess, onTaskChange, tasks: propTasks }) => {
     let newStatus = 'not_started';
     if (destination.droppableId === 'inprogress') newStatus = 'in_progress';
     if (destination.droppableId === 'done') newStatus = 'completed';
-    // Update status and completed
-    const updated = { ...task, status: newStatus, completed: newStatus === 'completed' };
+    // Update status only (DB trigger mirrors completed during transition)
+    const updated = { ...task, status: newStatus };
     // Optimistically update local state
     setTasks(prevTasks => prevTasks.map(t => t.id === task.id ? updated : t));
     // Send update to backend
@@ -243,7 +243,7 @@ const TaskList = ({ showSuccess, onTaskChange, tasks: propTasks }) => {
   const getTodaysFocusTask = () => {
     const now = new Date();
     const upcoming = [...groupedTasks.not_started, ...groupedTasks.in_progress].filter(
-      t => !t.completed && t.due_date
+      t => t.status !== 'completed' && t.due_date
     );
     if (upcoming.length === 0) return null;
     upcoming.sort((a, b) => new Date(a.due_date) - new Date(b.due_date));

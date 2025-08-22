@@ -8,7 +8,8 @@ const InlineTaskEditor = ({ task, goals, loadingGoals, onSuccess, onCancel }) =>
     due_date: task?.due_date ? task.due_date.split('T')[0] : '',
     priority: task?.priority || 'medium',
     goal_id: task?.goal_id || null,
-    completed: task?.completed || false,
+    // completed deprecated; use status
+    status: task?.status || (task?.completed ? 'completed' : 'not_started'),
     preferred_time_of_day: task?.preferred_time_of_day || 'any',
     deadline_type: task?.deadline_type || 'soft',
     travel_time_minutes: task?.travel_time_minutes || '',
@@ -227,19 +228,22 @@ const InlineTaskEditor = ({ task, goals, loadingGoals, onSuccess, onCancel }) =>
           </select>
         </div>
 
-        {/* Completed Checkbox */}
-        <div className="flex items-center">
-          <input
-            type="checkbox"
-            id="completed"
-            name="completed"
-            checked={formData.completed}
-            onChange={handleChange}
-            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-          />
-          <label htmlFor="completed" className="ml-2 block text-sm text-gray-900">
-            Mark as completed
+        {/* Status */}
+        <div>
+          <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
+            Status
           </label>
+          <select
+            id="status"
+            name="status"
+            value={formData.status}
+            onChange={handleChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="not_started">Not Started</option>
+            <option value="in_progress">In Progress</option>
+            <option value="completed">Completed</option>
+          </select>
         </div>
 
         {/* Auto-Scheduling Section */}
