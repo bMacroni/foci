@@ -163,17 +163,17 @@ I'm here to help you:
         // Has both goals and tasks - focus on momentum
         const goalsCount = Array.isArray(userData.goals) ? userData.goals.length : 0;
         const tasksArray = Array.isArray(userData.tasks) ? userData.tasks : [];
-        const completedTasks = tasksArray.filter(task => task.completed).length;
+        const completedTasks = tasksArray.filter(task => String(task.status).toLowerCase() === 'completed').length;
         const totalTasks = tasksArray.length;
         const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
         
         // Insights
         const overdueTasks = tasksArray.filter(task =>
-          task.due_date && new Date(task.due_date) < new Date() && !task.completed
+          task.due_date && new Date(task.due_date) < new Date() && String(task.status).toLowerCase() !== 'completed'
         ).length;
         
         const highPriorityTasks = tasksArray.filter(task =>
-          task.priority === 'high' && !task.completed
+          task.priority === 'high' && String(task.status).toLowerCase() !== 'completed'
         ).length;
         
         welcomeMessage = `👋 **Welcome back!** 
@@ -203,7 +203,7 @@ I'm here to help you:
         // Has tasks but no goals - help them find direction
         const tasksArray = Array.isArray(userData.tasks) ? userData.tasks : [];
         const tasksCount = tasksArray.length;
-        const completedTasks = tasksArray.filter(task => task.completed).length;
+        const completedTasks = tasksArray.filter(task => String(task.status).toLowerCase() === 'completed').length;
         
         welcomeMessage = `👋 **Welcome back!** 
 
@@ -395,7 +395,7 @@ I'm here to help you:
     } else if (hasGoals && hasTasks) {
       const goalsCount = Array.isArray(userData.goals) ? userData.goals.length : 0;
       const tasksArray = Array.isArray(userData.tasks) ? userData.tasks : [];
-      const completedTasks = tasksArray.filter(task => task.completed).length;
+      const completedTasks = tasksArray.filter(task => String(task.status).toLowerCase() === 'completed').length;
       const totalTasks = tasksArray.length;
       
       return `🎯 **Welcome back!**  

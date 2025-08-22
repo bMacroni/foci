@@ -22,7 +22,7 @@ export async function createTask(req, res) {
     due_date, 
     priority, 
     goal_id, 
-    completed, 
+    // completed (deprecated): use status; left for backward compatibility via trigger
     preferred_time_of_day, 
     deadline_type, 
     travel_time_minutes,
@@ -71,7 +71,7 @@ export async function createTask(req, res) {
       due_date: sanitizedDueDate, 
       priority, 
       goal_id: sanitizedGoalId, 
-      completed, 
+      // Do not write completed directly; rely on status and sync trigger
       preferred_time_of_day, 
       deadline_type, 
       travel_time_minutes,
@@ -93,6 +93,15 @@ export async function createTask(req, res) {
   
   if (error) {
     console.log('Supabase error:', error);
+    
+    // Check if this is a unique constraint violation for is_today_focus
+    if (error.message && error.message.includes('uniq_tasks_user_focus')) {
+      return res.status(400).json({ 
+        error: 'You already have a task set as today\'s focus. Please update your existing focus task instead.',
+        code: 'FOCUS_CONSTRAINT_VIOLATION'
+      });
+    }
+    
     return res.status(400).json({ error: error.message });
   }
   res.status(201).json(data);
@@ -347,7 +356,6 @@ export async function bulkCreateTasks(req, res) {
       due_date: task.due_date || null,
       priority: task.priority || null,
       goal_id: task.goal_id === '' ? null : (task.goal_id || null),
-      completed: task.completed || false,
       preferred_time_of_day: task.preferred_time_of_day || null,
       deadline_type: task.deadline_type || null,
       travel_time_minutes: task.travel_time_minutes || null,
@@ -409,7 +417,6 @@ export async function createTaskFromAI(args, userId, userContext) {
       due_date: parsedDueDate,
       priority,
       goal_id: goalId,
-      completed: false,
       preferred_time_of_day,
       deadline_type,
       travel_time_minutes
@@ -424,7 +431,7 @@ export async function createTaskFromAI(args, userId, userContext) {
 }
 
 export async function updateTaskFromAI(args, userId, userContext) {
-  const { id, title, description, due_date, priority, related_goal, completed, status, preferred_time_of_day, deadline_type, travel_time_minutes } = args;
+  const { id, title, description, due_date, priority, related_goal, /* completed (deprecated) */ completed, status, preferred_time_of_day, deadline_type, travel_time_minutes } = args;
   const token = userContext?.token;
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
     global: {
@@ -474,18 +481,12 @@ export async function updateTaskFromAI(args, userId, userContext) {
   }
   if (priority !== undefined) updateData.priority = priority;
   if (related_goal !== undefined) updateData.goal_id = goalId;
-  // Normalize completed/status to keep fields in sync
+  // Prefer status as source of truth; DB trigger keeps completed mirrored while it exists
   if (status !== undefined) {
     updateData.status = status;
-    if (completed === undefined) {
-      updateData.completed = String(status).toLowerCase() === 'completed';
-    }
-  }
-  if (completed !== undefined) {
-    updateData.completed = completed;
-    if (status === undefined) {
-      updateData.status = completed ? 'completed' : 'not_started';
-    }
+  } else if (completed !== undefined) {
+    // Back-compat: translate completed to status if provided by older clients
+    updateData.status = completed ? 'completed' : 'not_started';
   }
   if (preferred_time_of_day !== undefined) updateData.preferred_time_of_day = preferred_time_of_day;
   if (deadline_type !== undefined) updateData.deadline_type = deadline_type;
@@ -618,8 +619,9 @@ export async function readTaskFromAI(args, userId, userContext) {
   if (args.status) {
     query = query.eq('status', args.status);
   }
+  // Back-compat: map completed filter to status
   if (args.completed !== undefined) {
-    query = query.eq('completed', args.completed);
+    query = query.eq('status', args.completed ? 'completed' : 'not_started');
   }
   if (args.category) {
     query = query.eq('category', args.category);

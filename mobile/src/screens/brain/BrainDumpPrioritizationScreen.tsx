@@ -311,13 +311,46 @@ export default function BrainDumpPrioritizationScreen({ navigation, route }: any
       const remainder = tasks.filter(i => i !== focus);
       
       if (focus) {
-        await tasksAPI.createTask({ 
-          title: focus.text, 
-          description: '', 
-          priority: focus.priority, 
-          category: focus.category || undefined, 
-          is_today_focus: true 
-        } as any);
+        try {
+          await tasksAPI.createTask({ 
+            title: focus.text, 
+            description: '', 
+            priority: focus.priority, 
+            category: focus.category || undefined, 
+            is_today_focus: true 
+          } as any);
+        } catch (error: any) {
+          // If we get a focus constraint violation, try to update existing focus task
+          if (error?.code === 'FOCUS_CONSTRAINT_VIOLATION' || 
+              String(error?.message || '').includes('already have a task set as today\'s focus')) {
+            
+            // Get existing tasks to find the current focus
+            const existingTasks = await tasksAPI.getTasks();
+            const currentFocus = existingTasks.find((task: any) => task.is_today_focus);
+            
+            if (currentFocus) {
+              // Update the existing focus task with the new focus
+              await tasksAPI.updateTask(currentFocus.id, {
+                title: focus.text,
+                description: '',
+                priority: focus.priority,
+                category: focus.category || undefined,
+                is_today_focus: true
+              } as any);
+            } else {
+              // If no current focus found, try creating again (maybe the constraint was resolved)
+              await tasksAPI.createTask({ 
+                title: focus.text, 
+                description: '', 
+                priority: focus.priority, 
+                category: focus.category || undefined, 
+                is_today_focus: true 
+              } as any);
+            }
+          } else {
+            throw error; // Re-throw if it's not a focus constraint issue
+          }
+        }
       }
       
       if (remainder.length > 0) {
@@ -336,13 +369,21 @@ export default function BrainDumpPrioritizationScreen({ navigation, route }: any
       
       // Clear the UI on successful save
       setTasks([]);
-      setToastMessage('Tasks saved! Your focus for today is set.');
+      setToastMessage('Tasks saved! Your focus for today has been updated.');
       setToastVisible(true);
       
       // Navigate after a short delay so the toast is visible briefly
       setTimeout(() => { navigation.navigate('Tasks'); }, 300);
-    } catch {
-      setToastMessage('Failed to save tasks. Please try again.');
+    } catch (error: any) {
+      console.error('Brain dump save error:', error);
+      
+      // Handle specific focus constraint violation
+      if (String(error?.message || '').includes('already have a task set as today\'s focus') || 
+          error?.code === 'FOCUS_CONSTRAINT_VIOLATION') {
+        setToastMessage('Updated your existing focus task with the new priority.');
+      } else {
+        setToastMessage('Failed to save tasks. Please try again.');
+      }
       setToastVisible(true);
     } finally {
       setSaving(false);

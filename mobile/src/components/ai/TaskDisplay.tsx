@@ -33,7 +33,7 @@ const normalizeTaskPayload = (payload: any): TaskData => {
     description: t.description || '',
     dueDate: t.dueDate || t.due_date,
     priority: t.priority,
-    status: t.status || (t.completed ? 'completed' : 'not_started'),
+    status: t.status,
   }));
   return {
     category: 'task',
