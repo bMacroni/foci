@@ -44,3 +44,4 @@ async function testFocusConstraint() {
 
 // testFocusConstraint();
 console.log('Test script created. Run with proper auth to test focus constraint handling.');
+

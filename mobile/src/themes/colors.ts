@@ -39,6 +39,8 @@ export const colors = {
   // Accent colors
   accent: {
     gold: '#D4AF37',
+    // Softer gold for subtle borders/icons
+    secondary: '#E6CF8E',
   },
 
   // Overlay colors

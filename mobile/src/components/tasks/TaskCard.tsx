@@ -12,6 +12,7 @@ import { colors } from '../../themes/colors';
 import { spacing, borderRadius } from '../../themes/spacing';
 import { typography } from '../../themes/typography';
 import Icon from 'react-native-vector-icons/Octicons';
+import { formatRelativeDueLabel } from '../../utils/dateUtils';
 
 interface Task {
   id: string;
@@ -40,6 +41,12 @@ interface TaskCardProps {
   onAddToCalendar: (taskId: string) => void;
   onToggleAutoSchedule?: (taskId: string, enabled: boolean) => void;
   onScheduleNow?: (taskId: string) => void;
+  onQuickSchedule?: (
+    taskId: string,
+    preset: 'today' | 'tomorrow' | 'this_week' | 'next_week'
+  ) => void;
+  onOpenQuickSchedule?: (taskId: string, center: { x: number; y: number }) => void;
+  onAIHelp?: (task: Task) => void;
 }
 
 export const TaskCard: React.FC<TaskCardProps> = ({
@@ -50,9 +57,14 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   onAddToCalendar,
   onToggleAutoSchedule,
   onScheduleNow,
+  onQuickSchedule,
+  onOpenQuickSchedule,
+  onAIHelp,
 }) => {
   const translateX = new Animated.Value(0);
   const [_isDeleting, _setIsDeleting] = React.useState(false);
+
+  const [anchor, setAnchor] = React.useState<{ x: number; y: number } | undefined>(undefined);
 
   // helpers retained for future UI variants
    
@@ -173,6 +185,25 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     }
   };
 
+  const toggleComplete = () => {
+    const newStatus = task.status === 'completed' ? 'not_started' : 'completed';
+    onToggleStatus(task.id, newStatus);
+  };
+
+  const dueMeta = formatRelativeDueLabel(task.due_date, { status: task.status });
+
+  const getDueToneStyle = () => {
+    switch (dueMeta?.tone) {
+      case 'overdue':
+        return styles.dueOverdue;
+      case 'today':
+      case 'tomorrow':
+        return styles.dueEmphasis;
+      default:
+        return styles.dueNeutral;
+    }
+  };
+
   return (
     <View style={styles.container}>
       <PanGestureHandler
@@ -190,104 +221,144 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             },
           ]}
         >
-          <TouchableOpacity
-            style={styles.content}
-            onPress={() => onPress(task)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.header}>
-              <Text 
-                style={[
-                  styles.title, 
-                  task.status === 'completed' && styles.completedTitle
-                ]} 
-                numberOfLines={2}
+          <View style={styles.content}>
+            <View style={styles.rowTop} />
+
+            <TouchableOpacity onPress={() => onPress(task)} activeOpacity={0.7}>
+              <Text
+                style={[styles.title, task.status === 'completed' && styles.completedTitle]}
+                numberOfLines={3}
               >
                 {task.title}
               </Text>
-              <View style={styles.headerRight}>
-                {task.due_date && (
-                  <Text style={styles.dueDate}>
-                    {formatDueDate(task.due_date)}
-                  </Text>
-                )}
-                <TouchableOpacity
-                  style={styles.calendarButton}
-                  onPress={() => onAddToCalendar(task.id)}
-                  activeOpacity={0.7}
-                >
-                  <Icon name="calendar" size={20} color={colors.text.secondary} />
-                </TouchableOpacity>
-              </View>
-            </View>
+            </TouchableOpacity>
 
-            {/* Auto-scheduling controls */}
-            <View style={styles.autoScheduleSection}>
-              <View style={styles.autoScheduleRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.autoScheduleToggle,
-                    task.status === 'completed' && styles.autoScheduleToggleDisabled
-                  ]}
-                  onPress={handleToggleAutoSchedule}
-                  activeOpacity={0.7}
-                  disabled={task.status === 'completed'}
-                >
-                  <Icon 
-                    name={task.auto_schedule_enabled ? "check-circle" : "circle"} 
-                    size={20} 
-                    color={task.status === 'completed' ? colors.text.disabled : (task.auto_schedule_enabled ? colors.primary : colors.text.disabled)} 
-                  />
-                  <Text style={[
-                    styles.autoScheduleText,
-                    task.auto_schedule_enabled && styles.autoScheduleTextEnabled,
-                    task.status === 'completed' && styles.autoScheduleTextDisabled
-                  ]}>
-                    Auto-schedule
-                  </Text>
+            <View style={styles.actionIcons}>
+                <TouchableOpacity style={styles.iconBtn} onPress={toggleComplete}>
+                  <Icon name="check" size={22} color={colors.text.primary} />
                 </TouchableOpacity>
-
-                {task.auto_schedule_enabled && task.status !== 'completed' && (
-                  <TouchableOpacity
-                    style={styles.scheduleNowButton}
-                    onPress={handleScheduleNow}
-                    activeOpacity={0.7}
-                  >
-                    <Icon name="clock" size={16} color={colors.primary} />
-                    <Text style={styles.scheduleNowText}>Schedule Now</Text>
+                <TouchableOpacity
+                  style={styles.iconBtn}
+                  onPressIn={(e) => {
+                    const { pageX, pageY } = e.nativeEvent;
+                    setAnchor({ x: pageX, y: pageY });
+                  }}
+                  onPress={() => {
+                    if (onOpenQuickSchedule && anchor) {
+                      onOpenQuickSchedule(task.id, anchor);
+                    }
+                  }}
+                >
+                  <Icon name="calendar" size={22} color={colors.text.primary} />
+                </TouchableOpacity>
+                {onAIHelp && (
+                  <TouchableOpacity style={styles.iconBtn} onPress={() => onAIHelp(task)}>
+                    <Icon name="light-bulb" size={22} color={colors.text.primary} />
                   </TouchableOpacity>
                 )}
+                <TouchableOpacity style={styles.iconBtn} onPress={() => onPress(task)}>
+                  <Icon name="pencil" size={22} color={colors.text.primary} />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.iconBtn} onPress={() => onDelete(task.id)}>
+                  <Icon name="trash" size={22} color={colors.text.primary} />
+                </TouchableOpacity>
               </View>
 
-              {/* Scheduled time display */}
-              {task.due_date && task.auto_schedule_enabled && (
-                <View style={styles.scheduledTimeRow}>
+            {/* Meta chips row */}
+            <View style={styles.metaRow}>
+              {dueMeta && (
+                <Text style={[styles.duePill, getDueToneStyle()]} numberOfLines={1}>
+                  {dueMeta.label}
+                </Text>
+              )}
+              {!!task.goal?.title && (
+                <View style={styles.goalBadge}><Text style={styles.goalText}>{task.goal.title}</Text></View>
+              )}
+              <View style={[styles.priorityBadge, task.priority === 'high' ? styles.high : task.priority === 'medium' ? styles.medium : styles.low]}>
+                <Text style={[styles.badgeText, styles.badgeTextDark]}>{task.priority}</Text>
+              </View>
+              {Number.isFinite((task as any).estimated_duration_minutes) && (
+                <View style={styles.durationBadge}>
                   <Icon name="clock" size={14} color={colors.text.secondary} />
-                  <Text style={styles.scheduledTimeText}>
-                    Scheduled for {formatScheduledTime(task.due_date)}
-                  </Text>
-                </View>
-              )}
-
-              {/* Weather dependency indicator */}
-              {task.weather_dependent && (
-                <View style={styles.weatherIndicator}>
-                  <Icon name="cloud" size={14} color={colors.text.secondary} />
-                  <Text style={styles.weatherText}>Weather dependent</Text>
-                </View>
-              )}
-
-              {/* Location indicator */}
-              {task.location && (
-                <View style={styles.locationIndicator}>
-                  <Icon name="location" size={14} color={colors.text.secondary} />
-                  <Text style={styles.locationText}>{task.location}</Text>
+                  <Text style={styles.durationText}>{(task as any).estimated_duration_minutes}m</Text>
                 </View>
               )}
             </View>
-          </TouchableOpacity>
+
+            {/* Auto-scheduling controls (hidden unless enabled or indicators present) */}
+            {(task.auto_schedule_enabled || task.weather_dependent || !!task.location) && (
+              <View style={styles.autoScheduleSection}>
+                {task.auto_schedule_enabled && (
+                  <>
+                    <View style={styles.autoScheduleRow}>
+                      <TouchableOpacity
+                        style={[
+                          styles.autoScheduleToggle,
+                          task.status === 'completed' && styles.autoScheduleToggleDisabled
+                        ]}
+                        onPress={handleToggleAutoSchedule}
+                        activeOpacity={0.7}
+                        disabled={task.status === 'completed'}
+                      >
+                        <Icon 
+                          name={task.auto_schedule_enabled ? "check-circle" : "circle"} 
+                          size={20} 
+                          color={task.status === 'completed' ? colors.text.disabled : (task.auto_schedule_enabled ? colors.primary : colors.text.disabled)} 
+                        />
+                        <Text style={[
+                          styles.autoScheduleText,
+                          task.auto_schedule_enabled && styles.autoScheduleTextEnabled,
+                          task.status === 'completed' && styles.autoScheduleTextDisabled
+                        ]}>
+                          Auto-schedule
+                        </Text>
+                      </TouchableOpacity>
+
+                      {task.auto_schedule_enabled && task.status !== 'completed' && (
+                        <TouchableOpacity
+                          style={styles.scheduleNowButton}
+                          onPress={handleScheduleNow}
+                          activeOpacity={0.7}
+                        >
+                          <Icon name="clock" size={16} color={colors.primary} />
+                          <Text style={styles.scheduleNowText}>Schedule Now</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+
+                    {/* Scheduled time display */}
+                    {task.due_date && (
+                      <View style={styles.scheduledTimeRow}>
+                        <Icon name="clock" size={14} color={colors.text.secondary} />
+                        <Text style={styles.scheduledTimeText}>
+                          Scheduled for {formatScheduledTime(task.due_date)}
+                        </Text>
+                      </View>
+                    )}
+                  </>
+                )}
+
+                {/* Weather dependency indicator */}
+                {task.weather_dependent && (
+                  <View style={styles.weatherIndicator}>
+                    <Icon name="cloud" size={14} color={colors.text.secondary} />
+                    <Text style={styles.weatherText}>Weather dependent</Text>
+                  </View>
+                )}
+
+                {/* Location indicator */}
+                {task.location && (
+                  <View style={styles.locationIndicator}>
+                    <Icon name="location" size={14} color={colors.text.secondary} />
+                    <Text style={styles.locationText}>{task.location}</Text>
+                  </View>
+                )}
+              </View>
+            )}
+          </View>
         </Animated.View>
       </PanGestureHandler>
+
     </View>
   );
 };
@@ -297,18 +368,16 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   card: {
-    backgroundColor: colors.background.surface,
+    backgroundColor: colors.secondary,
     borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: colors.border.light,
-    shadowColor: colors.primary,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    // No shadow for a flatter look
+    shadowColor: 'transparent',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   content: {
     padding: spacing.md,
@@ -319,10 +388,31 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: spacing.sm,
   },
+  rowTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  leftControls: {},
+  completeToggle: {},
+  completeToggleActive: {},
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+  },
+  actionIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.sm,
+  },
+  iconBtn: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.sm,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
   },
   title: {
     fontSize: typography.fontSize.lg,
@@ -334,6 +424,12 @@ const styles = StyleSheet.create({
   completedTitle: {
     textDecorationLine: 'line-through',
     color: colors.text.disabled,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
   },
   badges: {
     flexDirection: 'row',
@@ -349,11 +445,30 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.full,
   },
+  durationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    backgroundColor: colors.surface,
+  },
+  durationText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+  },
   badgeText: {
     color: colors.secondary,
     fontSize: typography.fontSize.xs,
     fontWeight: typography.fontWeight.medium as any,
   },
+  badgeTextDark: { color: colors.text.primary },
+  low: { backgroundColor: '#E8F5E9', borderWidth: 1, borderColor: '#C8E6C9' },
+  medium: { backgroundColor: '#FFFDE7', borderWidth: 1, borderColor: '#FFF9C4' },
+  high: { backgroundColor: '#FFEBEE', borderWidth: 1, borderColor: '#FFCDD2' },
   description: {
     fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
@@ -365,16 +480,28 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  dueDate: {
+  duePill: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: 999,
     fontSize: typography.fontSize.xs,
-    color: colors.text.disabled,
-  },
-  calendarButton: {
-    padding: spacing.xs,
-    borderRadius: borderRadius.sm,
-    backgroundColor: colors.surface,
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: colors.border.light,
+  },
+  dueOverdue: { color: '#B00020', borderColor: '#F4C7C3', backgroundColor: '#FDECEA' },
+  dueEmphasis: { color: '#8A6D1A', borderColor: '#F3E2A9', backgroundColor: '#FFF8D9' },
+  dueNeutral: { color: colors.text.secondary, borderColor: colors.border.light, backgroundColor: colors.background.surface },
+  calendarButton: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.primary,
+    borderWidth: 0,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
   },
   goalBadge: {
     backgroundColor: colors.surface,
