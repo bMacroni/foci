@@ -315,6 +315,105 @@ export async function deleteTask(req, res) {
   res.status(204).send();
 }
 
+/**
+ * Momentum Mode: Find and set the next focus task for today.
+ * Body: { current_task_id: string|null, travel_preference: 'allow_travel'|'home_only'|null, exclude_ids: string[] }
+ * Behavior:
+ * 1) If current_task_id provided, unset its is_today_focus (set false)
+ * 2) Select next candidate among user's tasks:
+ *    - Not completed
+ *    - Not in exclude_ids
+ *    - If travel_preference === 'home_only', prefer tasks without a location
+ *    - Must have estimated_duration_minutes; if missing on chosen task, default to 30
+ *    - Highest priority (high > medium > low), then earliest due date (nulls last)
+ * 3) Set chosen task is_today_focus = true and return the full row
+ * 4) If none found, return 404 with message
+ */
+export async function getNextFocusTask(req, res) {
+  const user_id = req.user.id;
+  const { current_task_id, travel_preference, exclude_ids } = req.body || {};
+
+  const token = req.headers.authorization?.split(' ')[1];
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: `Bearer ${token}` } }
+  });
+
+  try {
+    // 1) Unset current focus if provided
+    if (current_task_id) {
+      await supabase
+        .from('tasks')
+        .update({ is_today_focus: false })
+        .eq('id', current_task_id)
+        .eq('user_id', user_id);
+    }
+
+    // 2) Fetch candidates (filter minimal in SQL, do detailed ordering in JS)
+    const { data: candidatesRaw, error: fetchErr } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('user_id', user_id)
+      .neq('status', 'completed');
+    if (fetchErr) {
+      return res.status(400).json({ error: fetchErr.message });
+    }
+
+    let candidates = candidatesRaw || [];
+
+    // Exclusions (client-provided)
+    const exclude = Array.isArray(exclude_ids) ? exclude_ids : [];
+    if (exclude.length > 0) {
+      const excludeSet = new Set(exclude);
+      candidates = candidates.filter(t => !excludeSet.has(t.id));
+    }
+
+    // Travel preference filter (frontend may also compute travel, but filter here per PRD intent)
+    if (travel_preference === 'home_only') {
+      candidates = candidates.filter(t => !t.location || t.location === '' || t.location === null);
+    }
+
+    // Custom priority weight
+    const weight = (p) => (p === 'high' ? 3 : p === 'medium' ? 2 : p === 'low' ? 1 : 0);
+    // Normalize due_date to comparable time, with null/undefined placed last
+    const dueTime = (d) => (d ? new Date(d).getTime() : Number.POSITIVE_INFINITY);
+
+    candidates.sort((a, b) => {
+      const wp = weight(b.priority) - weight(a.priority);
+      if (wp !== 0) return wp;
+      return dueTime(a.due_date) - dueTime(b.due_date);
+    });
+
+    // 3) Choose first candidate; ensure estimated_duration_minutes defaults to 30 if missing
+    const next = candidates[0];
+    if (!next) {
+      return res.status(404).json({ message: 'No other tasks match your criteria.' });
+    }
+
+    const ensureDuration = (t) => (Number.isFinite(t.estimated_duration_minutes) && t.estimated_duration_minutes > 0) ? t.estimated_duration_minutes : 30;
+
+    const updates = {
+      is_today_focus: true,
+      estimated_duration_minutes: ensureDuration(next),
+    };
+
+    const { data: updated, error: updErr } = await supabase
+      .from('tasks')
+      .update(updates)
+      .eq('id', next.id)
+      .eq('user_id', user_id)
+      .select()
+      .single();
+
+    if (updErr) {
+      return res.status(400).json({ error: updErr.message });
+    }
+
+    return res.json(updated);
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to select next focus task' });
+  }
+}
+
 export async function bulkCreateTasks(req, res) {
   const tasks = req.body;
   const user_id = req.user.id;

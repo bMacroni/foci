@@ -2,6 +2,7 @@
 // For Android emulator, use 10.0.2.2 instead of localhost
 // For physical device, use your computer's IP address (e.g., 192.168.1.100)
 import { configService } from './config';
+import { authService } from './auth';
 import {
   SchedulingPreferences,
   TaskSchedulingStatus,
@@ -597,6 +598,31 @@ export const tasksAPI = {
       throw _error;
     }
   },
+  
+  // Momentum Mode: Get next focus task
+  focusNext: async (payload: { current_task_id?: string|null; travel_preference?: 'allow_travel'|'home_only'; exclude_ids?: string[] }): Promise<Task> => {
+    const token = await getAuthToken();
+    const response = await fetch(`${configService.getBaseUrl()}/tasks/focus/next`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload || {}),
+    });
+    if (response.status === 404) {
+      const text = await response.text().catch(()=> '');
+      const err = new Error(text || 'No other tasks match your criteria.');
+      // @ts-ignore
+      err.code = 404;
+      throw err;
+    }
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`HTTP error! status: ${response.status}, body: ${text}`);
+    }
+    return response.json();
+  },
 };
 
 // Calendar API
@@ -972,7 +998,6 @@ export const autoSchedulingAPI = {
 
 // Helper function to get auth token from auth service
 async function getAuthToken(): Promise<string> {
-  const { authService } = await import('./auth');
   const token = await authService.getAuthToken();
   if (!token) {
     throw new Error('No authentication token available');
@@ -999,6 +1024,29 @@ export const usersAPI = {
       body: JSON.stringify(payload),
     });
     if (!response.ok) {throw new Error(await response.text());}
+    return response.json();
+  }
+};
+
+// App Preferences API
+export const appPreferencesAPI = {
+  get: async (): Promise<{ momentum_mode_enabled: boolean; momentum_travel_preference: 'allow_travel'|'home_only' }> => {
+    const token = await getAuthToken();
+    const response = await fetch(`${configService.getBaseUrl()}/user/app-preferences`, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!response.ok) { throw new Error(await response.text()); }
+    return response.json();
+  },
+  update: async (payload: Partial<{ momentum_mode_enabled: boolean; momentum_travel_preference: 'allow_travel'|'home_only' }>): Promise<any> => {
+    const token = await getAuthToken();
+    const response = await fetch(`${configService.getBaseUrl()}/user/app-preferences`, {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+    });
+    if (!response.ok) { throw new Error(await response.text()); }
     return response.json();
   }
 };

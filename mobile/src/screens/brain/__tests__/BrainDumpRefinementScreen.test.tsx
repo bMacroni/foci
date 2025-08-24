@@ -1,6 +1,36 @@
 import React from 'react';
 import ReactTestRenderer, { act } from 'react-test-renderer';
+import { NavigationContainer } from '@react-navigation/native';
 import BrainDumpRefinementScreen from '../BrainDumpRefinementScreen';
+import { BrainDumpProvider } from '../../../contexts/BrainDumpContext';
+
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  __esModule: true,
+  default: {
+    getItem: jest.fn(async () => null),
+    setItem: jest.fn(async () => {}),
+    multiSet: jest.fn(async () => {}),
+    multiRemove: jest.fn(async () => {}),
+    getAllKeys: jest.fn(async () => []),
+    multiGet: jest.fn(async () => []),
+    clear: jest.fn(async () => {}),
+  },
+}));
+
+jest.mock('../../../contexts/BrainDumpContext', () => {
+  const React = require('react');
+  return {
+    __esModule: true,
+    BrainDumpProvider: ({ children }: any) => React.createElement(React.Fragment, null, children),
+    useBrainDump: () => ({
+      threadId: 't1',
+      items: [{ text: 'Task 1', type: 'task', stress_level: 'medium', priority: 'medium' }],
+      setThreadId: jest.fn(),
+      setItems: jest.fn(),
+      clearSession: jest.fn(),
+    }),
+  };
+});
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
   __esModule: true,
@@ -14,7 +44,11 @@ describe('BrainDumpRefinementScreen', () => {
     let tree: any;
     await act(async () => {
       tree = ReactTestRenderer.create(
-        <BrainDumpRefinementScreen navigation={{ navigate }} route={{ params: { items, threadId: 't1' } }} />
+        <NavigationContainer>
+          <BrainDumpProvider>
+            <BrainDumpRefinementScreen navigation={{ navigate }} route={{ params: { items, threadId: 't1' } }} />
+          </BrainDumpProvider>
+        </NavigationContainer>
       );
     });
     const nextBtn = tree.root.findAllByProps({ testID: 'nextPrioritizeButton' })[0];
@@ -30,7 +64,11 @@ describe('BrainDumpRefinementScreen', () => {
     let tree: any;
     await act(async () => {
       tree = ReactTestRenderer.create(
-        <BrainDumpRefinementScreen navigation={{ navigate }} route={{ params: { items, threadId: 't1' } }} />
+        <NavigationContainer>
+          <BrainDumpProvider>
+            <BrainDumpRefinementScreen navigation={{ navigate }} route={{ params: { items, threadId: 't1' } }} />
+          </BrainDumpProvider>
+        </NavigationContainer>
       );
     });
     const nextBtn = tree.root.findAllByProps({ testID: 'nextPrioritizeButton' })[0];

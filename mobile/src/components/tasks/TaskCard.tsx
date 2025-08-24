@@ -372,6 +372,9 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: colors.border.light,
+    // Green accent bar on the left
+    borderLeftWidth: 4,
+    borderLeftColor: colors.success,
     // No shadow for a flatter look
     shadowColor: 'transparent',
     shadowOffset: { width: 0, height: 0 },
