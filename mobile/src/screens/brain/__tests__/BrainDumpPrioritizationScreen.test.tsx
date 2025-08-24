@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactTestRenderer, { act } from 'react-test-renderer';
 import BrainDumpPrioritizationScreen from '../BrainDumpPrioritizationScreen';
+import { BrainDumpProvider } from '../../../contexts/BrainDumpContext';
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
   __esModule: true,
@@ -25,7 +26,9 @@ describe('BrainDumpPrioritizationScreen', () => {
     let tree: any;
     await act(async () => {
       tree = ReactTestRenderer.create(
-        <BrainDumpPrioritizationScreen navigation={{ navigate }} route={{ params: { tasks } }} />
+        <BrainDumpProvider>
+          <BrainDumpPrioritizationScreen navigation={{ navigate }} route={{ params: { tasks } }} />
+        </BrainDumpProvider>
       );
     });
     const saveBtn = tree.root.findAllByProps({ testID: 'saveAndFinishButton' })[0];

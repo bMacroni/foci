@@ -17,6 +17,15 @@ jest.mock('react-native-haptic-feedback', () => ({
   __esModule: true,
   default: { trigger: jest.fn() },
 }));
+jest.mock('./src/services/auth', () => ({
+  authService: {
+    getAuthToken: jest.fn(async () => null),
+    getInstance: jest.fn(() => ({
+      subscribe: jest.fn(() => jest.fn()),
+      getAuthState: jest.fn(() => ({ user: null, token: null, isAuthenticated: false, isLoading: false })),
+    })),
+  },
+}));
 jest.mock('@react-native-async-storage/async-storage', () => ({
   __esModule: true,
   default: {
@@ -25,6 +34,9 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
     multiSet: jest.fn(async () => {}),
     multiRemove: jest.fn(async () => {}),
     removeItem: jest.fn(async () => {}),
+    getAllKeys: jest.fn(async () => []),
+    multiGet: jest.fn(async (keys) => (Array.isArray(keys) ? keys.map(k => [k, null]) : [])),
+    clear: jest.fn(async () => {}),
   },
 }));
 
@@ -44,11 +56,11 @@ jest.mock('react-native-safe-area-context', () => {
     SafeAreaProvider: ({ children }) => React.createElement('SafeAreaProvider', null, children),
     SafeAreaView: ({ children }) => React.createElement('SafeAreaView', null, children),
     useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+    useSafeAreaFrame: () => ({ x: 0, y: 0, width: 390, height: 844 }),
     SafeAreaInsetsContext: SafeAreaContext,
   };
 });
 
-// Use fake timers to prevent setTimeout from firing after tests complete
-jest.useFakeTimers();
+// Note: Do not use fake timers globally; they can stall component effects.
 
 

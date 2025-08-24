@@ -18,7 +18,6 @@ jest.mock('../../../services/api', () => {
         { id: '2', title: 'Task B', status: 'not_started', is_today_focus: false, priority: 'medium' },
       ]),
       focusNext: jest.fn().mockResolvedValue({ id: '2', title: 'Task B', status: 'not_started', is_today_focus: true, priority: 'medium' }),
-      updateTask: jest.fn().mockResolvedValue({ id: '1', title: 'Focus A', status: 'in_progress', is_today_focus: false, priority: 'high' }),
     },
     goalsAPI: { getGoals: jest.fn().mockResolvedValue([]) },
   };
@@ -26,18 +25,23 @@ jest.mock('../../../services/api', () => {
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 
-describe('Focus Skip', () => {
-  function renderWithNav(ui: React.ReactElement) {
-    return render(<NavigationContainer>{ui}</NavigationContainer>);
-  }
+function renderWithNav(ui: React.ReactElement) {
+  return render(<NavigationContainer>{ui}</NavigationContainer>);
+}
 
-  it('skips current focus and shows Next up toast', async () => {
-    const { getByText, getByTestId, queryByText } = renderWithNav(<TasksScreen />);
-    await waitFor(() => getByText(/Tasks/));
-    // Momentum is enabled in mock usersAPI; skip button should be visible
+describe('Skip exhaustion retains original focus', () => {
+  it('when focusNext 404 repeatedly, focus remains unchanged', async () => {
+    const { getByTestId, getByText, queryByText } = renderWithNav(<TasksScreen />);
+    await waitFor(() => getByText('Tasks'));
     const skip = getByTestId('skipFocusButton');
+    // Change mock to 404 after first attempt
+    const mod = require('../../../services/api');
+    (mod.tasksAPI.focusNext as jest.Mock).mockImplementationOnce(async () => { const err: any = new Error('No other tasks match your criteria.'); err.code = 404; throw err; });
     fireEvent.press(skip);
-    await waitFor(() => expect(queryByText(/Next up:/)).toBeTruthy());
+    await waitFor(() => expect(queryByText('No other tasks match your criteria.')).toBeTruthy());
+    // Verify focus card still shows original title
+    const { getAllByText } = renderWithNav(<TasksScreen />);
+    await waitFor(() => expect(getAllByText('Focus A').length).toBeGreaterThan(0));
   });
 });
 

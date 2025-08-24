@@ -15,10 +15,9 @@ jest.mock('../../../services/api', () => {
       ...actual.tasksAPI,
       getTasks: jest.fn().mockResolvedValue([
         { id: '1', title: 'Focus A', status: 'in_progress', is_today_focus: true, priority: 'high' },
-        { id: '2', title: 'Task B', status: 'not_started', is_today_focus: false, priority: 'medium' },
       ]),
-      focusNext: jest.fn().mockResolvedValue({ id: '2', title: 'Task B', status: 'not_started', is_today_focus: true, priority: 'medium' }),
-      updateTask: jest.fn().mockResolvedValue({ id: '1', title: 'Focus A', status: 'in_progress', is_today_focus: false, priority: 'high' }),
+      updateTask: jest.fn().mockResolvedValue({ id: '1', title: 'Focus A', status: 'completed', is_today_focus: false, priority: 'high' }),
+      focusNext: jest.fn().mockImplementation(async () => { const err: any = new Error('No other tasks match your criteria.'); err.code = 404; throw err; }),
     },
     goalsAPI: { getGoals: jest.fn().mockResolvedValue([]) },
   };
@@ -26,18 +25,17 @@ jest.mock('../../../services/api', () => {
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 
-describe('Focus Skip', () => {
-  function renderWithNav(ui: React.ReactElement) {
-    return render(<NavigationContainer>{ui}</NavigationContainer>);
-  }
+function renderWithNav(ui: React.ReactElement) {
+  return render(<NavigationContainer>{ui}</NavigationContainer>);
+}
 
-  it('skips current focus and shows Next up toast', async () => {
-    const { getByText, getByTestId, queryByText } = renderWithNav(<TasksScreen />);
+describe('Auto-advance no candidates path', () => {
+  it('shows cleared-all toast when no candidates', async () => {
+    const { getByTestId, getByText, queryByText } = renderWithNav(<TasksScreen />);
     await waitFor(() => getByText(/Tasks/));
-    // Momentum is enabled in mock usersAPI; skip button should be visible
-    const skip = getByTestId('skipFocusButton');
-    fireEvent.press(skip);
-    await waitFor(() => expect(queryByText(/Next up:/)).toBeTruthy());
+    const complete = getByTestId('completeFocusButton');
+    fireEvent.press(complete);
+    await waitFor(() => expect(queryByText("Great work, you've cleared all your tasks!")).toBeTruthy());
   });
 });
 

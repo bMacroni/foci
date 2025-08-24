@@ -2,6 +2,7 @@
 // For Android emulator, use 10.0.2.2 instead of localhost
 // For physical device, use your computer's IP address (e.g., 192.168.1.100)
 import { configService } from './config';
+import { authService } from './auth';
 import {
   SchedulingPreferences,
   TaskSchedulingStatus,
@@ -997,7 +998,6 @@ export const autoSchedulingAPI = {
 
 // Helper function to get auth token from auth service
 async function getAuthToken(): Promise<string> {
-  const { authService } = await import('./auth');
   const token = await authService.getAuthToken();
   if (!token) {
     throw new Error('No authentication token available');

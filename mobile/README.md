@@ -95,3 +95,27 @@ To learn more about React Native, take a look at the following resources:
 - [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
 - [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
 - [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+
+## Momentum Mode (mobile-only)
+
+Momentum Mode accelerates task flow by automatically suggesting the next focus task and providing quick controls for travel preference and skipping.
+
+### Backend endpoints
+- POST `POST /api/tasks/focus/next`
+  - Selects/unsets/sets focus; prioritizes high > medium > low, then earliest due date; supports `travel_preference` (`'home_only'` filters out tasks with a location) and `exclude_ids`; ensures a default duration of 30 minutes if missing.
+- App Preferences `GET/PUT /api/user/app-preferences`
+  - Persists Momentum settings under keys: `momentum_mode_enabled` and `momentum_travel_preference` (`'allow_travel' | 'home_only'`).
+
+Related SQL migration: see `SQL/migrations/2025-08-24_0013_user_app_preferences.sql` in the repository root.
+
+### Using Momentum in the app
+- Open the `Tasks` tab.
+- Toggle Momentum using the zap icon button (shows “Momentum On/Off”).
+- Adjust travel preference with the adjacent button (“Allow Travel” / “Home Only”).
+- When a focus task is completed and Momentum is enabled, the app auto-advances and shows a toast: `Next up: [New Task Title]`.
+- Use the Skip button on the focus card to request the next candidate (excludes current task). If no candidates remain, you’ll see: `No other tasks match your criteria.` When finishing the last candidate via complete, you’ll see: `Great work, you've cleared all your tasks!`.
+- No calendar events are created by this flow.
+
+### Tests
+- UI tests cover: Momentum toggle, travel preference switching, skip behavior, auto-advance, and empty-candidate cases.
+- Run: `npm test`

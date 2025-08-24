@@ -1,6 +1,10 @@
 import { tasksAPI } from '../../services/api';
 import { configService } from '../../services/config';
 
+jest.mock('../../services/auth', () => ({
+  authService: { getAuthToken: jest.fn(async () => 'test-token') }
+}));
+
 describe('tasksAPI.focusNext', () => {
   const originalFetch = global.fetch as any;
   beforeEach(() => {

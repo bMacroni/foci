@@ -10,6 +10,7 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
+import { useWindowDimensions } from 'react-native';
 import { colors } from '../../themes/colors';
 import { spacing, borderRadius } from '../../themes/spacing';
 import { typography } from '../../themes/typography';
@@ -53,6 +54,8 @@ interface Goal {
 
 export const TasksScreen: React.FC = () => {
   const navigation = useNavigation<any>();
+  const { width } = useWindowDimensions();
+  const isCompact = width < 1000; // Icon-only on phones; show labels only on very wide/tablet screens
   const [tasks, setTasks] = useState<Task[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -524,26 +527,6 @@ export const TasksScreen: React.FC = () => {
       
       <View style={styles.actionButtons}>
         <TouchableOpacity
-          style={[styles.momentumToggle, momentumEnabled && styles.momentumToggleOn]}
-          onPress={handleToggleMomentum}
-          activeOpacity={0.7}
-        >
-          <Icon name="zap" size={16} color={momentumEnabled ? colors.secondary : colors.text.secondary} />
-          <Text style={[styles.momentumText, momentumEnabled && styles.momentumTextOn]}>
-            {momentumEnabled ? 'Momentum On' : 'Momentum Off'}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.travelPrefButton}
-          onPress={handleToggleTravelPref}
-          activeOpacity={0.7}
-        >
-          <Icon name={travelPreference === 'home_only' ? 'home' : 'globe'} size={16} color={colors.text.secondary} />
-          <Text style={styles.travelPrefText}>{travelPreference === 'home_only' ? 'Home Only' : 'Allow Travel'}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
           style={styles.settingsButton}
           onPress={handleAutoScheduleSettings}
           activeOpacity={0.7}
@@ -713,9 +696,7 @@ export const TasksScreen: React.FC = () => {
   const handleToggleTravelPref = async () => {
     const next = travelPreference === 'allow_travel' ? 'home_only' : 'allow_travel';
     setTravelPreference(next);
-    if (momentumEnabled) {
-      await persistMomentumSettings(momentumEnabled, next);
-    }
+    await persistMomentumSettings(momentumEnabled, next);
   };
 
   const handleFocusSkip = async () => {
@@ -777,11 +758,34 @@ export const TasksScreen: React.FC = () => {
             <View>
               <View style={styles.focusHeaderRow}>
                 <Text style={styles.focusTitle}>Today's Focus</Text>
-                <TouchableOpacity style={styles.inboxButton} onPress={() => { setShowInbox(!showInbox); setSelectingFocus(false); }}>
-                  <Icon name="inbox" size={14} color={colors.text.primary} />
-                  <Text style={styles.inboxText}>Inbox{inboxCount > 0 ? ` (${inboxCount})` : ''}</Text>
-                  <Icon name={showInbox ? 'chevron-up' : 'chevron-down'} size={14} color={colors.text.primary} />
-                </TouchableOpacity>
+                <View style={styles.focusHeaderControls}>
+                  {/* Momentum toggle placed next to Inbox; icon-only on compact */}
+                  <TouchableOpacity
+                    testID="momentumToggle"
+                    style={[styles.momentumToggle, momentumEnabled && styles.momentumToggleOn, isCompact && styles.compactBtn]}
+                    onPress={handleToggleMomentum}
+                    activeOpacity={0.7}
+                    accessibilityLabel={momentumEnabled ? 'Momentum On' : 'Momentum Off'}
+                  >
+                    <Icon name="zap" size={16} color={momentumEnabled ? colors.secondary : colors.text.secondary} />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    testID="travelPrefButton"
+                    style={[styles.travelPrefButton, isCompact && styles.compactBtn]}
+                    onPress={handleToggleTravelPref}
+                    activeOpacity={0.7}
+                    accessibilityLabel={travelPreference === 'home_only' ? 'Home Only' : 'Allow Travel'}
+                  >
+                    <Icon name={travelPreference === 'home_only' ? 'home' : 'globe'} size={16} color={colors.text.secondary} />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity style={styles.inboxButton} onPress={() => { setShowInbox(!showInbox); setSelectingFocus(false); }}>
+                    <Icon name="inbox" size={14} color={colors.text.primary} />
+                    <Text style={styles.inboxText}>Inbox{inboxCount > 0 ? ` (${inboxCount})` : ''}</Text>
+                    <Icon name={showInbox ? 'chevron-up' : 'chevron-down'} size={14} color={colors.text.primary} />
+                  </TouchableOpacity>
+                </View>
               </View>
               {focus ? (
                 <View style={styles.focusCard}>
@@ -793,11 +797,11 @@ export const TasksScreen: React.FC = () => {
                     <View style={[styles.badge, styles[focus.priority]]}><Text style={[styles.badgeText, styles.badgeTextDark]}>{focus.priority}</Text></View>
                   </View>
                   <View style={styles.focusActionsRow}>
-                    <TouchableOpacity style={styles.focusIconBtn} onPress={() => handleFocusDone(focus)}>
+                    <TouchableOpacity testID="completeFocusButton" style={styles.focusIconBtn} onPress={() => handleFocusDone(focus)}>
                       <Icon name="check" size={22} color={colors.text.primary} />
                     </TouchableOpacity>
                     {momentumEnabled && (
-                      <TouchableOpacity style={styles.focusIconBtn} onPress={handleFocusSkip}>
+                      <TouchableOpacity testID="skipFocusButton" style={styles.focusIconBtn} onPress={handleFocusSkip}>
                         <Icon name="arrow-right" size={22} color={colors.text.primary} />
                       </TouchableOpacity>
                     )}
@@ -995,6 +999,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  focusHeaderControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   focusTitle: {
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.bold as any,
@@ -1120,6 +1129,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border.light,
     marginLeft: spacing.sm,
+  },
+  compactBtn: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    gap: 0,
   },
   travelPrefText: {
     fontSize: typography.fontSize.sm,
