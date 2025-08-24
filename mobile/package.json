@@ -61,7 +61,8 @@
     "react-native-svg-transformer": "^1.5.1",
     "react-test-renderer": "19.1.0",
     "sharp": "^0.33.4",
-    "typescript": "~5.5"
+    "typescript": "~5.5",
+    "@testing-library/react-native": "^12.6.0"
   },
   "engines": {
     "node": ">=18"
@@ -72,6 +73,7 @@
     "2025-08-14 CST: added dependency 'date-fns' for due-date formatting in Goals screen redesign",
     "2025-08-15 CST: upgraded devDependency 'eslint' to v9 flat config and added devDependency '@typescript-eslint/parser' for TS parsing",
     "2025-08-16 CST: added devDependency 'react-native-svg-transformer' to enable importing .svg files as React components",
-    "2025-08-18 CST: added dependency 'react-native-draggable-flatlist' for Brain Dump Prioritization draggable tasks list"
+    "2025-08-18 CST: added dependency 'react-native-draggable-flatlist' for Brain Dump Prioritization draggable tasks list",
+    "2025-08-24 CST: added devDependency '@testing-library/react-native' for mobile UI tests"
   ]
 }

@@ -18,7 +18,7 @@ import QuickScheduleRadial from '../../components/tasks/QuickScheduleRadial';
 import { TaskForm } from '../../components/tasks/TaskForm';
 import { AutoSchedulingPreferencesModal } from '../../components/tasks/AutoSchedulingPreferencesModal';
 import { SuccessToast } from '../../components/common/SuccessToast';
-import { tasksAPI, goalsAPI, calendarAPI, autoSchedulingAPI } from '../../services/api';
+import { tasksAPI, goalsAPI, calendarAPI, autoSchedulingAPI, appPreferencesAPI } from '../../services/api';
 import { offlineService } from '../../services/offline';
 import Icon from 'react-native-vector-icons/Octicons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -73,6 +73,9 @@ export const TasksScreen: React.FC = () => {
   const [quickAnchor, setQuickAnchor] = useState<{ x: number; y: number } | undefined>(undefined);
   const [quickOpenedAt, setQuickOpenedAt] = useState<number | undefined>(undefined);
   const [quickTaskId, setQuickTaskId] = useState<string | undefined>(undefined);
+  const [momentumEnabled, setMomentumEnabled] = useState<boolean>(false);
+  const [travelPreference, setTravelPreference] = useState<'allow_travel' | 'home_only'>('allow_travel');
+  const [userNotificationPrefs, setUserNotificationPrefs] = useState<any | null>(null);
 
   useEffect(() => {
     loadData();
@@ -114,12 +117,17 @@ export const TasksScreen: React.FC = () => {
       // Fetch fresh in parallel
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 15000);
-      const [tasksData, goalsData] = await Promise.all([
+      const [tasksData, goalsData, prefs] = await Promise.all([
         tasksAPI.getTasks(controller.signal as any),
         goalsAPI.getGoals(controller.signal as any),
+        appPreferencesAPI.get().catch(() => null),
       ]).finally(() => clearTimeout(timeout));
       setTasks(tasksData);
       setGoals(goalsData);
+      if (prefs && typeof prefs === 'object') {
+        setMomentumEnabled(!!(prefs as any).momentum_mode_enabled);
+        setTravelPreference((prefs as any).momentum_travel_preference === 'home_only' ? 'home_only' : 'allow_travel');
+      }
       // Cache raw responses
       try {
         await Promise.all([
@@ -516,6 +524,26 @@ export const TasksScreen: React.FC = () => {
       
       <View style={styles.actionButtons}>
         <TouchableOpacity
+          style={[styles.momentumToggle, momentumEnabled && styles.momentumToggleOn]}
+          onPress={handleToggleMomentum}
+          activeOpacity={0.7}
+        >
+          <Icon name="zap" size={16} color={momentumEnabled ? colors.secondary : colors.text.secondary} />
+          <Text style={[styles.momentumText, momentumEnabled && styles.momentumTextOn]}>
+            {momentumEnabled ? 'Momentum On' : 'Momentum Off'}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.travelPrefButton}
+          onPress={handleToggleTravelPref}
+          activeOpacity={0.7}
+        >
+          <Icon name={travelPreference === 'home_only' ? 'home' : 'globe'} size={16} color={colors.text.secondary} />
+          <Text style={styles.travelPrefText}>{travelPreference === 'home_only' ? 'Home Only' : 'Allow Travel'}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
           style={styles.settingsButton}
           onPress={handleAutoScheduleSettings}
           activeOpacity={0.7}
@@ -610,6 +638,35 @@ export const TasksScreen: React.FC = () => {
       setToastMessage('Great job! Focus task completed.');
       setToastCalendarEvent(false);
       setShowToast(true);
+      if (task.is_today_focus && momentumEnabled) {
+        try {
+          const next = await tasksAPI.focusNext({
+            current_task_id: task.id,
+            travel_preference: travelPreference,
+            exclude_ids: [],
+          });
+          setTasks(prev => {
+            const mapped = prev.map(t => {
+              if (t.id === task.id) { return { ...t, is_today_focus: false }; }
+              if (t.id === next.id) { return next as any; }
+              return t;
+            });
+            if (!mapped.find(t => t.id === next.id)) {
+              return [next as any, ...mapped];
+            }
+            return mapped;
+          });
+          setToastMessage(`Next up: ${next.title}`);
+          setToastCalendarEvent(false);
+          setShowToast(true);
+        } catch (err: any) {
+          if (err?.code === 404) {
+            setToastMessage("Great work, you've cleared all your tasks!");
+            setToastCalendarEvent(false);
+            setShowToast(true);
+          }
+        }
+      }
     } catch (e) {
       Alert.alert('Error', 'Failed to complete focus task');
     }
@@ -639,6 +696,60 @@ export const TasksScreen: React.FC = () => {
     setToastMessage("Select a task from your Inbox to set as Today's Focus.");
     setToastCalendarEvent(false);
     setShowToast(true);
+  };
+
+  const persistMomentumSettings = async (enabled: boolean, pref: 'allow_travel'|'home_only') => {
+    try {
+      await appPreferencesAPI.update({ momentum_mode_enabled: enabled, momentum_travel_preference: pref });
+    } catch {}
+  };
+
+  const handleToggleMomentum = async () => {
+    const next = !momentumEnabled;
+    setMomentumEnabled(next);
+    await persistMomentumSettings(next, travelPreference);
+  };
+
+  const handleToggleTravelPref = async () => {
+    const next = travelPreference === 'allow_travel' ? 'home_only' : 'allow_travel';
+    setTravelPreference(next);
+    if (momentumEnabled) {
+      await persistMomentumSettings(momentumEnabled, next);
+    }
+  };
+
+  const handleFocusSkip = async () => {
+    const focus = getFocusTask();
+    if (!focus) { return; }
+    try {
+      const next = await tasksAPI.focusNext({
+        current_task_id: focus.id,
+        travel_preference: travelPreference,
+        exclude_ids: [focus.id],
+      });
+      setTasks(prev => {
+        const mapped = prev.map(t => {
+          if (t.id === focus.id) { return { ...t, is_today_focus: false }; }
+          if (t.id === next.id) { return next as any; }
+          return t;
+        });
+        if (!mapped.find(t => t.id === next.id)) {
+          return [next as any, ...mapped];
+        }
+        return mapped;
+      });
+      setToastMessage(`Next up: ${next.title}`);
+      setToastCalendarEvent(false);
+      setShowToast(true);
+    } catch (err: any) {
+      if (err?.code === 404) {
+        setToastMessage('No other tasks match your criteria.');
+        setToastCalendarEvent(false);
+        setShowToast(true);
+      } else {
+        Alert.alert('Error', 'Failed to get next focus task');
+      }
+    }
   };
 
   if (loading) {
@@ -685,6 +796,11 @@ export const TasksScreen: React.FC = () => {
                     <TouchableOpacity style={styles.focusIconBtn} onPress={() => handleFocusDone(focus)}>
                       <Icon name="check" size={22} color={colors.text.primary} />
                     </TouchableOpacity>
+                    {momentumEnabled && (
+                      <TouchableOpacity style={styles.focusIconBtn} onPress={handleFocusSkip}>
+                        <Icon name="arrow-right" size={22} color={colors.text.primary} />
+                      </TouchableOpacity>
+                    )}
                     <TouchableOpacity style={styles.focusIconBtn} onPress={handleChangeFocus}>
                       <Icon name="arrow-switch" size={22} color={colors.text.primary} />
                     </TouchableOpacity>
@@ -969,6 +1085,45 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  momentumToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.background.surface,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+  },
+  momentumToggleOn: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  momentumText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+  momentumTextOn: {
+    color: colors.secondary,
+    fontWeight: typography.fontWeight.semibold as any,
+  },
+  travelPrefButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.background.surface,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    marginLeft: spacing.sm,
+  },
+  travelPrefText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
   },
   settingsButton: {
     padding: spacing.sm,

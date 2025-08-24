@@ -8,6 +8,7 @@ import {
   updateTask,
   deleteTask,
   bulkCreateTasks,
+  getNextFocusTask,
   // Auto-scheduling endpoints
   toggleAutoSchedule,
   getAutoSchedulingDashboard,
@@ -30,6 +31,9 @@ router.get('/', requireAuth, getTasks);
 router.get('/:id', requireAuth, getTaskById);
 router.put('/:id', requireAuth, updateTask);
 router.delete('/:id', requireAuth, deleteTask);
+
+// Momentum Mode endpoint
+router.post('/focus/next', requireAuth, getNextFocusTask);
 
 // Auto-scheduling routes
 router.put('/:id/toggle-auto-schedule', requireAuth, toggleAutoSchedule);

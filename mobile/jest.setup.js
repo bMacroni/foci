@@ -13,6 +13,10 @@ jest.mock('react-native', () => {
 
 jest.mock('react-native-vector-icons/Octicons', () => 'Icon');
 jest.mock('react-native-draggable-flatlist', () => 'DraggableFlatList');
+jest.mock('react-native-haptic-feedback', () => ({
+  __esModule: true,
+  default: { trigger: jest.fn() },
+}));
 jest.mock('@react-native-async-storage/async-storage', () => ({
   __esModule: true,
   default: {
