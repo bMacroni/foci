@@ -649,10 +649,23 @@ export default function AIChatScreen({ navigation, route }: any) {
     // }
     
     // Remove JSON code blocks and (when present) the goal breakdown section
-    // from AI text for conversational display
-    const conversationalText = hasGoalBreakdownContent
+    // from AI text for conversational display, then simplify redundant lines
+    const baseConversational = hasGoalBreakdownContent
       ? stripGoalBreakdownFromText(msg.text)
       : msg.text.replace(/```json[\s\S]*?```/g, '').trim();
+    const conversationalText = (() => {
+      let text = baseConversational
+        .split('\n')
+        // Drop redundant confirmations like "I've scheduled ..."
+        .filter(line => !/^i['’]ve scheduled/i.test(line.trim()))
+        .join('\n');
+      const taskTitleFromRoute = route?.params?.taskTitle;
+      if (taskTitleFromRoute) {
+        // Replace generic 'your event' with the task title
+        text = text.replace(/\byour event\b/gi, taskTitleFromRoute);
+      }
+      return text.trim();
+    })();
 
     return (
       <View key={msg.id} style={[
@@ -665,7 +678,7 @@ export default function AIChatScreen({ navigation, route }: any) {
           <Text selectable style={styles.aiMsgText}>{conversationalText}</Text>
         )}
         {hasScheduleContent && (
-          <ScheduleDisplay text={msg.text} />
+          <ScheduleDisplay text={msg.text} taskTitle={route?.params?.taskTitle} />
         )}
         {hasGoalBreakdownContent && (
           <GoalBreakdownDisplay text={msg.text} />

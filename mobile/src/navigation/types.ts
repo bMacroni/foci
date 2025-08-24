@@ -10,7 +10,7 @@ export type RootStackParamList = {
 
 export type MainTabParamList = {
   BrainDump: undefined;
-  AIChat: { initialMessage?: string; threadId?: string } | undefined;
+  AIChat: { initialMessage?: string; threadId?: string; taskTitle?: string } | undefined;
   Goals: undefined;
   Tasks: undefined;
   Calendar: undefined;

@@ -15,7 +15,7 @@ import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { colors } from '../../themes/colors';
 import { spacing, borderRadius } from '../../themes/spacing';
 import { typography } from '../../themes/typography';
-import { Button } from '../common/Button';
+import { formatRelativeDueLabel } from '../../utils/dateUtils';
 import Icon from 'react-native-vector-icons/Octicons';
 
 interface Task {
@@ -47,6 +47,8 @@ interface TaskFormProps {
   onSave: (task: Partial<Task>) => void;
   onCancel: () => void;
   loading?: boolean;
+  saveSignal?: number; // optional trigger from parent header icon
+  stickyFooter?: boolean;
 }
 
 // Category options based on database schema
@@ -66,6 +68,8 @@ export const TaskForm: React.FC<TaskFormProps> = ({
   onSave,
   onCancel,
   loading = false,
+  saveSignal,
+  stickyFooter = false,
 }) => {
   const [formData, setFormData] = useState<Partial<Task>>({
     title: '',
@@ -123,6 +127,13 @@ export const TaskForm: React.FC<TaskFormProps> = ({
 
     onSave(formData);
   };
+
+  // Respond to parent header save icon taps
+  useEffect(() => {
+    if (saveSignal && typeof saveSignal === 'number') {
+      handleSave();
+    }
+  }, [saveSignal]);
 
   const clearDueDate = () => {
     setSelectedDate(null);
@@ -270,14 +281,29 @@ export const TaskForm: React.FC<TaskFormProps> = ({
     });
   };
 
+  const dueMeta = formatRelativeDueLabel(formData.due_date);
+
   return (
     <View style={styles.container}>
       <ScrollView 
         style={styles.scrollView} 
         showsVerticalScrollIndicator={false}
         scrollEnabled={!showCategoryDropdown && !showGoalDropdown}
+        contentContainerStyle={[styles.scrollContent, stickyFooter ? { paddingBottom: spacing['2xl'] } : null]}
       >
         <View style={styles.content}>
+          {/* Meta row to mirror TaskCard */}
+          <View style={styles.metaRow}>
+            {!!formData.goal_id && (
+              <View style={styles.goalBadge}><Text style={styles.goalText}>{getGoalLabel(formData.goal_id)}</Text></View>
+            )}
+            {Number.isFinite((formData as any).estimated_duration_minutes) && (
+              <View style={styles.durationBadge}>
+                <Icon name="clock" size={14} color={colors.text.secondary} />
+                <Text style={styles.durationText}>{(formData as any).estimated_duration_minutes}m</Text>
+              </View>
+            )}
+          </View>
           {/* Title */}
           <View style={styles.field}>
             <Text style={styles.label}>Title</Text>
@@ -382,6 +408,12 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                 </TouchableOpacity>
               )}
             </View>
+            {dueMeta?.tone === 'overdue' && (
+              <View style={styles.noticeRow}>
+                <Icon name="alert" size={14} color={colors.error} />
+                <Text style={styles.noticeText}>{dueMeta.label}</Text>
+              </View>
+            )}
             <DateTimePickerModal
               isVisible={showDatePicker}
               mode="date"
@@ -496,23 +528,30 @@ export const TaskForm: React.FC<TaskFormProps> = ({
             )}
           </View>
 
-          {/* Action Buttons */}
-          <View style={styles.actions}>
-            <Button
-              title="Cancel"
-              onPress={onCancel}
-              variant="outline"
-              style={styles.cancelButton}
-            />
-            <Button
-              title={task ? 'Update Task' : 'Create Task'}
-              onPress={handleSave}
-              loading={loading}
-              style={styles.saveButton}
-            />
-          </View>
+          {/* Bottom actions */}
+          {stickyFooter ? null : (
+            <View style={styles.actions}>
+              <TouchableOpacity style={[styles.footerIconBtn]} onPress={onCancel} accessibilityLabel="Cancel">
+                <Icon name="x" size={22} color={colors.text.primary} />
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.footerIconBtn]} onPress={handleSave} disabled={loading} accessibilityLabel="Save task">
+                <Icon name="check" size={22} color={colors.text.primary} />
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </ScrollView>
+
+      {stickyFooter && (
+        <View style={styles.stickyFooter}>
+          <TouchableOpacity style={styles.footerIconBtn} onPress={onCancel} accessibilityLabel="Cancel">
+            <Icon name="x" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.footerIconBtn} onPress={handleSave} disabled={loading} accessibilityLabel="Save task">
+            <Icon name="check" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Category Dropdown Overlay */}
       {showCategoryDropdown && (
@@ -613,6 +652,9 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  scrollContent: {
+    paddingBottom: spacing.md,
+  },
   content: {
     padding: spacing.md,
   },
@@ -634,12 +676,12 @@ const styles = StyleSheet.create({
   },
   textInput: {
     borderWidth: 1,
-    borderColor: colors.border.medium,
+    borderColor: colors.border.light,
     borderRadius: borderRadius.md,
-    padding: spacing.sm,
+    padding: spacing.md,
     fontSize: typography.fontSize.base,
     color: colors.text.primary,
-    backgroundColor: colors.background.primary,
+    backgroundColor: colors.secondary,
   },
   textArea: {
     height: 100,
@@ -649,15 +691,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: colors.border.medium,
+    borderColor: colors.border.light,
     overflow: 'hidden',
   },
   segment: {
     flex: 1,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
     paddingHorizontal: spacing.xs,
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background.surface,
   },
   segmentText: {
     fontSize: typography.fontSize.sm,
@@ -676,17 +718,17 @@ const styles = StyleSheet.create({
   dateButton: {
     flex: 1,
     borderWidth: 1,
-    borderColor: colors.border.medium,
+    borderColor: colors.border.light,
     borderRadius: borderRadius.md,
-    padding: spacing.sm,
-    backgroundColor: colors.background.primary,
+    padding: spacing.md,
+    backgroundColor: colors.secondary,
   },
   dateButtonText: {
     fontSize: typography.fontSize.base,
     color: colors.text.primary,
   },
   clearDateButton: {
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
   clearDateText: {
@@ -703,10 +745,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: colors.border.medium,
+    borderColor: colors.border.light,
     borderRadius: borderRadius.md,
-    padding: spacing.sm,
-    backgroundColor: colors.background.primary,
+    padding: spacing.md,
+    backgroundColor: colors.secondary,
     minHeight: 48,
   },
   dropdownButtonText: {
@@ -719,9 +761,9 @@ const styles = StyleSheet.create({
     top: '100%',
     left: 0,
     right: 0,
-    backgroundColor: colors.background.primary,
+    backgroundColor: colors.secondary,
     borderWidth: 1,
-    borderColor: colors.border.medium,
+    borderColor: colors.border.light,
     borderRadius: borderRadius.md,
     marginTop: 2,
     zIndex: 1002,
@@ -744,7 +786,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.border.light,
-    backgroundColor: colors.background.primary,
+    backgroundColor: colors.secondary,
   },
   dropdownOptionSelected: {
     backgroundColor: colors.primary,
@@ -760,9 +802,9 @@ const styles = StyleSheet.create({
   },
   pickerContainer: {
     borderWidth: 1,
-    borderColor: colors.border.medium,
+    borderColor: colors.border.light,
     borderRadius: borderRadius.md,
-    backgroundColor: colors.background.primary,
+    backgroundColor: colors.secondary,
   },
   pickerButton: {
     flexDirection: 'row',
@@ -812,10 +854,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: colors.border.medium,
+    borderColor: colors.border.light,
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.sm,
-    backgroundColor: colors.background.primary,
+    backgroundColor: colors.secondary,
   },
   locationInput: {
     flex: 1,
@@ -833,7 +875,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.sm,
     borderWidth: 1,
     borderColor: colors.border.light,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background.surface,
   },
   timeWindowButtonSelected: {
     backgroundColor: colors.primary,
@@ -849,8 +891,15 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginTop: spacing.xl,
+  },
+  footerIconBtn: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.sm,
+    backgroundColor: 'transparent',
   },
   cancelButton: {
     flex: 1,
@@ -875,10 +924,10 @@ const styles = StyleSheet.create({
   },
   dropdownOverlayContent: {
     position: 'absolute',
-    backgroundColor: colors.background.primary,
+    backgroundColor: colors.secondary,
     borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: colors.border.medium,
+    borderColor: colors.border.light,
     elevation: 8,
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
@@ -888,5 +937,29 @@ const styles = StyleSheet.create({
   },
   dropdownOverlayList: {
     maxHeight: Dimensions.get('window').height * 0.4, // Adjust as needed
+  },
+  stickyFooter: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.background.primary,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+  },
+  noticeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: spacing.xs,
+  },
+  noticeText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.error,
+    fontWeight: typography.fontWeight.medium as any,
   },
 });

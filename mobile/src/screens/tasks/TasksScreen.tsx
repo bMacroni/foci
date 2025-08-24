@@ -14,6 +14,7 @@ import { colors } from '../../themes/colors';
 import { spacing, borderRadius } from '../../themes/spacing';
 import { typography } from '../../themes/typography';
 import { TaskCard } from '../../components/tasks/TaskCard';
+import QuickScheduleRadial from '../../components/tasks/QuickScheduleRadial';
 import { TaskForm } from '../../components/tasks/TaskForm';
 import { AutoSchedulingPreferencesModal } from '../../components/tasks/AutoSchedulingPreferencesModal';
 import { SuccessToast } from '../../components/common/SuccessToast';
@@ -68,6 +69,10 @@ export const TasksScreen: React.FC = () => {
   const [showInbox, setShowInbox] = useState(false);
   const [selectingFocus, setSelectingFocus] = useState(false);
   const [showEodPrompt, setShowEodPrompt] = useState(false);
+  const [quickMenuVisible, setQuickMenuVisible] = useState(false);
+  const [quickAnchor, setQuickAnchor] = useState<{ x: number; y: number } | undefined>(undefined);
+  const [quickOpenedAt, setQuickOpenedAt] = useState<number | undefined>(undefined);
+  const [quickTaskId, setQuickTaskId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     loadData();
@@ -212,14 +217,37 @@ export const TasksScreen: React.FC = () => {
 
   const handleAddToCalendar = async (_taskId: string) => {
     try {
+      const task = tasks.find(t => t.id === _taskId);
+      if (!task) {
+        Alert.alert('Error', 'Task not found');
+        return;
+      }
+
+      const needsDuration = !Number.isFinite((task as any).estimated_duration_minutes) || (task as any).estimated_duration_minutes! <= 0;
+      const needsDueDate = !task.due_date;
+
+      if (needsDuration || needsDueDate) {
+        const missingParts: string[] = [];
+        if (needsDuration) { missingParts.push('duration'); }
+        if (needsDueDate) { missingParts.push('due date'); }
+
+        const descriptionPart = task.description ? `\nDescription: ${task.description}` : '';
+        const duePart = task.due_date ? task.due_date : 'none';
+        const durationPart = Number.isFinite((task as any).estimated_duration_minutes) ? String((task as any).estimated_duration_minutes) : 'none';
+
+        const prompt = `Help me schedule this task on my calendar. Ask me conversational clarifying questions to fill any missing values and then summarize the final values. After that, suggest one tiny micro-step to help me begin.\n\nTask details:\n- Title: ${task.title}${descriptionPart}\n- Task ID: ${task.id}\n- Current due date: ${duePart}\n- Estimated duration (minutes): ${durationPart}\n\nMissing: ${missingParts.join(', ')}.`;
+
+        (navigation as any).navigate('AIChat', { initialMessage: prompt, taskTitle: task.title });
+        return;
+      }
+
       const result = await calendarAPI.createEvent({
-        summary: 'Task',
-        description: '',
+        summary: task.title || 'Task',
+        description: task.description || '',
         startTime: new Date().toISOString(),
-        endTime: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        endTime: new Date(Date.now() + (((task as any).estimated_duration_minutes || 60) * 60 * 1000)).toISOString(),
       });
       
-      // Format the scheduled time for display
       const startTimeStr = result?.data?.scheduled_time;
       const startTime = startTimeStr ? new Date(startTimeStr) : null;
       const now = new Date();
@@ -240,6 +268,68 @@ export const TasksScreen: React.FC = () => {
     }
   };
 
+  const handleOpenQuickSchedule = (taskId: string, center: { x: number; y: number }) => {
+    setQuickTaskId(taskId);
+    setQuickAnchor(center);
+    setQuickOpenedAt(Date.now());
+    setQuickMenuVisible(true);
+  };
+
+  const handleAIHelp = async (task: Task) => {
+    try {
+      const descriptionPart = task.description ? `\nDescription: ${task.description}` : '';
+      const duePart = task.due_date ? task.due_date : 'none';
+      const durationPart = Number.isFinite((task as any).estimated_duration_minutes)
+        ? String((task as any).estimated_duration_minutes)
+        : 'none';
+      const prompt = `Help me think through and schedule this task. Ask conversational clarifying questions if needed, then summarize final values and suggest one tiny micro-step.\n\nTask details:\n- Title: ${task.title}${descriptionPart}\n- Task ID: ${task.id}\n- Current due date: ${duePart}\n- Estimated duration (minutes): ${durationPart}`;
+      (navigation as any).navigate('AIChat', { initialMessage: prompt, taskTitle: task.title });
+    } catch (e) {
+      Alert.alert('Error', 'Failed to open AI assistant');
+    }
+  };
+
+  const handleQuickSchedule = async (
+    taskId: string,
+    preset: 'today' | 'tomorrow' | 'this_week' | 'next_week'
+  ) => {
+    try {
+      const base = new Date();
+      const format = (d: Date) => {
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+      };
+
+      const target = new Date(base);
+
+      if (preset === 'today') {
+        // no change
+      } else if (preset === 'tomorrow') {
+        target.setDate(target.getDate() + 1);
+      } else if (preset === 'this_week') {
+        const dow = target.getDay(); // 0 Sun .. 6 Sat
+        const daysLeftThisWeek = 6 - dow; // up to Saturday
+        const move = Math.min(2, Math.max(1, daysLeftThisWeek));
+        target.setDate(target.getDate() + (daysLeftThisWeek > 0 ? move : 0));
+      } else if (preset === 'next_week') {
+        const dow = target.getDay();
+        const daysUntilNextMon = ((8 - dow) % 7) || 7; // next Monday
+        target.setDate(target.getDate() + daysUntilNextMon);
+      }
+
+      const updated = await tasksAPI.updateTask(taskId, { due_date: format(target) });
+      setTasks(prev => prev.map(t => t.id === taskId ? updated : t));
+      setToastMessage(`Scheduled: ${preset.replace('_', ' ')}`);
+      setToastCalendarEvent(false);
+      setShowToast(true);
+    } catch (error) {
+      console.error('Quick schedule error:', error);
+      Alert.alert('Error', 'Failed to quick-schedule task');
+    }
+  };
+
   const handleToggleAutoSchedule = async (taskId: string, enabled: boolean) => {
     try {
       await autoSchedulingAPI.toggleTaskAutoScheduling(taskId, enabled);
@@ -254,14 +344,37 @@ export const TasksScreen: React.FC = () => {
 
   const handleScheduleNow = async (_taskId: string) => {
     try {
+      const task = tasks.find(t => t.id === _taskId);
+      if (!task) {
+        Alert.alert('Error', 'Task not found');
+        return;
+      }
+
+      const needsDuration = !Number.isFinite((task as any).estimated_duration_minutes) || (task as any).estimated_duration_minutes! <= 0;
+      const needsDueDate = !task.due_date;
+
+      if (needsDuration || needsDueDate) {
+        const missingParts: string[] = [];
+        if (needsDuration) { missingParts.push('duration'); }
+        if (needsDueDate) { missingParts.push('due date'); }
+
+        const descriptionPart = task.description ? `\nDescription: ${task.description}` : '';
+        const duePart = task.due_date ? task.due_date : 'none';
+        const durationPart = Number.isFinite((task as any).estimated_duration_minutes) ? String((task as any).estimated_duration_minutes) : 'none';
+
+        const prompt = `I want to schedule this task now. Please ask me conversationally to confirm or fill in any missing values needed for scheduling, then summarize the final values. Also propose one tiny micro-step to get started.\n\nTask details:\n- Title: ${task.title}${descriptionPart}\n- Task ID: ${task.id}\n- Current due date: ${duePart}\n- Estimated duration (minutes): ${durationPart}\n\nMissing: ${missingParts.join(', ')}.`;
+
+        (navigation as any).navigate('AIChat', { initialMessage: prompt, taskTitle: task.title });
+        return;
+      }
+
       const result = await calendarAPI.createEvent({
-        summary: 'Task',
-        description: '',
+        summary: task.title || 'Task',
+        description: task.description || '',
         startTime: new Date().toISOString(),
-        endTime: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        endTime: new Date(Date.now() + (((task as any).estimated_duration_minutes || 60) * 60 * 1000)).toISOString(),
       });
       
-      // Build human-friendly scheduled time for toast
       const startTimeStr = result?.data?.scheduled_time;
       let formatted = '';
       if (startTimeStr) {
@@ -278,13 +391,11 @@ export const TasksScreen: React.FC = () => {
         }
       }
 
-      // Show success toast including scheduled date/time
       setToastMessage(formatted ? `Scheduled for ${formatted}` : 'Task scheduled successfully!');
       setToastScheduledTime(startTimeStr);
       setToastCalendarEvent(true);
       setShowToast(true);
       
-      // Refresh tasks to get updated scheduling info
       await loadData();
     } catch (error) {
       console.error('Error scheduling task:', error);
@@ -389,6 +500,9 @@ export const TasksScreen: React.FC = () => {
       onAddToCalendar={handleAddToCalendar}
       onToggleAutoSchedule={handleToggleAutoSchedule}
       onScheduleNow={handleScheduleNow}
+      onOpenQuickSchedule={handleOpenQuickSchedule}
+      onQuickSchedule={handleQuickSchedule}
+      onAIHelp={handleAIHelp}
     />
   );
 
@@ -568,17 +682,11 @@ export const TasksScreen: React.FC = () => {
                     <View style={[styles.badge, styles[focus.priority]]}><Text style={[styles.badgeText, styles.badgeTextDark]}>{focus.priority}</Text></View>
                   </View>
                   <View style={styles.focusActionsRow}>
-                    <TouchableOpacity style={styles.focusBtn} onPress={() => handleFocusDone(focus)}>
-                      <Icon name="check" size={16} color={colors.secondary} />
-                      <Text style={styles.focusBtnText}>Done</Text>
+                    <TouchableOpacity style={styles.focusIconBtn} onPress={() => handleFocusDone(focus)}>
+                      <Icon name="check" size={22} color={colors.text.primary} />
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.focusBtn} onPress={() => handleFocusRollover(focus)}>
-                      <Icon name="clock" size={16} color={colors.secondary} />
-                      <Text style={styles.focusBtnText}>Rollover</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.focusBtn} onPress={handleChangeFocus}>
-                      <Icon name="arrow-switch" size={16} color={colors.secondary} />
-                      <Text style={styles.focusBtnText}>Change</Text>
+                    <TouchableOpacity style={styles.focusIconBtn} onPress={handleChangeFocus}>
+                      <Icon name="arrow-switch" size={22} color={colors.text.primary} />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -626,6 +734,9 @@ export const TasksScreen: React.FC = () => {
                   onAddToCalendar={handleAddToCalendar}
                   onToggleAutoSchedule={handleToggleAutoSchedule}
                   onScheduleNow={handleScheduleNow}
+                  onOpenQuickSchedule={handleOpenQuickSchedule}
+                  onQuickSchedule={handleQuickSchedule}
+                  onAIHelp={handleAIHelp}
                 />
               ))}
             </View>
@@ -655,8 +766,23 @@ export const TasksScreen: React.FC = () => {
           onSave={handleSaveTask}
           onCancel={handleCancelModal}
           loading={saving}
+          stickyFooter
         />
       </Modal>
+
+      {/* Quick Schedule Radial overlay */}
+      <QuickScheduleRadial
+        visible={quickMenuVisible}
+        center={quickAnchor}
+        openTimestamp={quickOpenedAt}
+        onSelect={async (preset) => {
+          setQuickMenuVisible(false);
+          if (quickTaskId) {
+            await handleQuickSchedule(quickTaskId, preset);
+          }
+        }}
+        onClose={() => setQuickMenuVisible(false)}
+      />
 
       {/* Auto-Scheduling Preferences Modal */}
       <AutoSchedulingPreferencesModal
@@ -780,6 +906,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.secondary,
     borderRadius: borderRadius.md,
     padding: spacing.md,
+    // Subtle drop shadow to emphasize Today's Focus
+    shadowColor: colors.primary,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 6,
   },
   focusTaskTitle: {
     color: colors.text.primary,
@@ -808,19 +943,21 @@ const styles = StyleSheet.create({
   high: { backgroundColor: '#FFEBEE', borderColor: '#FFCDD2' },
   focusActionsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
+    gap: spacing.sm,
     marginTop: spacing.sm,
   },
   focusBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.sm,
+    display: 'none',
   },
-  focusBtnText: { color: colors.secondary, fontWeight: typography.fontWeight.bold as any },
+  focusBtnText: { },
+  focusIconBtn: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.sm,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+  },
   autoScheduleSummary: {
     marginBottom: spacing.sm,
   },

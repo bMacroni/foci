@@ -13,11 +13,12 @@ interface ScheduleEvent {
 
 interface ScheduleDisplayProps {
   text: string;
+  taskTitle?: string;
 }
 
 import { calendarAPI } from '../../services/api';
 
-export default function ScheduleDisplay({ text }: ScheduleDisplayProps) {
+export default function ScheduleDisplay({ text, taskTitle }: ScheduleDisplayProps) {
   // Extract the title/date from the AI response, preferring JSON title
   const extractScheduleDate = (scheduleText: string): string => {
     try {
@@ -56,7 +57,7 @@ export default function ScheduleDisplay({ text }: ScheduleDisplayProps) {
         const jsonData = JSON.parse(jsonMatch[1]);
         if (jsonData.category === 'schedule' && jsonData.events) {
           return jsonData.events.map((event: any) => ({
-            activity: event.title || event.summary || 'Untitled',
+            activity: event.title || event.summary || taskTitle || 'Task',
             // Support both new keys (startTime/endTime) and ISO keys (start/end)
             startTime: event.startTime || event.start?.dateTime || event.start || event.start_time,
             endTime: event.endTime || event.end?.dateTime || event.end || event.end_time,
@@ -71,7 +72,7 @@ export default function ScheduleDisplay({ text }: ScheduleDisplayProps) {
         const jsonData = JSON.parse(directJsonMatch[0]);
         if (jsonData.category === 'schedule' && jsonData.events) {
           return jsonData.events.map((event: any) => ({
-            activity: event.title || event.summary || 'Untitled',
+            activity: event.title || event.summary || taskTitle || 'Task',
             startTime: event.startTime || event.start?.dateTime || event.start || event.start_time,
             endTime: event.endTime || event.end?.dateTime || event.end || event.end_time,
             date: event.date || event.dateLabel,
@@ -105,7 +106,7 @@ export default function ScheduleDisplay({ text }: ScheduleDisplayProps) {
           // Strip out ** characters from activity name
           const cleanActivity = match[1].trim().replace(/\*\*/g, '');
           events.push({
-            activity: cleanActivity,
+            activity: (cleanActivity.match(/^your event$/i) ? (taskTitle || 'Task') : cleanActivity),
             startTime: match[2].trim(),
             endTime: match[3].trim(),
             date: match[4]?.trim() || lastDate,
@@ -128,7 +129,6 @@ export default function ScheduleDisplay({ text }: ScheduleDisplayProps) {
   };
 
   const events = parseScheduleEvents(text);
-  const scheduleDate = 'Tap to schedule the event';
 
   // If no events found, return null to fall back to regular text display
   if (events.length === 0) {
@@ -225,7 +225,7 @@ export default function ScheduleDisplay({ text }: ScheduleDisplayProps) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.scheduleTitle}>{scheduleDate}</Text>
+      {/* Simplified: no header title */}
       <View style={styles.eventsContainer}>
         {events.map((event, index) => (
           <TouchableOpacity key={index} style={styles.eventCard} onPress={() => handleSchedule(event)}>

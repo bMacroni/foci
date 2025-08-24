@@ -190,6 +190,49 @@ export const isOverdue = (dueDate: Date, status?: string): boolean => {
 };
 
 /**
+ * Format a human-friendly due label similar to the interface sample page.
+ * Returns a tuple of [label, tone] where tone can drive color styling.
+ * - overdue: red emphasis (e.g., "Overdue by 2 days")
+ * - today: amber emphasis ("Due today")
+ * - tomorrow: amber emphasis ("Due tomorrow")
+ * - soon: neutral emphasis within 7 days ("3 days left")
+ * - date: fallback absolute date (e.g., "Aug 29, 2025")
+ */
+export const formatRelativeDueLabel = (
+  dueDateString?: string,
+  opts?: { now?: Date; status?: 'not_started' | 'in_progress' | 'completed' }
+): { label: string; tone: 'overdue' | 'today' | 'tomorrow' | 'soon' | 'date' } | null => {
+  if (!dueDateString) { return null; }
+  const now = opts?.now ?? new Date();
+  const due = new Date(dueDateString);
+
+  // Normalize both to local date without time for day comparisons
+  const toDayOnly = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const today = toDayOnly(now);
+  const dueDay = toDayOnly(due);
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const diffDays = Math.round((dueDay.getTime() - today.getTime()) / msPerDay);
+
+  if (opts?.status !== 'completed' && diffDays < 0) {
+    const days = Math.abs(diffDays);
+    return { label: days === 1 ? 'Overdue by 1 day' : `Overdue by ${days} days`, tone: 'overdue' };
+  }
+  if (diffDays === 0) {
+    return { label: 'Due today', tone: 'today' };
+  }
+  if (diffDays === 1) {
+    return { label: 'Due tomorrow', tone: 'tomorrow' };
+  }
+  if (diffDays <= 7) {
+    return { label: `${diffDays} days left`, tone: 'soon' };
+  }
+
+  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const label = `${monthNames[due.getMonth()]} ${due.getDate()}, ${due.getFullYear()}`;
+  return { label, tone: 'date' };
+};
+
+/**
  * Get the number of days between two dates
  */
 export const getDaysDifference = (date1: Date, date2: Date): number => {
