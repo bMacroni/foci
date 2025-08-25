@@ -69,7 +69,7 @@ export default function SignupScreen({ navigation }: any) {
           <Text style={styles.logoIcon}>📖</Text>
         </View>
         <Text style={styles.title}>Create Account</Text>
-        <Text style={styles.subtitle}>Sign up for a Foci account</Text>
+        <Text style={styles.subtitle}>Sign up for a Mind Clear account</Text>
         
         <View style={styles.tabContainer}>
           <View style={styles.activeTab}>

@@ -116,7 +116,7 @@ const AIChat = ({ onNavigateToTab, initialMessages }) => {
       
       if (!hasGoals && !hasTasks) {
         // New user - personal onboarding
-        welcomeMessage = `👋 **Welcome to Foci!** I'm here to help you build a focused, organized life.
+        welcomeMessage = `👋 **Welcome to Mind Clear!** I'm here to help you build a focused, organized life.
 
 **How are you feeling today?** I'd love to know what's on your mind before we dive in.
 
@@ -370,7 +370,7 @@ I'm here to help you:
     const hasTasks = Array.isArray(userData.tasks) ? userData.tasks.length > 0 : false;
     
     if (!hasGoals && !hasTasks) {
-      return `🎯 **Welcome to Foci!** I'm your AI-powered productivity assistant, and I'm here to help you build a focused, organized life.
+      return `🎯 **Welcome to Mind Clear!** I'm your AI-powered productivity assistant, and I'm here to help you build a focused, organized life.
 
 **Let's get started!** I can help you:
 
@@ -1124,7 +1124,7 @@ You’re making great strides!
                 <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
                 <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
               </div>
-              <span className="text-sm">Foci.ai is thinking...</span>
+              <span className="text-sm">Mind Clear is thinking...</span>
             </div>
           )}
           <div ref={messagesEndRef} />

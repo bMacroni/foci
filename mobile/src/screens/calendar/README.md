@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Calendar Screen is a comprehensive mobile calendar implementation that provides users with day, week, and month views of their scheduled tasks and events. It integrates seamlessly with the existing Foci backend and follows the minimalist black and white design philosophy.
+The Calendar Screen is a comprehensive mobile calendar implementation that provides users with day, week, and month views of their scheduled tasks and events. It integrates seamlessly with the existing Mind Clear backend and follows the minimalist black and white design philosophy.
 
 ## Features Implemented
 
@@ -22,7 +22,7 @@ The Calendar Screen is a comprehensive mobile calendar implementation that provi
 - **Error Handling**: Comprehensive error handling with retry functionality
 
 ### ✅ UI/UX Features
-- **Minimalist Design**: Black and white theme consistent with Foci brand
+- **Minimalist Design**: Black and white theme consistent with Mind Clear brand
 - **Visual Indicators**: Color-coded events and tasks by priority/type
 - **Responsive Layout**: Optimized for various mobile screen sizes
 - **Loading States**: Proper loading indicators and empty states
@@ -174,4 +174,4 @@ The calendar implementation includes:
 - High contrast design
 - Screen reader friendly labels
 
-This implementation provides a solid foundation for the mobile calendar feature while maintaining the Foci app's design philosophy and user experience standards.
+This implementation provides a solid foundation for the mobile calendar feature while maintaining the Mind Clear app's design philosophy and user experience standards.

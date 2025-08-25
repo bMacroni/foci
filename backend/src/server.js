@@ -69,7 +69,7 @@ app.get('/api/health', (req, res) => {
 // Basic API routes
 app.get('/api', (req, res) => {
   res.json({ 
-    message: 'Welcome to Foci API',
+    message: 'Welcome to Mind Clear API',
     version: '1.0.0',
     endpoints: {
       health: '/api/health',
@@ -241,7 +241,7 @@ cron.schedule('0 */6 * * *', async () => {
 // Start server only if run directly
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, '0.0.0.0', () => {
-    logger.info(`🚀 Foci API server running on port ${PORT}`);
+    logger.info(`🚀 Mind Clear API server running on port ${PORT}`);
 logger.info(`📊 Health check: http://localhost:${PORT}/api/health`);
 logger.info(`🌐 Network access: http://192.168.1.66:${PORT}/api/health`);
   });
