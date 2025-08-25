@@ -56,7 +56,7 @@ export default function LoginScreen({ navigation }: any) {
           <OwlLogo width={220} height={220} />
         </View>
         <Text style={styles.title}>Welcome Back</Text>
-        <Text style={styles.subtitle}>Sign in to your Foci account</Text>
+        <Text style={styles.subtitle}>Sign in to your Mind Clear account</Text>
         
         <View style={styles.tabContainer}>
           <View style={styles.activeTab}>

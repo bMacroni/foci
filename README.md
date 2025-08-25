@@ -1,6 +1,6 @@
-# Foci - AI-Powered Mental Health Productivity Platform
+# Mind Clear - AI-Powered Mental Health Productivity Platform
 
-Foci is an intelligent productivity platform designed to support users with anxiety and depression by providing AI-assisted goal setting, task management, and calendar integration with advanced automatic scheduling capabilities.
+Mind Clear is an intelligent productivity platform designed to support users with anxiety and depression by providing AI-assisted goal setting, task management, and calendar integration with advanced automatic scheduling capabilities.
 
 ## 🚀 Features
 
@@ -222,7 +222,7 @@ mindgarden/
 │   └── 📁 __tests__/                    # Mobile test files
 │
 ├── 📁 FeaturePRDs/                      # Product Requirements Documents
-│   └── PRD_ Foci Mobile Calendar Page.md # Mobile calendar PRD (6.0KB)
+│   └── PRD_ Foci Mobile Calendar Page.md # Mobile calendar PRD (legacy filename)
 │
 ├── 📁 .github/                          # GitHub configuration
 ├── 📁 .cursor/                          # Cursor IDE configuration
@@ -356,7 +356,7 @@ VITE_GOOGLE_CLIENT_ID=your_google_client_id
 3. **Google OAuth Setup**
    - Update authorized origins with your Vercel domain
    - Update redirect URIs with your Vercel domain
-   - Update OAuth app name to "Foci"
+   - Update OAuth app name to "Mind Clear"
 
 ## 📱 Current Implementation Status
 
@@ -443,6 +443,6 @@ For support, email support@foci.app or create an issue in this repository.
 
 ---
 
-**Foci** - Empowering productivity through intelligent assistance. 
+**Mind Clear** - Empowering productivity through intelligent assistance. 
 
 *Built with ❤️ for users managing anxiety and depression through structured productivity.* 

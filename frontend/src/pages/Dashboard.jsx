@@ -82,7 +82,7 @@ function Dashboard({ showSuccess }) {
         <div className="fixed inset-0 z-40 bg-black/50 lg:hidden">
           <div className="fixed left-0 top-0 h-full w-64 bg-white shadow-xl z-50 flex flex-col">
             <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-gray-800">Foci</h2>
+              <h2 className="text-xl font-bold text-gray-800">Mind Clear</h2>
               <button
                 onClick={() => setShowMobileSidebar(false)}
                 className="p-2 text-gray-500 hover:text-gray-700"

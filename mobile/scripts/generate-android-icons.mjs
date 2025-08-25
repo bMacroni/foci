@@ -57,8 +57,8 @@ async function main() {
     const outDir = path.join(androidResRoot, dir);
     await ensureDir(outDir);
 
-    const squareOut = path.join(outDir, 'ic_foci.png');
-    const roundOut = path.join(outDir, 'ic_foci_round.png');
+    const squareOut = path.join(outDir, 'ic_mindclear.png');
+    const roundOut = path.join(outDir, 'ic_mindclear_round.png');
 
     await generateSquareIcon(size, squareOut);
     await generateRoundIcon(size, roundOut);
@@ -66,7 +66,7 @@ async function main() {
     console.log(`Generated ${dir}: ${size}x${size}`);
   }
 
-  console.log('Android Foci launcher icons generated successfully.');
+  console.log('Android Mind Clear launcher icons generated successfully.');
 }
 
 main().catch((err) => {

@@ -45,7 +45,7 @@ export default function AIChatScreen({ navigation, route }: any) {
     {
       id: '1',
       title: 'General Chat',
-      messages: [{ id: 1, text: 'Hi there, and welcome to Foci! I\'m here to help you structure your goals and tasks in a way that feels manageable. What would you like to do first?', sender: 'ai' }],
+      messages: [{ id: 1, text: 'Hi there, and welcome to Mind Clear! I\'m here to help you structure your goals and tasks in a way that feels manageable. What would you like to do first?', sender: 'ai' }],
       isPinned: false,
       createdAt: new Date(),
       lastMessageAt: new Date(),
@@ -125,7 +125,7 @@ export default function AIChatScreen({ navigation, route }: any) {
     const newConversation: Conversation = {
       id: Date.now().toString(),
       title: 'New Conversation',
-      messages: [{ id: 1, text: 'Hi there, and welcome to Foci! I\'m here to help you structure your goals and tasks in a way that feels manageable. What would you like to do first?', sender: 'ai' }],
+      messages: [{ id: 1, text: 'Hi there, and welcome to Mind Clear! I\'m here to help you structure your goals and tasks in a way that feels manageable. What would you like to do first?', sender: 'ai' }],
       isPinned: false,
       createdAt: new Date(),
       lastMessageAt: new Date(),
@@ -213,7 +213,7 @@ export default function AIChatScreen({ navigation, route }: any) {
     const resetConversation: Conversation = {
       id: currentConversationId,
       title: 'General Chat',
-      messages: [{ id: 1, text: 'Welcome to Foci! How can I help you today?', sender: 'ai' }],
+      messages: [{ id: 1, text: 'Welcome to Mind Clear! How can I help you today?', sender: 'ai' }],
       isPinned: false,
       createdAt: new Date(),
       lastMessageAt: new Date(),
@@ -562,7 +562,7 @@ export default function AIChatScreen({ navigation, route }: any) {
         id: Date.now().toString(),
         title: inferredTitle,
         messages: [
-          { id: 1, text: 'Welcome to Foci! How can I help you today?', sender: 'ai' }
+          { id: 1, text: 'Welcome to Mind Clear! How can I help you today?', sender: 'ai' }
         ],
         isPinned: false,
         createdAt: new Date(),
@@ -699,7 +699,7 @@ export default function AIChatScreen({ navigation, route }: any) {
         {hasTaskContent && (
           <TaskDisplay text={msg.text} />
         )}
-        {showOnboarding && msg.text.includes('Hi there, and welcome to Foci') && (
+        {showOnboarding && msg.text.includes('Hi there, and welcome to Mind Clear') && (
           <QuickActions
             actions={quickActions}
             onActionPress={handleQuickActionPress}
@@ -767,7 +767,7 @@ export default function AIChatScreen({ navigation, route }: any) {
             <Icon name="three-bars" size={20} color={colors.text.primary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>
-            {currentConversation?.title || 'Foci AI Chat'}
+            {currentConversation?.title || 'Mind Clear AI Chat'}
           </Text>
           <View style={styles.headerActions}>
             <TouchableOpacity style={styles.helpButton} onPress={handleHelpPress}>
