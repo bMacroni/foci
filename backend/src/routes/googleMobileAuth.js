@@ -11,19 +11,44 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// Helper: admin find user by email using pagination (v2 SDK has no getUserByEmail)
+// Helper: admin find user by email using listUsers with pagination
 async function findUserByEmail(email) {
-  let page = 1;
-  const perPage = 200;
-  while (true) {
-    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
-    if (error) {
-      return { error };
+  try {
+    let page = 1;
+    const perPage = 1000; // Get more users per page to reduce iterations
+    
+    while (true) {
+      const { data, error } = await supabaseAdmin.auth.admin.listUsers({
+        page,
+        perPage
+      });
+      
+      if (error) {
+        return { error };
+      }
+      
+      if (!data || !data.users) {
+        return { user: null };
+      }
+      
+      // Find user with matching email (case-insensitive)
+      const foundUser = data.users.find(user => 
+        user.email && user.email.toLowerCase() === email.toLowerCase()
+      );
+      
+      if (foundUser) {
+        return { user: foundUser };
+      }
+      
+      // If we got fewer users than requested, we've reached the end
+      if (data.users.length < perPage) {
+        return { user: null };
+      }
+      
+      page++;
     }
-    const found = data?.users?.find((u) => u?.email?.toLowerCase() === email.toLowerCase());
-    if (found) return { user: found };
-    if (!data || data.users.length < perPage) return { user: null };
-    page += 1;
+  } catch (error) {
+    return { error };
   }
 }
 
@@ -84,19 +109,11 @@ router.post('/mobile-signin', async (req, res) => {
     let userId;
     let userSession;
 
-    if (existingUserRow?.id) {
-      // User exists - check if they were created with Google auth
-      userId = existingUserRow.id;
-      logger.info(`Existing user found: ${userId}`);
+          if (existingUserRow?.id) {
+        // User exists - trust Google authentication and sign them in
+        userId = existingUserRow.id;
+        logger.info(`Existing user found: ${userId}`);
 
-      // Check if this user was created with Google auth by looking at their metadata
-      const userMetadata = existingUserRow.user_metadata || {};
-      const isGoogleUser = userMetadata.provider === 'google' || userMetadata.google_linked;
-
-      if (isGoogleUser) {
-        // This is a Google user - create a session for them
-        logger.info(`Existing Google user detected: ${userId}`);
-        
         try {
           // Set a temporary password if they don't have one
           const { error: passwordError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
@@ -117,27 +134,20 @@ router.post('/mobile-signin', async (req, res) => {
           });
 
           if (signInError) {
-            logger.error('Error signing in existing Google user:', signInError);
+            logger.error('Error signing in existing user:', signInError);
             return res.status(500).json({
               error: 'Failed to create user session'
             });
           }
 
           userSession = signInData;
-          logger.info(`Existing Google user signed in: ${userId}`);
+          logger.info(`Existing user signed in via Google: ${userId}`);
         } catch (sessionError) {
-          logger.error('Error creating session for existing Google user:', sessionError);
+          logger.error('Error creating session for existing user:', sessionError);
           return res.status(500).json({
             error: 'Failed to create user session'
           });
         }
-      } else {
-        // This is a password-based account - require linking
-        logger.info(`Password-based account detected for ${email}, linking required`);
-        return res.status(409).json({
-          status: 'linking_required'
-        });
-      }
     } else {
       // User doesn't exist - create new user
       logger.info(`Creating new user for email: ${email}`);
@@ -250,143 +260,7 @@ router.post('/mobile-signin', async (req, res) => {
   }
 });
 
-/**
- * POST /api/auth/google/link-account
- * Links a Google account to an existing password-based account
- * Requires password verification for security
- */
-router.post('/link-account', async (req, res) => {
-  try {
-    const { idToken, accessToken, password } = req.body;
 
-    // Validate required fields
-    if (!idToken || !accessToken) {
-      return res.status(400).json({
-        error: 'idToken and accessToken are required'
-      });
-    }
-    
-    if (!password) {
-      return res.status(400).json({
-        error: 'Password is required'
-      });
-    }
-
-    logger.info('Processing account linking request');
-
-    // Verify Google ID token
-    let decodedToken;
-    try {
-      decodedToken = await verifyGoogleIdToken(idToken);
-    } catch (error) {
-      logger.error('Google ID token verification failed:', error);
-      
-      // Handle specific error types
-      if (error.message === 'Email must be verified') {
-        return res.status(400).json({
-          error: 'Email must be verified'
-        });
-      }
-      
-      return res.status(401).json({
-        error: 'Invalid Google token'
-      });
-    }
-
-    const { email } = decodedToken;
-    logger.info(`Account linking attempt for email: ${email}`);
-
-    // Check if user exists
-    const { user: existingUser, error: getUserError } = await findUserByEmail(email);
-
-    if (getUserError || !existingUser?.id) {
-      logger.error('User not found for linking:', getUserError);
-      return res.status(404).json({
-        error: 'User not found'
-      });
-    }
-
-    const userId = existingUser.id;
-
-    // Verify password by attempting to sign in
-    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
-
-    if (signInError) {
-      logger.warn(`Invalid password for account linking: ${email}`);
-      return res.status(401).json({
-        error: 'Invalid password'
-      });
-    }
-
-    // Password is correct - update user to enable Google auth
-    try {
-      const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
-        user_metadata: {
-          ...(existingUserRow?.raw_user_meta_data || {}),
-          google_linked: true,
-          google_linked_at: new Date().toISOString()
-        }
-      });
-
-      if (updateError) {
-        logger.error('Error updating user for Google linking:', updateError);
-        return res.status(500).json({
-          error: 'Failed to link accounts'
-        });
-      }
-
-      logger.info(`Account linked successfully for user: ${userId}`);
-    } catch (updateError) {
-      logger.error('Error updating user metadata:', updateError);
-      return res.status(500).json({
-        error: 'Failed to link accounts'
-      });
-    }
-
-    // Store Google tokens for calendar integration
-    try {
-      const { error: tokenError } = await supabaseAdmin
-        .from('google_tokens')
-        .upsert({
-          user_id: userId,
-          access_token: accessToken,
-          token_type: 'Bearer',
-          scope: 'https://www.googleapis.com/auth/calendar.events.readonly',
-          expiry_date: Date.now() + (3600 * 1000) // 1 hour from now
-        });
-
-      if (tokenError) {
-        logger.warn('Failed to store Google tokens during linking:', tokenError);
-        // Don't fail the linking for token storage issues
-      } else {
-        logger.info(`Google tokens stored during linking for user: ${userId}`);
-      }
-    } catch (tokenError) {
-      logger.warn('Error storing Google tokens during linking:', tokenError);
-      // Don't fail the linking for token storage issues
-    }
-
-    // Return successful response with session
-    res.json({
-      token: signInData.session.access_token,
-      user: {
-        id: signInData.user.id,
-        email: signInData.user.email,
-        full_name: signInData.user.user_metadata?.full_name,
-        avatar_url: signInData.user.user_metadata?.avatar_url
-      }
-    });
-
-  } catch (error) {
-    logger.error('Account linking error:', error);
-    res.status(500).json({
-      error: 'Internal server error'
-    });
-  }
-});
 
 /**
  * DELETE /api/auth/google/delete-user (ADMIN ONLY - for testing)
