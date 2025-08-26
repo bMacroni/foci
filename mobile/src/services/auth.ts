@@ -338,6 +338,12 @@ class AuthService {
   // Set authentication data
   private async setAuthData(token: string, user: User): Promise<void> {
     try {
+      // Validate token before storing
+      if (!token || token === 'undefined' || token === 'null') {
+        console.error('Invalid token provided to setAuthData:', token);
+        throw new Error('Invalid authentication token');
+      }
+
       await AsyncStorage.setItem('auth_token', token);
       await AsyncStorage.setItem('auth_user', JSON.stringify(user));
       
@@ -352,6 +358,12 @@ class AuthService {
     } catch (_error) {
       console.error('Error setting auth data:', _error);
     }
+  }
+
+  // Set session (public method for external use)
+  public async setSession(token: string, user: User): Promise<void> {
+    console.warn('🔐 AuthService: setSession called with token:', !!token, 'user:', user?.email);
+    await this.setAuthData(token, user);
   }
 
   // Check if user is authenticated

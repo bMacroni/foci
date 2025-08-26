@@ -6,9 +6,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../../themes/colors';
 import { typography } from '../../themes/typography';
 import { spacing, borderRadius } from '../../themes/spacing';
-import { Input, PasswordInput, Button, ApiToggle } from '../../components/common';
+import { Input, PasswordInput, Button, ApiToggle, GoogleSignInButton, AccountLinkingModal } from '../../components/common';
 import { configService } from '../../services/config';
 import { authService } from '../../services/auth';
+import { googleAuthService } from '../../services/googleAuth';
 
 export default function SignupScreen({ navigation }: any) {
   const [email, setEmail] = useState('');
@@ -16,6 +17,10 @@ export default function SignupScreen({ navigation }: any) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [showLinkingModal, setShowLinkingModal] = useState(false);
+  const [linkingEmail, setLinkingEmail] = useState('');
+  const [googleTokens, setGoogleTokens] = useState<{ idToken: string; accessToken: string } | null>(null);
 
   const handleSignup = async () => {
     setError('');
@@ -59,6 +64,60 @@ export default function SignupScreen({ navigation }: any) {
         setError('Signup failed. Please try again.');
       }
     }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setError('');
+    setGoogleLoading(true);
+    
+    try {
+      const result = await googleAuthService.signInWithGoogle();
+      
+      if (result.success) {
+        // Successful sign-in
+        navigation.replace('Main');
+      } else if (result.linkingRequired) {
+        // Account linking required
+        setLinkingEmail(result.user?.email || '');
+        setGoogleTokens({
+          idToken: result.idToken || '',
+          accessToken: result.accessToken || '',
+        });
+        setShowLinkingModal(true);
+      } else {
+        // Error
+        setError(result.error || 'Google Sign-In failed');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Google Sign-In failed');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const handleAccountLinking = async (password: string) => {
+    if (!googleTokens) {
+      throw new Error('Google tokens not available');
+    }
+
+    const result = await googleAuthService.linkAccount(
+      googleTokens.idToken,
+      googleTokens.accessToken,
+      password
+    );
+
+    if (result.success) {
+      setShowLinkingModal(false);
+      navigation.replace('Main');
+    } else {
+      throw new Error(result.error || 'Account linking failed');
+    }
+  };
+
+  const handleCloseLinkingModal = () => {
+    setShowLinkingModal(false);
+    setLinkingEmail('');
+    setGoogleTokens(null);
   };
 
   return (
@@ -117,7 +176,31 @@ export default function SignupScreen({ navigation }: any) {
           variant="outline"
           style={styles.signinButton}
         />
+
+        {/* Divider */}
+        <View style={styles.divider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>or</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        {/* Google Sign-In Button */}
+        <GoogleSignInButton
+          onPress={handleGoogleSignIn}
+          loading={googleLoading}
+          disabled={loading || googleLoading}
+          variant="signup"
+        />
       </View>
+
+      {/* Account Linking Modal */}
+      <AccountLinkingModal
+        visible={showLinkingModal}
+        onClose={handleCloseLinkingModal}
+        onLinkAccount={handleAccountLinking}
+        email={linkingEmail}
+        maxRetries={3}
+      />
     </SafeAreaView>
   );
 }
@@ -188,6 +271,23 @@ const styles = StyleSheet.create({
   signinButton: {
     width: '100%',
     maxWidth: 320,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 320,
+    marginVertical: spacing.lg,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border.medium,
+  },
+  dividerText: {
+    marginHorizontal: spacing.md,
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
   },
   error: {
     color: colors.error,

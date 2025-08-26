@@ -50,7 +50,7 @@ const QuickScheduleRadial: React.FC<QuickScheduleRadialProps> = ({ visible, cent
     let bestDiff = Number.POSITIVE_INFINITY;
     for (let i = 0; i < anglesRad.length; i++) {
       let diff = Math.abs(angle - anglesRad[i]);
-      if (diff > Math.PI) diff = 2 * Math.PI - diff;
+      if (diff > Math.PI) {diff = 2 * Math.PI - diff;}
       if (diff < bestDiff) {
         bestDiff = diff;
         bestIdx = i;
@@ -60,7 +60,7 @@ const QuickScheduleRadial: React.FC<QuickScheduleRadialProps> = ({ visible, cent
   };
 
   const onGestureEvent = (e: PanGestureHandlerGestureEvent) => {
-    if (!startRef.current) return;
+    if (!startRef.current) {return;}
     const x = startRef.current.x + e.nativeEvent.translationX;
     const y = startRef.current.y + e.nativeEvent.translationY;
     const dx = x - cx;
@@ -114,7 +114,7 @@ const QuickScheduleRadial: React.FC<QuickScheduleRadialProps> = ({ visible, cent
     }
   };
 
-  if (!visible) return null;
+  if (!visible) {return null;}
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
