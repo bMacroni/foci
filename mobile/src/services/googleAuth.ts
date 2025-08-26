@@ -7,6 +7,8 @@ import { authService } from './auth';
 export interface GoogleAuthResult {
   success: boolean;
   token?: string;
+  idToken?: string;
+  accessToken?: string;
   user?: any;
   error?: string;
   linkingRequired?: boolean;
@@ -59,7 +61,6 @@ class GoogleAuthService {
 
       GoogleSignin.configure(baseConfig);
       this.isConfigured = true;
-      console.log('Google Sign-In configured successfully');
     } catch (error) {
       console.error('Failed to configure Google Sign-In:', error);
     }
@@ -153,6 +154,8 @@ class GoogleAuthService {
         return {
           success: true,
           token: data.token,
+          idToken,
+          accessToken,
           user: data.user,
         };
       } else if (response.status === 409 && data.status === 'linking_required') {
@@ -160,6 +163,8 @@ class GoogleAuthService {
         return {
           success: false,
           linkingRequired: true,
+          idToken,
+          accessToken,
           error: 'Account linking required',
         };
       } else {
@@ -228,7 +233,6 @@ class GoogleAuthService {
   async signOut(): Promise<void> {
     try {
       await GoogleSignin.signOut();
-      console.log('Google Sign-Out successful');
     } catch (error) {
       console.error('Google Sign-Out error:', error);
     }

@@ -962,4 +962,38 @@ const styles = StyleSheet.create({
     color: colors.error,
     fontWeight: typography.fontWeight.medium as any,
   },
+  // Meta row styles for task badges
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  goalBadge: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+  },
+  goalText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.secondary,
+    fontWeight: typography.fontWeight.medium as any,
+  },
+  durationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background.surface,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+  },
+  durationText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    fontWeight: typography.fontWeight.medium as any,
+    marginLeft: spacing.xs,
+  },
 });

@@ -503,7 +503,7 @@ export const tasksAPI = {
         }
         
         const error = new Error(errorData.error || `HTTP error! status: ${response.status}`);
-        error.code = errorData.code;
+        (error as any).code = errorData.code;
         throw error;
       }
 

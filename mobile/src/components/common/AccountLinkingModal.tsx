@@ -124,7 +124,7 @@ export const AccountLinkingModal: React.FC<AccountLinkingModalProps> = ({
               value={password}
               onChangeText={(text) => {
                 setPassword(text);
-                if (error) setError('');
+                if (error) {setError('');}
               }}
               style={styles.passwordInput}
             />
@@ -185,13 +185,15 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   title: {
-    ...typography.h2,
+    fontSize: typography.fontSize['2xl'],
+    fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
     marginBottom: spacing.sm,
     textAlign: 'center',
   },
   subtitle: {
-    ...typography.body,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.normal,
     color: colors.text.secondary,
     textAlign: 'center',
     lineHeight: 20,
@@ -204,7 +206,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   explanation: {
-    ...typography.body,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.normal,
     color: colors.text.secondary,
     marginBottom: spacing.md,
     lineHeight: 20,
@@ -213,7 +216,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   error: {
-    ...typography.caption,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.normal,
     color: colors.error,
     marginBottom: spacing.sm,
   },
@@ -222,7 +226,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   forgotPasswordText: {
-    ...typography.caption,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.normal,
     color: colors.primary,
     textDecorationLine: 'underline',
   },

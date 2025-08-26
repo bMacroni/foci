@@ -118,9 +118,9 @@ const styles = StyleSheet.create({
   },
 
   buttonText: {
-    ...typography.button,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
     color: '#3C4043',
-    fontWeight: '500',
     fontFamily: 'Roboto',
   },
 });
