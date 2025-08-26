@@ -11,14 +11,6 @@ export interface GoogleAuthResult {
   accessToken?: string;
   user?: any;
   error?: string;
-  linkingRequired?: boolean;
-}
-
-export interface AccountLinkingResult {
-  success: boolean;
-  token?: string;
-  user?: any;
-  error?: string;
 }
 
 class GoogleAuthService {
@@ -158,17 +150,8 @@ class GoogleAuthService {
           accessToken,
           user: data.user,
         };
-      } else if (response.status === 409 && data.status === 'linking_required') {
-        // Account linking required
-        return {
-          success: false,
-          linkingRequired: true,
-          idToken,
-          accessToken,
-          error: 'Account linking required',
-        };
       } else {
-        // Other errors
+        // Authentication failed
         return {
           success: false,
           error: data.error || 'Authentication failed',
@@ -183,49 +166,7 @@ class GoogleAuthService {
     }
   }
 
-  /**
-   * Links Google account to existing password-based account
-   */
-  async linkAccount(idToken: string, accessToken: string, password: string): Promise<AccountLinkingResult> {
-    try {
-      const baseUrl = configService.getBaseUrl();
-      const response = await fetch(`${baseUrl}/auth/google/link-account`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          idToken,
-          accessToken,
-          password,
-        }),
-      });
 
-      const data = await response.json();
-
-      if (response.ok) {
-        // Successful account linking
-        await authService.setSession(data.token, data.user);
-        return {
-          success: true,
-          token: data.token,
-          user: data.user,
-        };
-      } else {
-        // Linking failed
-        return {
-          success: false,
-          error: data.error || 'Account linking failed',
-        };
-      }
-    } catch (error: any) {
-      console.error('Account linking error:', error);
-      return {
-        success: false,
-        error: error.message || 'Network error',
-      };
-    }
-  }
 
   /**
    * Signs out from Google

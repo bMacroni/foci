@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../../themes/colors';
 import { typography } from '../../themes/typography';
 import { spacing, borderRadius } from '../../themes/spacing';
-import { Input, PasswordInput, Button, ApiToggle, GoogleSignInButton, AccountLinkingModal } from '../../components/common';
+import { Input, PasswordInput, Button, ApiToggle, GoogleSignInButton } from '../../components/common';
 import { configService, ApiConfig } from '../../services/config';
 import { authService } from '../../services/auth';
 import { googleAuthService } from '../../services/googleAuth';
@@ -18,9 +18,6 @@ export default function LoginScreen({ navigation }: any) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [showLinkingModal, setShowLinkingModal] = useState(false);
-  const [linkingEmail, setLinkingEmail] = useState('');
-  const [googleTokens, setGoogleTokens] = useState<{ idToken: string; accessToken: string } | null>(null);
 
   const handleLogin = async () => {
     setError('');
@@ -63,14 +60,6 @@ export default function LoginScreen({ navigation }: any) {
       if (result.success) {
         // Successful sign-in
         navigation.replace('Main');
-      } else if (result.linkingRequired) {
-        // Account linking required
-        setLinkingEmail(result.user?.email || '');
-        setGoogleTokens({
-          idToken: result.idToken || '',
-          accessToken: result.accessToken || '',
-        });
-        setShowLinkingModal(true);
       } else {
         // Error
         setError(result.error || 'Google Sign-In failed');
@@ -82,30 +71,7 @@ export default function LoginScreen({ navigation }: any) {
     }
   };
 
-  const handleAccountLinking = async (password: string) => {
-    if (!googleTokens) {
-      throw new Error('Google tokens not available');
-    }
 
-    const result = await googleAuthService.linkAccount(
-      googleTokens.idToken,
-      googleTokens.accessToken,
-      password
-    );
-
-    if (result.success) {
-      setShowLinkingModal(false);
-      navigation.replace('Main');
-    } else {
-      throw new Error(result.error || 'Account linking failed');
-    }
-  };
-
-  const handleCloseLinkingModal = () => {
-    setShowLinkingModal(false);
-    setLinkingEmail('');
-    setGoogleTokens(null);
-  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -177,14 +143,7 @@ export default function LoginScreen({ navigation }: any) {
         <View style={{ height: spacing.xl }} />
       </View>
 
-      {/* Account Linking Modal */}
-      <AccountLinkingModal
-        visible={showLinkingModal}
-        onClose={handleCloseLinkingModal}
-        onLinkAccount={handleAccountLinking}
-        email={linkingEmail}
-        maxRetries={3}
-      />
+
     </SafeAreaView>
   );
 }
