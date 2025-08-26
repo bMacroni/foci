@@ -12,6 +12,7 @@ import { requireAuth } from './middleware/auth.js'
 import goalsRouter from './routes/goals.js'
 import tasksRouter from './routes/tasks.js'
 import googleAuthRoutes from './routes/googleAuth.js'
+import googleMobileAuthRoutes from './routes/googleMobileAuth.js'
 import authRouter from './routes/auth.js'
 import calendarRouter from './routes/calendar.js'
 import aiRouter from './routes/ai.js'
@@ -20,6 +21,7 @@ import userRouter from './routes/user.js'
 import cron from 'node-cron';
 import { syncGoogleCalendarEvents } from './utils/syncService.js';
 import { autoScheduleTasks } from './controllers/autoSchedulingController.js';
+import { initializeFirebaseAdmin } from './utils/firebaseAdmin.js';
 import logger from './utils/logger.js';
 
 
@@ -89,6 +91,7 @@ app.use('/api/tasks', tasksRouter);
 
 app.use('/api/auth', authRouter);
 app.use('/api/auth/google', googleAuthRoutes);
+app.use('/api/auth/google', googleMobileAuthRoutes);
 
 if (process.env.DEBUG_LOGS === 'true') logger.info('Registering calendar router...');
 app.use('/api/calendar', calendarRouter);
@@ -238,12 +241,21 @@ cron.schedule('0 */6 * * *', async () => {
   timezone: 'America/Chicago'
 });
 
+// Initialize Firebase Admin SDK
+try {
+  initializeFirebaseAdmin();
+  logger.info('Firebase Admin SDK initialized successfully');
+} catch (error) {
+  logger.warn('Firebase Admin SDK initialization failed:', error.message);
+  logger.warn('Google mobile authentication will not be available');
+}
+
 // Start server only if run directly
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, '0.0.0.0', () => {
     logger.info(`🚀 Mind Clear API server running on port ${PORT}`);
-logger.info(`📊 Health check: http://localhost:${PORT}/api/health`);
-logger.info(`🌐 Network access: http://192.168.1.66:${PORT}/api/health`);
+    logger.info(`📊 Health check: http://localhost:${PORT}/api/health`);
+    logger.info(`🌐 Network access: http://192.168.1.66:${PORT}/api/health`);
   });
 }
 

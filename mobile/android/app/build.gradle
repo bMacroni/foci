@@ -1,6 +1,7 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
+apply plugin: 'com.google.gms.google-services'
 
 // Add this line for vector icons
 apply from: file("../../node_modules/react-native-vector-icons/fonts.gradle")
@@ -82,9 +83,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "com.mobile"
+    namespace "com.foci.mobile"
     defaultConfig {
-        applicationId "com.mobile"
+        applicationId "com.foci.mobile"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
@@ -126,6 +127,9 @@ dependencies {
     } else {
         implementation jscFlavor
     }
+
+    // Google Play Services for Google Sign-In
+    implementation 'com.google.android.gms:play-services-auth:20.7.0'
 
     // Exclude react-native-worklets in release to avoid prefab CMake issues on Windows
     configurations.releaseImplementation {
