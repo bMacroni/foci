@@ -51,6 +51,7 @@ mindgarden/
 │   │   │   ├── goals.js                 # Goal CRUD operations (1.8KB)
 │   │   │   ├── auth.js                  # Authentication (4.2KB)
 │   │   │   ├── googleAuth.js            # Google OAuth (1.9KB)
+│   │   │   ├── googleMobileAuth.js      # Google Sign-In for mobile (8.2KB)
 │   │   │   ├── conversations.js         # Conversation threads (1.1KB)
 │   │   │   └── user.js                  # User settings (402B)
 │   │   ├── 📁 utils/                    # Utility services
@@ -63,6 +64,7 @@ mindgarden/
 │   │   │   ├── dateParser.js            # Date parsing utilities (9.1KB)
 │   │   │   ├── googleTokenStorage.js    # Google token management (2.1KB)
 │   │   │   ├── syncService.js           # Calendar sync service (3.6KB)
+│   │   │   ├── firebaseAdmin.js         # Firebase Admin SDK setup (2.1KB)
 │   │   │   ├── googleAuth.js            # Google auth utilities (351B)
 │   │   │   └── jwtUtils.js              # JWT utilities (456B)
 │   │   ├── 📁 services/                 # Business services
@@ -75,7 +77,8 @@ mindgarden/
 │   ├── env.example                      # Environment variables template
 │   ├── vitest.config.js                 # Test configuration
 │   ├── GOAL_HIERARCHY_API.md           # Goal API documentation
-│   └── SECURITY_FIXES.md               # Security documentation
+│   ├── SECURITY_FIXES.md               # Security documentation
+│   └── FIREBASE_SETUP_INSTRUCTIONS.md  # Firebase setup guide
 │
 ├── 📁 frontend/                         # React frontend application
 │   ├── 📁 src/
@@ -154,6 +157,8 @@ mindgarden/
 │   │   │   │   ├── Button.tsx           # Custom button component (2.7KB)
 │   │   │   │   ├── CustomTabBar.tsx     # Custom tab bar component (3.4KB)
 │   │   │   │   ├── Input.tsx            # Custom input component (1004B)
+│   │   │   │   ├── PasswordInput.tsx    # Password input component (1.2KB)
+│   │   │   │   ├── GoogleSignInButton.tsx # Google Sign-In button (2.1KB)
 │   │   │   │   ├── SuccessToast.tsx     # Success notification component (5.2KB)
 │   │   │   │   ├── Loading.tsx          # Loading spinner component (0B)
 │   │   │   │   ├── Card.tsx             # Card container component (0B)
@@ -193,6 +198,8 @@ mindgarden/
 │   │   ├── 📁 services/                 # API and business services
 │   │   │   ├── api.ts                   # API client and endpoints (18KB)
 │   │   │   ├── auth.ts                  # Authentication service (12KB)
+│   │   │   ├── googleAuth.ts            # Google Sign-In service (8.1KB)
+│   │   │   ├── config.ts                # Configuration service (2.3KB)
 │   │   │   └── storage.ts               # Local storage service (0B)
 │   │   ├── 📁 themes/                   # Design system and theming
 │   │   │   ├── colors.ts                # Color palette definitions (628B)
@@ -218,6 +225,8 @@ mindgarden/
 │   ├── Gemfile                          # Ruby dependencies
 │   ├── index.js                         # Mobile app entry point
 │   ├── 📁 android/                      # Android configuration
+│   │   └── 📁 app/
+│   │       └── google-services.json     # Firebase Android config
 │   ├── 📁 ios/                          # iOS configuration
 │   └── 📁 __tests__/                    # Mobile test files
 │
@@ -244,12 +253,24 @@ mindgarden/
 ### Backend
 - **Node.js** with Express
 - **Supabase** for database and authentication
+- **Firebase Admin SDK** for Google Sign-In verification
 - **Google AI (Gemini 2.5 Flash)** for intelligent features
 - **Google OAuth** for calendar integration
 - **Open-Meteo API** for weather data (free, no API key required)
 - **GraphHopper API** for travel time calculations (1000 free requests/day)
 - **Nodemailer** for email notifications
 - **Node-cron** for background job scheduling
+
+### Mobile
+- **React Native** with Expo
+- **TypeScript** for type safety
+- **React Navigation** for navigation
+- **AsyncStorage** for local data persistence
+- **Axios** for API communication
+- **React Native Vector Icons** for icons
+- **React Native Gesture Handler** for touch interactions
+- **@react-native-google-signin/google-signin** for Google Sign-In
+- **@react-native-firebase/auth** for Firebase authentication
 
 ### Database Schema
 - **Users**: Extended Supabase auth with timezone and preferences
@@ -274,6 +295,9 @@ Before running this application, you'll need:
 3. **Google Cloud Console** project with:
    - OAuth 2.0 credentials
    - Google AI API key
+4. **Firebase** project with:
+   - Firebase Admin SDK service account
+   - Google Sign-In configuration
 4. **Railway** account (for backend deployment)
 5. **Vercel** account (for frontend deployment)
 
@@ -290,12 +314,30 @@ GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 GOOGLE_AI_API_KEY=your_google_ai_api_key
 CORS_ORIGIN=your_frontend_url
+
+# Firebase Admin SDK (for Google Sign-In)
+FIREBASE_PROJECT_ID=your_firebase_project_id
+FIREBASE_PRIVATE_KEY_ID=your_firebase_private_key_id
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nYour Firebase Private Key Here\n-----END PRIVATE KEY-----\n"
+FIREBASE_CLIENT_EMAIL=your_firebase_client_email
+FIREBASE_CLIENT_ID=your_firebase_client_id
+FIREBASE_AUTH_URI=https://accounts.google.com/o/oauth2/auth
+FIREBASE_TOKEN_URI=https://oauth2.googleapis.com/token
+FIREBASE_AUTH_PROVIDER_X509_CERT_URL=https://www.googleapis.com/oauth2/v1/certs
+FIREBASE_CLIENT_X509_CERT_URL=your_firebase_client_x509_cert_url
 ```
 
 ### Frontend (.env)
 ```env
 VITE_API_URL=your_backend_url
 VITE_GOOGLE_CLIENT_ID=your_google_client_id
+```
+
+### Mobile (.env)
+```env
+# Google Sign-In Configuration
+GOOGLE_WEB_CLIENT_ID=your_google_web_client_id
+GOOGLE_IOS_CLIENT_ID=your_google_ios_client_id
 ```
 
 ## 🚀 Quick Start
@@ -358,10 +400,18 @@ VITE_GOOGLE_CLIENT_ID=your_google_client_id
    - Update redirect URIs with your Vercel domain
    - Update OAuth app name to "Mind Clear"
 
+4. **Firebase Setup**
+   - Create a Firebase project
+   - Download `google-services.json` for Android
+   - Download `GoogleService-Info.plist` for iOS
+   - Generate Firebase Admin SDK service account key
+   - Add Firebase environment variables to Railway
+
 ## 📱 Current Implementation Status
 
 ### ✅ Fully Implemented Features
-- **User Authentication**: Complete Supabase auth integration
+- **User Authentication**: Complete Supabase auth integration with Google Sign-In
+- **Google Sign-In**: Streamlined authentication flow for mobile and web
 - **Goal Management**: Create, edit, delete goals with AI breakdown
 - **Task Management**: Full CRUD operations with auto-scheduling
 - **AI Chat Interface**: Natural language processing with Gemini 2.5 Flash
