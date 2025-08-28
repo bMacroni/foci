@@ -9,7 +9,7 @@ import {
   getCalendarList,
   getEventsForDate
 } from '../utils/calendarService.js';
-import { getCalendarEventsFromDB, syncGoogleCalendarEvents } from '../utils/syncService.js';
+import { getCalendarEventsFromDB, syncGoogleCalendarEvents, getUserSubscriptionTier, calculateDateRangeForTier } from '../utils/syncService.js';
 import { scheduleSingleTask } from '../controllers/autoSchedulingController.js';
 import { createClient } from '@supabase/supabase-js';
 
@@ -80,18 +80,17 @@ router.get('/events', requireAuth, async (req, res) => {
   try {
     const maxResults = parseInt(req.query.maxResults) || 200;
     
-    // Calculate time range: 90 days prior to 365 days from now (expanded range)
-    const now = new Date();
-    const ninetyDaysAgo = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000));
-    const oneYearFromNow = new Date(now.getTime() + (365 * 24 * 60 * 60 * 1000));
+    // Get user's subscription tier and calculate appropriate date range
+    const subscriptionTier = await getUserSubscriptionTier(req.user.id);
+    const { timeMin, timeMax } = calculateDateRangeForTier(subscriptionTier);
     
-    logger.info(`[Calendar API] Getting events for user ${req.user.id}, maxResults: ${maxResults}`);
-    logger.info(`[Calendar API] Time range: ${ninetyDaysAgo.toISOString()} to ${oneYearFromNow.toISOString()}`);
+    logger.info(`[Calendar API] Getting events for user ${req.user.id} (${subscriptionTier} tier), maxResults: ${maxResults}`);
+    logger.info(`[Calendar API] Time range: ${timeMin.toISOString()} to ${timeMax.toISOString()}`);
     
-    // Get events from local database with expanded time range
-    const events = await getCalendarEventsFromDB(req.user.id, maxResults, ninetyDaysAgo, oneYearFromNow);
+    // Get events from local database with subscription-based time range
+    const events = await getCalendarEventsFromDB(req.user.id, maxResults, timeMin, timeMax);
     
-    logger.info(`[Calendar API] Returning ${events.length} events`);
+    logger.info(`[Calendar API] Returning ${events.length} events for ${subscriptionTier} tier user`);
     
     // Always return 200 with an array (possibly empty)
     res.json(events);
@@ -302,7 +301,7 @@ router.get('/status', requireAuth, async (req, res) => {
     const { getGoogleTokens } = await import('../utils/googleTokenStorage.js');
     const tokens = await getGoogleTokens(req.user.id);
     
-    console.log(`[Calendar Status] User ${req.user.id} tokens:`, {
+    logger.info(`[Calendar Status] User ${req.user.id} tokens:`, {
       hasTokens: !!tokens,
       hasAccessToken: !!tokens?.access_token,
       hasRefreshToken: !!tokens?.refresh_token,
@@ -351,7 +350,7 @@ router.get('/status', requireAuth, async (req, res) => {
         lastUpdated: tokens.updated_at 
       });
     } catch (err) {
-      console.log(`[Calendar Status] API call failed:`, err.message);
+      logger.warn(`[Calendar Status] API call failed: ${err.message}`);
       // If token is invalid or expired
       if (
         (err.response && err.response.data && err.response.data.error === 'invalid_grant') ||

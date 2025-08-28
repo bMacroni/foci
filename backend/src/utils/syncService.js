@@ -13,19 +13,25 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
 /**
  * Syncs Google Calendar events for a user into the local calendar_events table.
  * Upserts by user_id + google_event_id to prevent duplicates.
+ * Date range is based on user subscription tier:
+ * - Free/Basic: today to 60 days ahead
+ * - Premium: today to 365 days ahead
  * @param {string} userId
  * @returns {Promise<{success: boolean, count: number}>}
  */
 export async function syncGoogleCalendarEvents(userId) {
-  // Calculate date range: 90 days back to 365 days forward (expanded to match backend)
-  const now = new Date();
-  const ninetyDaysAgo = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000));
-  const oneYearFromNow = new Date(now.getTime() + (365 * 24 * 60 * 60 * 1000));
+  // Get user's subscription tier
+  const subscriptionTier = await getUserSubscriptionTier(userId);
+  logger.info(`[Calendar Sync] User ${userId} has subscription tier: ${subscriptionTier}`);
+  
+  // Calculate date range based on subscription tier
+  const { timeMin, timeMax } = calculateDateRangeForTier(subscriptionTier);
+  logger.info(`[Calendar Sync] Date range for user ${userId}: ${timeMin.toISOString()} to ${timeMax.toISOString()}`);
 
   // We will page through Google events via listCalendarEvents' maxResults window
   // If listCalendarEvents adds pagination later, this function will still upsert idempotently
   const maxResults = 2500; // Google API max per call
-  const googleEvents = await listCalendarEvents(userId, maxResults, ninetyDaysAgo, oneYearFromNow);
+  const googleEvents = await listCalendarEvents(userId, maxResults, timeMin, timeMax);
 
   let importedCount = 0;
   for (const event of googleEvents) {
@@ -57,6 +63,8 @@ export async function syncGoogleCalendarEvents(userId) {
       importedCount += 1;
     }
   }
+  
+  logger.info(`[Calendar Sync] Successfully synced ${importedCount} events for user ${userId} (${subscriptionTier} tier)`);
   return { success: true, count: importedCount };
 }
 
@@ -128,5 +136,61 @@ export async function getCalendarEventsFromDB(userId, maxResults = 100, timeMin 
   } catch (error) {
     logger.error('Error getting calendar events from database:', error);
     throw error;
+  }
+}
+
+/**
+ * Gets the subscription tier for a user
+ * @param {string} userId
+ * @returns {Promise<string>} subscription tier ('free', 'basic', 'premium')
+ */
+export async function getUserSubscriptionTier(userId) {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('subscription_tier')
+      .eq('id', userId)
+      .single();
+
+    if (error) {
+      logger.error('Error getting user subscription tier:', error);
+      return 'free'; // Default to free tier on error
+    }
+
+    return data?.subscription_tier || 'free';
+  } catch (error) {
+    logger.error('Error getting user subscription tier:', error);
+    return 'free'; // Default to free tier on error
+  }
+}
+
+/**
+ * Calculates date range based on user subscription tier
+ * @param {string} subscriptionTier
+ * @returns {Object} Object with timeMin and timeMax dates
+ */
+export function calculateDateRangeForTier(subscriptionTier) {
+  const now = new Date();
+  
+  switch (subscriptionTier) {
+    case 'premium':
+      // Premium users: today to 365 days ahead
+      return {
+        timeMin: now,
+        timeMax: new Date(now.getTime() + (365 * 24 * 60 * 60 * 1000))
+      };
+    case 'basic':
+      // Basic users: today to 60 days ahead
+      return {
+        timeMin: now,
+        timeMax: new Date(now.getTime() + (60 * 24 * 60 * 60 * 1000))
+      };
+    case 'free':
+    default:
+      // Free users: today to 60 days ahead (same as basic for now)
+      return {
+        timeMin: now,
+        timeMax: new Date(now.getTime() + (60 * 24 * 60 * 60 * 1000))
+      };
   }
 } 

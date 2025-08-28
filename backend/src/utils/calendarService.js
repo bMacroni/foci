@@ -313,7 +313,7 @@ export async function getEventsForDate(userId, date) {
       description: event.description || '',
     }));
   } catch (error) {
-    console.error('Error fetching events for date:', error);
+    logger.error('Error fetching events for date:', error);
     throw error;
   }
 }
