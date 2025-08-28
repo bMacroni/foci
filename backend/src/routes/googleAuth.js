@@ -22,9 +22,10 @@ router.get('/login', (req, res) => {
   res.redirect(url);
 });
 
-// 2. Handle OAuth callback for login
+// 2. Handle OAuth callback for login (supports both web and mobile)
 router.get('/callback', async (req, res) => {
   const code = req.query.code;
+  const state = req.query.state; // For mobile flow, state contains user info
 
   if (!code) return res.status(400).send('No code provided');
 
@@ -32,6 +33,14 @@ router.get('/callback', async (req, res) => {
     // 1. Exchange code for tokens
     const { tokens } = await oauth2Client.getToken(code);
     logger.info('Google tokens received successfully');
+    
+    console.log(`[GoogleAuth Callback] Token exchange result:`, {
+      hasAccessToken: !!tokens.access_token,
+      hasRefreshToken: !!tokens.refresh_token,
+      scope: tokens.scope,
+      tokenType: tokens.token_type,
+      expiryDate: tokens.expiry_date
+    });
 
     // 2. Get user info from Google
     oauth2Client.setCredentials(tokens);
@@ -41,15 +50,47 @@ router.get('/callback', async (req, res) => {
     const googleEmail = userInfo.data.email;
     const googleName = userInfo.data.name;
 
-    // 3. For now, just redirect with success and let the user log in manually
-    // In a production app, you'd want to implement proper user creation/login
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    res.redirect(`${frontendUrl}?google=info&email=${encodeURIComponent(googleEmail)}&name=${encodeURIComponent(googleName)}`);
+    // 3. Check if this is a mobile flow (state contains user info)
+    if (state && state.includes('mobile:')) {
+      // Mobile flow - store tokens and redirect back to mobile app
+      const userId = state.replace('mobile:', '');
+      
+      try {
+        await storeGoogleTokens(userId, {
+          access_token: tokens.access_token,
+          refresh_token: tokens.refresh_token,
+          token_type: tokens.token_type || 'Bearer',
+          scope: tokens.scope || 'https://www.googleapis.com/auth/calendar.events.readonly',
+          expiry_date: tokens.expiry_date || (Date.now() + 3600 * 1000),
+        });
+        logger.info(`Stored Google tokens for mobile user: ${userId}`);
+        
+        // Redirect to mobile app with success
+        const mobileRedirectUrl = process.env.MOBILE_REDIRECT_URL || 'mindgarden://oauth-callback';
+        res.redirect(`${mobileRedirectUrl}?success=true&email=${encodeURIComponent(googleEmail)}`);
+      } catch (tokenError) {
+        logger.error('Error storing tokens for mobile user:', tokenError);
+        const mobileRedirectUrl = process.env.MOBILE_REDIRECT_URL || 'mindgarden://oauth-callback';
+        res.redirect(`${mobileRedirectUrl}?error=token_storage_failed`);
+      }
+    } else {
+      // Web flow - redirect to frontend
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      res.redirect(`${frontendUrl}?google=info&email=${encodeURIComponent(googleEmail)}&name=${encodeURIComponent(googleName)}`);
+    }
     
   } catch (err) {
     logger.error('Error in Google OAuth callback:', err);
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    res.redirect(`${frontendUrl}?google=error&message=${encodeURIComponent('OAuth callback failed')}`);
+    
+    if (state && state.includes('mobile:')) {
+      // Mobile flow error
+      const mobileRedirectUrl = process.env.MOBILE_REDIRECT_URL || 'mindgarden://oauth-callback';
+      res.redirect(`${mobileRedirectUrl}?error=oauth_failed`);
+    } else {
+      // Web flow error
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      res.redirect(`${frontendUrl}?google=error&message=${encodeURIComponent('OAuth callback failed')}`);
+    }
   }
 });
 

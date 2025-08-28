@@ -1,7 +1,9 @@
 import express from 'express';
 import logger from '../utils/logger.js';
 import { createClient } from '@supabase/supabase-js';
-import { verifyGoogleIdToken } from '../utils/firebaseAdmin.js';
+import oauth2Client from '../utils/googleAuth.js';
+import { storeGoogleTokens } from '../utils/googleTokenStorage.js';
+import { google } from 'googleapis';
 
 const router = express.Router();
 
@@ -59,6 +61,40 @@ const supabase = createClient(
 );
 
 /**
+ * Verify Google ID token directly using Google Auth library
+ */
+async function verifyGoogleIdToken(idToken) {
+  try {
+    const { OAuth2Client } = await import('google-auth-library');
+    const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+    
+    const ticket = await client.verifyIdToken({
+      idToken,
+      audience: process.env.GOOGLE_CLIENT_ID
+    });
+    
+    const payload = ticket.getPayload();
+    
+    if (!payload.email) {
+      throw new Error('Email not found in Google ID token');
+    }
+    
+    if (!payload.email_verified) {
+      throw new Error('Email must be verified');
+    }
+    
+    return {
+      email: payload.email,
+      name: payload.name,
+      picture: payload.picture
+    };
+  } catch (error) {
+    logger.error('Error verifying Google ID token:', error);
+    throw error;
+  }
+}
+
+/**
  * POST /api/auth/google/mobile-signin
  * Handles Google Sign-In for mobile clients
  * Creates new users or signs in existing Google users
@@ -66,12 +102,17 @@ const supabase = createClient(
  */
 router.post('/mobile-signin', async (req, res) => {
   try {
-    const { idToken, accessToken } = req.body;
+    const { idToken, accessToken, serverAuthCode, webClientId: mobileWebClientId } = req.body;
+    const headerWebClientId = req.headers['x-web-client-id'];
+    try {
+      const bodyKeys = Object.keys(req.body || {});
+      logger.info(`[GoogleAuth] Incoming body keys: ${bodyKeys.join(', ')}; header X-Web-Client-Id present: ${Boolean(headerWebClientId)}`);
+    } catch {}
 
     // Validate required fields
-    if (!idToken || !accessToken) {
+    if (!idToken || (!accessToken && !serverAuthCode)) {
       return res.status(400).json({
-        error: 'idToken and accessToken are required'
+        error: 'idToken and serverAuthCode (or accessToken) are required'
       });
     }
 
@@ -212,24 +253,58 @@ router.post('/mobile-signin', async (req, res) => {
 
     // Store Google tokens for calendar integration
     try {
-      const { error: tokenError } = await supabaseAdmin
-        .from('google_tokens')
-        .upsert({
-          user_id: userId,
-          access_token: accessToken,
-          token_type: 'Bearer',
-          scope: 'https://www.googleapis.com/auth/calendar.events.readonly',
-          expiry_date: Date.now() + (3600 * 1000) // 1 hour from now
+      // Prefer exchanging a serverAuthCode to obtain refresh_token
+      if (serverAuthCode) {
+        // Use a dedicated OAuth2 client for mobile code exchange with redirect_uri 'postmessage'
+        const { google } = await import('googleapis');
+        const mobileOauthClient = new google.auth.OAuth2(
+          process.env.GOOGLE_CLIENT_ID,
+          process.env.GOOGLE_CLIENT_SECRET,
+          process.env.GOOGLE_REDIRECT_URI || 'postmessage' // Use configured redirect URI or fallback to postmessage
+        );
+        try {
+          const backendId = process.env.GOOGLE_CLIENT_ID || '';
+          const backendFirst6 = backendId.slice(0, 6);
+          const backendLast6 = backendId.slice(-6);
+          const mobileId = mobileWebClientId || headerWebClientId || '';
+          const mobileFirst6 = mobileId ? mobileId.slice(0, 6) : 'n/a';
+          const mobileLast6 = mobileId ? mobileId.slice(-6) : 'n/a';
+          const codePreview = typeof serverAuthCode === 'string' ? `${serverAuthCode.slice(0, 6)}...(${serverAuthCode.length})` : 'n/a';
+          logger.info(`[GoogleAuth] Exchanging serverAuthCode using redirect_uri=postmessage, backend_client_id=${backendFirst6}...${backendLast6}, mobile_webClientId=${mobileFirst6}...${mobileLast6}, code=${codePreview}`);
+        } catch (_) {}
+        const { tokens } = await mobileOauthClient.getToken(serverAuthCode);
+        
+        console.log(`[GoogleAuth] Token exchange result:`, {
+          hasAccessToken: !!tokens.access_token,
+          hasRefreshToken: !!tokens.refresh_token,
+          scope: tokens.scope,
+          tokenType: tokens.token_type,
+          expiryDate: tokens.expiry_date,
+          fullTokens: tokens // Log the full tokens object to see what Google is actually returning
         });
-
-      if (tokenError) {
-        logger.warn('Failed to store Google tokens:', tokenError);
-        // Don't fail the sign-in for token storage issues
-      } else {
-        logger.info(`Google tokens stored for user: ${userId}`);
-      }
+        
+        if (!tokens.refresh_token) {
+          console.warn(`[GoogleAuth] WARNING: No refresh token received from Google!`);
+          console.warn(`[GoogleAuth] This might be because:`);
+          console.warn(`[GoogleAuth] 1. User has already authorized this app before`);
+          console.warn(`[GoogleAuth] 2. Mobile app is not requesting offline access properly`);
+          console.warn(`[GoogleAuth] 3. Google OAuth configuration issue`);
+        }
+        
+        await storeGoogleTokens(userId, {
+          access_token: tokens.access_token,
+          refresh_token: tokens.refresh_token,
+          token_type: tokens.token_type || 'Bearer',
+          scope: tokens.scope || 'https://www.googleapis.com/auth/calendar.events.readonly',
+          expiry_date: tokens.expiry_date || (Date.now() + 3600 * 1000),
+        });
+        logger.info(`Exchanged serverAuthCode and stored Google tokens for user: ${userId}`);
+              } else {
+          logger.info(`No serverAuthCode provided - calendar integration will be requested separately`);
+        }
     } catch (tokenError) {
-      logger.warn('Error storing Google tokens:', tokenError);
+      const details = tokenError?.response?.data || tokenError?.message || tokenError;
+      logger.warn('Error storing Google tokens:', details);
       // Don't fail the sign-in for token storage issues
     }
 
