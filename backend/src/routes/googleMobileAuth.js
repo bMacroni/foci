@@ -260,7 +260,7 @@ router.post('/mobile-signin', async (req, res) => {
         const mobileOauthClient = new google.auth.OAuth2(
           process.env.GOOGLE_CLIENT_ID,
           process.env.GOOGLE_CLIENT_SECRET,
-          process.env.GOOGLE_REDIRECT_URI || 'postmessage' // Use configured redirect URI or fallback to postmessage
+          process.env.GOOGLE_REDIRECT_URI 
         );
         try {
           const backendId = process.env.GOOGLE_CLIENT_ID || '';
