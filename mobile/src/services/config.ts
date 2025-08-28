@@ -22,6 +22,9 @@ export const API_CONFIGS: Record<string, ApiConfig> = {
 class ConfigService {
   private currentConfig: ApiConfig = API_CONFIGS.local;
   private configKey = 'api_config';
+  private googleWebClientId: string | undefined;
+  private googleAndroidClientId: string | undefined;
+  private googleIosClientId: string | undefined;
 
   constructor() {
     this.loadConfig();
@@ -69,20 +72,35 @@ class ConfigService {
   }
 
   // Google Sign-In Configuration
+  setGoogleClientIds(ids: { web?: string; android?: string; ios?: string }) {
+    if (ids.web) this.googleWebClientId = ids.web;
+    if (ids.android) this.googleAndroidClientId = ids.android;
+    if (ids.ios) this.googleIosClientId = ids.ios;
+  }
+
   getGoogleWebClientId(): string {
-    // Web OAuth client from google-services.json (client_type 3)
-    return process.env.GOOGLE_WEB_CLIENT_ID || '416233535798-dpehu9uiun1nlub5nu1rgi36qog1e57j.apps.googleusercontent.com';
+    const id = this.googleWebClientId || process.env.GOOGLE_WEB_CLIENT_ID;
+    if (!id) {
+      console.warn('GOOGLE_WEB_CLIENT_ID is not set');
+    }
+    return id || '';
   }
 
 
   getGoogleAndroidClientId(): string {
-    // This is the Android client ID from google-services.json
-    return process.env.GOOGLE_ANDROID_CLIENT_ID || '416233535798-dvmtmqjgmrmmrm4uv0lgqos02od26sh0.apps.googleusercontent.com';
+    const id = this.googleAndroidClientId || process.env.GOOGLE_ANDROID_CLIENT_ID;
+    if (!id) {
+      console.warn('GOOGLE_ANDROID_CLIENT_ID is not set');
+    }
+    return id || '';
   }
 
   getGoogleIosClientId(): string {
-    // This is the iOS client ID from GoogleService-Info.plist
-    return process.env.GOOGLE_IOS_CLIENT_ID || '416233535798-dpehu9uiun1nlub5nu1rgi36qog1e57j.apps.googleusercontent.com';
+    const id = this.googleIosClientId || process.env.GOOGLE_IOS_CLIENT_ID;
+    if (!id) {
+      console.warn('GOOGLE_IOS_CLIENT_ID is not set');
+    }
+    return id || '';
   }
 }
 

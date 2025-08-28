@@ -1,5 +1,4 @@
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
-import auth from '@react-native-firebase/auth';
 import { Platform } from 'react-native';
 import { configService } from './config';
 import { authService } from './auth';
@@ -34,9 +33,20 @@ class GoogleAuthService {
     }
 
     try {
+      const webClientId = configService.getGoogleWebClientId();
+      const iosClientId = configService.getGoogleIosClientId();
+      const androidClientId = configService.getGoogleAndroidClientId();
+
+      // Log client ID configuration for debugging
+      console.log('[GoogleAuth] Configuring Google Sign-In...');
+      console.log(`[GoogleAuth] Web Client ID: ${webClientId ? `${webClientId.slice(0, 17)}...${webClientId.slice(-6)}` : 'NOT SET'}`);
+      console.log(`[GoogleAuth] iOS Client ID: ${iosClientId ? `${iosClientId.slice(0, 17)}...${iosClientId.slice(-6)}` : 'NOT SET'}`);
+      console.log(`[GoogleAuth] Android Client ID: ${androidClientId ? `${androidClientId.slice(0, 17)}...${androidClientId.slice(-6)}` : 'NOT SET'}`);
+      console.log(`[GoogleAuth] Platform: ${Platform.OS}`);
+
       const baseConfig: any = {
         // These will be set from environment variables or config
-        webClientId: configService.getGoogleWebClientId(), // Required for getting the ID token
+        webClientId: webClientId, // Required for getting the ID token
         offlineAccess: true, // Required for getting the access token
         forceCodeForRefreshToken: true, // Required for getting the refresh token
         scopes: [
@@ -48,13 +58,25 @@ class GoogleAuthService {
       };
 
       if (Platform.OS === 'ios') {
-        baseConfig.iosClientId = configService.getGoogleIosClientId();
+        baseConfig.iosClientId = iosClientId;
+        console.log(`[GoogleAuth] iOS configuration added: ${iosClientId ? 'YES' : 'NO'}`);
       }
+
+      console.log('[GoogleAuth] Final configuration:', {
+        webClientId: webClientId ? 'SET' : 'NOT SET',
+        iosClientId: iosClientId ? 'SET' : 'NOT SET',
+        androidClientId: androidClientId ? 'SET' : 'NOT SET',
+        platform: Platform.OS,
+        offlineAccess: baseConfig.offlineAccess,
+        forceCodeForRefreshToken: baseConfig.forceCodeForRefreshToken,
+        scopes: baseConfig.scopes
+      });
 
       GoogleSignin.configure(baseConfig);
       this.isConfigured = true;
+      console.log('[GoogleAuth] Google Sign-In configured successfully');
     } catch (error) {
-      console.error('Failed to configure Google Sign-In:', error);
+      console.error('[GoogleAuth] Failed to configure Google Sign-In:', error);
     }
   }
 
@@ -68,31 +90,33 @@ class GoogleAuthService {
         this.configureGoogleSignIn();
       }
 
+      console.log('[GoogleAuth] Starting sign-in flow...');
+      console.log(`[GoogleAuth] Using webClientId: ${configService.getGoogleWebClientId() ? `${configService.getGoogleWebClientId().slice(0, 17)}...${configService.getGoogleWebClientId().slice(-6)}` : 'NOT SET'}`);
+      
       // Check if Google Play Services are available (Android only)
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      console.log('[GoogleAuth] Play Services check passed');
 
       // Sign in with Google
+      console.log('[GoogleAuth] Calling GoogleSignin.signIn()...');
       const userInfo = await GoogleSignin.signIn();
+      console.log('[GoogleAuth] GoogleSignin.signIn() completed');
+      console.log('[GoogleAuth] User info received:', {
+        hasIdToken: !!userInfo.idToken,
+        hasServerAuthCode: !!userInfo.serverAuthCode,
+        hasAccessToken: !!userInfo.serverAuthCode,
+        userEmail: userInfo.user?.email || 'N/A',
+        userId: userInfo.user?.id || 'N/A'
+      });
       
       if (!userInfo.idToken) {
         throw new Error('No ID token received from Google');
       }
 
-      // Sign into Firebase to obtain a Firebase ID token (matches Firebase Admin expectations)
-      const googleCredential = auth.GoogleAuthProvider.credential(userInfo.idToken);
-      await auth().signInWithCredential(googleCredential);
-
-      const firebaseUser = auth().currentUser;
-      const firebaseIdToken = await firebaseUser?.getIdToken(true);
-
-      if (!firebaseIdToken) {
-        throw new Error('Failed to retrieve Firebase ID token');
-      }
-
-      // Send Firebase ID token to backend (accessToken remains Google code/token if needed)
+      // Send Google ID token and serverAuthCode directly to backend
       const result = await this.authenticateWithBackend(
-        firebaseIdToken,
-        userInfo.serverAuthCode || userInfo.idToken
+        userInfo.idToken,
+        userInfo.serverAuthCode || ''
       );
 
       return result;
@@ -124,34 +148,61 @@ class GoogleAuthService {
   /**
    * Authenticates with the backend using Google tokens
    */
-  private async authenticateWithBackend(idToken: string, accessToken: string): Promise<GoogleAuthResult> {
+  private async authenticateWithBackend(idToken: string, serverAuthCode: string): Promise<GoogleAuthResult> {
     try {
       const baseUrl = configService.getBaseUrl();
+      const webClientId = configService.getGoogleWebClientId();
+      
+      console.log('[GoogleAuth] Authenticating with backend...');
+      console.log(`[GoogleAuth] Backend URL: ${baseUrl}/auth/google/mobile-signin`);
+      console.log(`[GoogleAuth] Web Client ID: ${webClientId ? `${webClientId.slice(0, 17)}...${webClientId.slice(-6)}` : 'NOT SET'}`);
+      console.log(`[GoogleAuth] ID Token length: ${idToken ? idToken.length : 0}`);
+      console.log(`[GoogleAuth] Server Auth Code: ${serverAuthCode ? `${serverAuthCode.slice(0, 6)}...(${serverAuthCode.length})` : 'NOT PROVIDED'}`);
+      
       const response = await fetch(`${baseUrl}/auth/google/mobile-signin`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-Web-Client-Id': webClientId,
         },
         body: JSON.stringify({
           idToken,
-          accessToken,
+          serverAuthCode,
+          webClientId,
         }),
       });
 
       const data = await response.json();
+      
+      console.log(`[GoogleAuth] Backend response status: ${response.status}`);
+      console.log(`[GoogleAuth] Backend response data:`, {
+        success: response.ok,
+        hasToken: !!data.token,
+        hasUser: !!data.user,
+        error: data.error || 'none'
+      });
 
       if (response.ok) {
         // Successful authentication
+        console.log('[GoogleAuth] Authentication successful, setting session...');
         await authService.setSession(data.token, data.user);
+        console.log('[GoogleAuth] Session set successfully');
+        
+        // If we have a user ID, trigger the OAuth flow for calendar permissions
+        if (data.user?.id) {
+          await this.triggerCalendarOAuth(data.user.id);
+        }
+        
         return {
           success: true,
           token: data.token,
           idToken,
-          accessToken,
+          accessToken: undefined,
           user: data.user,
         };
       } else {
         // Authentication failed
+        console.log(`[GoogleAuth] Authentication failed: ${data.error || 'Unknown error'}`);
         return {
           success: false,
           error: data.error || 'Authentication failed',
@@ -202,6 +253,29 @@ class GoogleAuthService {
     } catch (error) {
       console.error('Error checking Google sign-in status:', error);
       return false;
+    }
+  }
+
+  /**
+   * Triggers OAuth flow for calendar permissions
+   */
+  private async triggerCalendarOAuth(userId: string): Promise<void> {
+    try {
+      const baseUrl = configService.getBaseUrl();
+      const oauthUrl = `${baseUrl}/auth/google/login?state=mobile:${userId}`;
+      
+      console.log('[GoogleAuth] Triggering calendar OAuth flow...');
+      console.log(`[GoogleAuth] OAuth URL: ${oauthUrl}`);
+      
+      // For mobile, we need to open this URL in a web browser
+      // The user will be redirected back to the mobile app after OAuth completion
+      // This is a simplified approach - in production you'd use a proper OAuth flow
+      
+      // For now, just log the URL - the user can manually complete the flow
+      console.log('[GoogleAuth] Please complete OAuth flow manually by visiting:', oauthUrl);
+      
+    } catch (error) {
+      console.error('[GoogleAuth] Error triggering calendar OAuth:', error);
     }
   }
 }

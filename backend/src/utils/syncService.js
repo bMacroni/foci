@@ -17,23 +17,23 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
  * @returns {Promise<{success: boolean, count: number}>}
  */
 export async function syncGoogleCalendarEvents(userId) {
-  // 1. Fetch events from Google Calendar (90 days back + 365 days forward to match backend fetching)
-  const maxResults = 2500; // Google API max
-  
   // Calculate date range: 90 days back to 365 days forward (expanded to match backend)
   const now = new Date();
   const ninetyDaysAgo = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000));
   const oneYearFromNow = new Date(now.getTime() + (365 * 24 * 60 * 60 * 1000));
-  
+
+  // We will page through Google events via listCalendarEvents' maxResults window
+  // If listCalendarEvents adds pagination later, this function will still upsert idempotently
+  const maxResults = 2500; // Google API max per call
   const googleEvents = await listCalendarEvents(userId, maxResults, ninetyDaysAgo, oneYearFromNow);
 
+  let importedCount = 0;
   for (const event of googleEvents) {
-    // 2. Upsert into calendar_events table
     const { id, summary, description, start, end, location } = event;
-    const startTime = start?.dateTime || start?.date;
-    const endTime = end?.dateTime || end?.date;
+    const isAllDay = !!(start?.date && end?.date);
+    const startTime = start?.dateTime || start?.date || null;
+    const endTime = end?.dateTime || end?.date || null;
 
-    // Upsert by google_calendar_id + user_id
     const { error } = await supabase
       .from('calendar_events')
       .upsert([
@@ -46,15 +46,18 @@ export async function syncGoogleCalendarEvents(userId) {
           end_time: endTime,
           location: location || '',
           event_type: 'event',
-          updated_at: new Date().toISOString()
+          is_all_day: isAllDay,
+          updated_at: new Date().toISOString(),
         }
       ], { onConflict: 'google_calendar_id,user_id' });
 
     if (error) {
       logger.error('Error upserting event:', error, event);
+    } else {
+      importedCount += 1;
     }
   }
-  return { success: true, count: googleEvents.length };
+  return { success: true, count: importedCount };
 }
 
 /**

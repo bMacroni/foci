@@ -171,6 +171,48 @@ class EnhancedAPI {
     );
   }
 
+  async getCalendarStatus(): Promise<{ connected: boolean; email?: string; lastUpdated?: string; error?: string; details?: string; }>{
+    return this.makeRequest(
+      `${configService.getBaseUrl()}/calendar/status`,
+      { method: 'GET' },
+      ErrorCategory.CALENDAR,
+      'getCalendarStatus'
+    );
+  }
+
+
+
+  async importCalendarFirstRun(): Promise<{ success: boolean; count?: number; warning?: string; error?: string; details?: string; }>{
+    return this.makeRequest(
+      `${configService.getBaseUrl()}/calendar/import/first-run`,
+      { method: 'POST' },
+      ErrorCategory.SYNC,
+      'importCalendarFirstRun'
+    );
+  }
+
+  async getAppPreferences(): Promise<any> {
+    return this.makeRequest(
+      `${configService.getBaseUrl()}/user/app-preferences`,
+      { method: 'GET' },
+      ErrorCategory.SYNC,
+      'getAppPreferences'
+    );
+  }
+
+  async updateAppPreferences(preferences: any): Promise<any> {
+    return this.makeRequest(
+      `${configService.getBaseUrl()}/user/app-preferences`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(preferences),
+      },
+      ErrorCategory.SYNC,
+      'updateAppPreferences'
+    );
+  }
+
   // Tasks API methods
   async getTasks(): Promise<any> {
     return this.makeRequest(

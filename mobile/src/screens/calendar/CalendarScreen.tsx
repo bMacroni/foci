@@ -15,6 +15,7 @@ import { spacing } from '../../themes/spacing';
 import { Button } from '../../components/common/Button';
 import { EventCard } from '../../components/calendar/EventCard';
 import { EventFormModal } from '../../components/calendar/EventFormModal';
+import { CalendarImportModal } from '../../components/calendar/CalendarImportModal';
 import { GoalDueCard } from '../../components/goals/GoalDueCard';
 // import { VirtualizedEventList } from '../../components/calendar/VirtualizedEventList';
 import { OfflineIndicator } from '../../components/common/OfflineIndicator';
@@ -69,6 +70,9 @@ export default function CalendarScreen() {
   const [formModalVisible, setFormModalVisible] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | Task | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+  const [showImportPrompt, setShowImportPrompt] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   
   // Enhanced error handling state
   const [currentError, setCurrentError] = useState<UserFriendlyError | null>(null);
@@ -216,7 +220,50 @@ export default function CalendarScreen() {
     loadCalendarData();
   }, [loadCalendarData]);
 
+  // Check first-visit import conditions
+  useEffect(() => {
+    const checkImportPrompt = async () => {
+      try {
+        const status = await enhancedAPI.getCalendarStatus();
+        const prefs = await enhancedAPI.getAppPreferences();
+        const completed = !!(prefs && (prefs as any).calendar_first_import_completed);
+        if (status && status.connected === true && !completed) {
+          setShowImportPrompt(true);
+        }
+      } catch (_e) {
+        // non-blocking
+      }
+    };
+    checkImportPrompt();
+  }, []);
 
+  const handleImportNow = useCallback(async () => {
+    try {
+      setImporting(true);
+      await enhancedAPI.importCalendarFirstRun();
+      await loadCalendarData(1, false);
+      setShowImportPrompt(false);
+    } catch (_e) {
+      // leave prompt for retry
+    } finally {
+      setImporting(false);
+    }
+  }, [loadCalendarData]);
+
+  const handleNotNow = useCallback(async () => {
+    try {
+      setShowImportPrompt(false);
+      await enhancedAPI.updateAppPreferences({ calendar_import_prompt_dismissed_at: new Date().toISOString() });
+    } catch (_e) {
+      // ignore
+    }
+  }, []);
+
+  const handleImportModalComplete = useCallback(() => {
+    // Refresh calendar data after successful import
+    loadCalendarData(1, false);
+    setShowImportPrompt(false);
+  }, [loadCalendarData]);
 
   // Handle date selection
   const handleDateSelect = useCallback((day: DateData) => {
@@ -1211,10 +1258,56 @@ export default function CalendarScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Calendar</Text>
-        <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
-          <Text style={styles.refreshButtonText}>↻</Text>
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity 
+            onPress={() => setShowImportModal(true)} 
+            style={styles.importButton}
+          >
+            <Icon name="download" size={18} color={colors.text.secondary} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
+            <Text style={styles.refreshButtonText}>↻</Text>
+          </TouchableOpacity>
+        </View>
       </View>
+
+      {/* First-run Import Prompt */}
+      {showImportPrompt && (
+        <View style={{
+          marginHorizontal: spacing.md,
+          marginTop: spacing.sm,
+          padding: spacing.md,
+          backgroundColor: colors.surface,
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: colors.border.light,
+        }}>
+          <Text style={{ color: colors.text.primary, marginBottom: spacing.sm, fontSize: typography.fontSize.base }}>
+            Import your Google Calendar events into MindGarden?
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <TouchableOpacity onPress={handleImportNow} disabled={importing} style={{
+              paddingVertical: 10,
+              paddingHorizontal: 14,
+              backgroundColor: colors.primary,
+              borderRadius: 8,
+              opacity: importing ? 0.7 : 1,
+            }}>
+              <Text style={{ color: 'white', fontWeight: '600' }}>{importing ? 'Importing…' : 'Import now'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleNotNow} style={{
+              paddingVertical: 10,
+              paddingHorizontal: 14,
+              backgroundColor: colors.surface,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: colors.border.light,
+            }}>
+              <Text style={{ color: colors.text.secondary }}>Not now</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       {/* View Type Selector */}
       <View style={styles.viewSelector}>
@@ -1315,6 +1408,13 @@ export default function CalendarScreen() {
         onSubmit={handleFormSubmit}
         loading={formLoading}
       />
+
+      {/* Calendar Import Modal */}
+      <CalendarImportModal
+        visible={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onImportComplete={handleImportModalComplete}
+      />
     </View>
   );
 }
@@ -1332,6 +1432,19 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.border.light,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  importButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   title: {
     fontSize: typography.fontSize.xl,

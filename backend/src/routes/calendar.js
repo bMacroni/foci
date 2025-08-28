@@ -301,9 +301,31 @@ router.get('/status', requireAuth, async (req, res) => {
   try {
     const { getGoogleTokens } = await import('../utils/googleTokenStorage.js');
     const tokens = await getGoogleTokens(req.user.id);
+    
+    console.log(`[Calendar Status] User ${req.user.id} tokens:`, {
+      hasTokens: !!tokens,
+      hasAccessToken: !!tokens?.access_token,
+      hasRefreshToken: !!tokens?.refresh_token,
+      scope: tokens?.scope,
+      expiryDate: tokens?.expiry_date
+    });
+    
     if (!tokens) {
-      return res.json({ connected: false });
+      return res.json({ 
+        connected: false, 
+        error: 'calendar_status_error', 
+        details: 'No Google tokens found for user' 
+      });
     }
+    
+    if (!tokens.refresh_token) {
+      return res.json({ 
+        connected: false, 
+        error: 'calendar_status_error', 
+        details: 'No refresh token is set.' 
+      });
+    }
+    
     // Try a lightweight Google Calendar API call to verify token validity
     try {
       const { google } = await import('googleapis');
@@ -329,6 +351,7 @@ router.get('/status', requireAuth, async (req, res) => {
         lastUpdated: tokens.updated_at 
       });
     } catch (err) {
+      console.log(`[Calendar Status] API call failed:`, err.message);
       // If token is invalid or expired
       if (
         (err.response && err.response.data && err.response.data.error === 'invalid_grant') ||
@@ -395,5 +418,45 @@ router.post('/schedule-task', requireAuth, async (req, res) => {
     });
   }
 });
+
+// First-run import: sync Google → DB and set preference flag in one call
+router.post('/import/first-run', requireAuth, async (req, res) => {
+  try {
+    logger.info(`First-run import requested for user: ${req.user.id}`);
+
+    // 1) Sync events from Google into our DB
+    const result = await syncGoogleCalendarEvents(req.user.id);
+
+    // 2) Mark preference as completed
+    const { error: prefErr } = await supabase
+      .from('user_app_preferences')
+      .upsert({
+        user_id: req.user.id,
+        calendar_first_import_completed: true,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
+
+    if (prefErr) {
+      logger.warn('Failed to update user_app_preferences after first-run import:', prefErr);
+      // Continue; the import succeeded, but we return a warning
+      return res.status(200).json({
+        success: true,
+        count: result.count,
+        warning: 'Import completed but preference flag failed to update',
+      });
+    }
+
+    res.json({ success: true, count: result.count });
+  } catch (error) {
+    logger.error('Error during first-run import:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to complete first-run import',
+      details: error.message,
+    });
+  }
+});
+
+
 
 export default router; 
