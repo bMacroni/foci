@@ -5,13 +5,13 @@ import { StatusBar } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native';
 import Icon from 'react-native-vector-icons/Octicons';
 import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../../themes/colors';
 import { typography } from '../../themes/typography';
 import { spacing, borderRadius } from '../../themes/spacing';
 import { OnboardingState, QuickAction } from '../../types/onboarding';
 import { OnboardingService } from '../../services/onboarding';
 import { configService } from '../../services/config';
+import { authService } from '../../services/auth';
 import QuickActions from '../../components/ai/QuickActions';
 import ScheduleDisplay from '../../components/ai/ScheduleDisplay';
 import GoalBreakdownDisplay from '../../components/ai/GoalBreakdownDisplay';
@@ -484,7 +484,8 @@ export default function AIChatScreen({ navigation, route }: any) {
     setConversations(updatedConversations);
 
     try {
-      const token = await AsyncStorage.getItem('authToken');
+      const token = await authService.getAuthToken();
+      
       const response = await axios.post(
         `${configService.getBaseUrl()}/ai/chat`,
         { message: userMessage, threadId: route.params?.threadId },
@@ -508,8 +509,21 @@ export default function AIChatScreen({ navigation, route }: any) {
         }
         return c;
       }));
-    } catch (_err: any) {
-      setError('AI failed to respond. Please try again.');
+    } catch (err: any) {
+      console.error('AI Chat error:', err.message);
+      
+      let errorMessage = 'AI failed to respond. Please try again.';
+      if (err.response?.status === 401) {
+        errorMessage = 'Authentication failed. Please log in again.';
+      } else if (err.response?.status === 500) {
+        errorMessage = 'Server error. Please try again later.';
+      } else if (err.code === 'NETWORK_ERROR') {
+        errorMessage = 'Network error. Please check your connection.';
+      } else if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -578,7 +592,7 @@ export default function AIChatScreen({ navigation, route }: any) {
       // Auto-send the message immediately without requiring user to tap send
       (async () => {
         try {
-          const token = await AsyncStorage.getItem('authToken');
+          const token = await authService.getAuthToken();
           // Add user message to conversation state first
           setConversations(prev => prev.map(c => {
             if (c.id === newConversation.id) {
@@ -587,13 +601,15 @@ export default function AIChatScreen({ navigation, route }: any) {
             }
             return c;
           }));
-          setLoading(true);
-          setError('');
-          const response = await axios.post(
-            `${configService.getBaseUrl()}/ai/chat`,
-            { message: initialMessage, threadId: route.params?.threadId },
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
+                     setLoading(true);
+           setError('');
+           
+           const response = await axios.post(
+             `${configService.getBaseUrl()}/ai/chat`,
+             { message: initialMessage, threadId: route.params?.threadId },
+             { headers: { Authorization: `Bearer ${token}` } }
+           );
+          
           const aiMessage: Message = { id: Date.now() + 1, text: response.data.message, sender: 'ai' };
           setConversations(prev => prev.map(c => {
             if (c.id === newConversation.id) {
@@ -601,8 +617,21 @@ export default function AIChatScreen({ navigation, route }: any) {
             }
             return c;
           }));
-        } catch (_err) {
-          setError('AI failed to respond. Please try again.');
+                 } catch (err: any) {
+           console.error('AI Chat auto-send error:', err.message);
+          
+          let errorMessage = 'AI failed to respond. Please try again.';
+          if (err.response?.status === 401) {
+            errorMessage = 'Authentication failed. Please log in again.';
+          } else if (err.response?.status === 500) {
+            errorMessage = 'Server error. Please try again later.';
+          } else if (err.code === 'NETWORK_ERROR') {
+            errorMessage = 'Network error. Please check your connection.';
+          } else if (err.response?.data?.message) {
+            errorMessage = err.response.data.message;
+          }
+          
+          setError(errorMessage);
         } finally {
           setLoading(false);
         }
