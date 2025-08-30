@@ -20,8 +20,8 @@ interface QuickScheduleRadialProps {
   openTimestamp?: number;
 }
 
-const RADIUS = 96;
-const INNER_CANCEL_RADIUS = 52; // distance from center treated as cancel zone
+const RADIUS = 120; // Increased from 96 for better touch targets
+const INNER_CANCEL_RADIUS = 60; // Increased proportionally from 52
 
 const OPTIONS: Array<{ key: QuickSchedulePreset; label: string; icon: string }> = [
   { key: 'today', label: 'Today', icon: 'sun' },
@@ -45,18 +45,25 @@ const QuickScheduleRadial: React.FC<QuickScheduleRadialProps> = ({ visible, cent
   const getIndexFromPoint = (x: number, y: number) => {
     const dx = x - cx;
     const dy = y - cy;
-    const angle = (Math.atan2(dy, dx) + 2 * Math.PI) % (2 * Math.PI);
-    let bestIdx = 0;
-    let bestDiff = Number.POSITIVE_INFINITY;
-    for (let i = 0; i < anglesRad.length; i++) {
-      let diff = Math.abs(angle - anglesRad[i]);
-      if (diff > Math.PI) {diff = 2 * Math.PI - diff;}
-      if (diff < bestDiff) {
-        bestDiff = diff;
-        bestIdx = i;
-      }
+    const distance = Math.hypot(dx, dy);
+
+    // Only consider points outside the inner cancel radius
+    if (distance <= INNER_CANCEL_RADIUS) {
+      return -1; // Cancel zone
     }
-    return bestIdx;
+
+    const angle = (Math.atan2(dy, dx) + 2 * Math.PI) % (2 * Math.PI);
+
+    // More precise quadrant detection
+    if (angle >= 7 * Math.PI / 4 || angle < Math.PI / 4) {
+      return 0; // Right quadrant (Today)
+    } else if (angle >= Math.PI / 4 && angle < 3 * Math.PI / 4) {
+      return 1; // Bottom quadrant (Tomorrow)
+    } else if (angle >= 3 * Math.PI / 4 && angle < 5 * Math.PI / 4) {
+      return 2; // Left quadrant (This week)
+    } else {
+      return 3; // Top quadrant (Next week)
+    }
   };
 
   const onGestureEvent = (e: PanGestureHandlerGestureEvent) => {
@@ -72,7 +79,8 @@ const QuickScheduleRadial: React.FC<QuickScheduleRadialProps> = ({ visible, cent
       return;
     }
     setHoverCenter(false);
-    setHoverIndex(getIndexFromPoint(x, y));
+    const index = getIndexFromPoint(x, y);
+    setHoverIndex(index >= 0 ? index : null);
   };
 
   const onHandlerStateChange = (e: PanGestureHandlerStateChangeEvent) => {
@@ -86,7 +94,8 @@ const QuickScheduleRadial: React.FC<QuickScheduleRadialProps> = ({ visible, cent
         setHoverIndex(null);
       } else {
         setHoverCenter(false);
-        setHoverIndex(getIndexFromPoint(e.nativeEvent.x, e.nativeEvent.y));
+        const index = getIndexFromPoint(e.nativeEvent.x, e.nativeEvent.y);
+        setHoverIndex(index >= 0 ? index : null);
       }
     } else if (
       e.nativeEvent.state === State.END ||
@@ -106,11 +115,19 @@ const QuickScheduleRadial: React.FC<QuickScheduleRadialProps> = ({ visible, cent
         return;
       }
       const idx = getIndexFromPoint(endX, endY);
-      const chosen = OPTIONS[idx].key;
-      startRef.current = null;
-      setHoverIndex(null);
-      setHoverCenter(false);
-      onSelect(chosen);
+      if (idx >= 0 && idx < OPTIONS.length) {
+        const chosen = OPTIONS[idx].key;
+        startRef.current = null;
+        setHoverIndex(null);
+        setHoverCenter(false);
+        onSelect(chosen);
+      } else {
+        // Invalid selection, close menu
+        startRef.current = null;
+        setHoverIndex(null);
+        setHoverCenter(false);
+        onClose();
+      }
     }
   };
 
@@ -121,7 +138,7 @@ const QuickScheduleRadial: React.FC<QuickScheduleRadialProps> = ({ visible, cent
       <TouchableWithoutFeedback
         onPress={() => {
           // Ignore the initial tap that opened the menu
-          if (openTimestamp && Date.now() - openTimestamp < 250) {
+          if (openTimestamp && Date.now() - openTimestamp < 300) {
             return;
           }
           onClose();
@@ -134,7 +151,7 @@ const QuickScheduleRadial: React.FC<QuickScheduleRadialProps> = ({ visible, cent
         <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
           {(() => {
             const size = RADIUS * 2;
-            const centerSize = 72; // bigger, easier to hit
+            const centerSize = 90; // Increased from 72 for better touch target
             return (
               <View
                 style={[
@@ -235,6 +252,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.background.surface,
+    // Add padding to increase touch target size
+    padding: 8,
   },
   label: {
     marginTop: 6,
@@ -246,6 +265,8 @@ const styles = StyleSheet.create({
   },
   quadrantActive: {
     backgroundColor: colors.primary,
+    // Add subtle animation effect
+    transform: [{ scale: 1.05 }],
   },
   topLeft: { left: 0, top: 0 },
   topRight: { right: 0, top: 0 },

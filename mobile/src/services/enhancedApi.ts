@@ -91,6 +91,15 @@ class EnhancedAPI {
     );
   }
 
+  async getEventsForTask(taskId: string): Promise<any> {
+    return this.makeRequest(
+      `${configService.getBaseUrl()}/calendar/events/task/${taskId}`,
+      { method: 'GET' },
+      ErrorCategory.CALENDAR,
+      'getEventsForTask'
+    );
+  }
+
   async createEvent(eventData: {
     summary: string;
     description?: string;
@@ -160,6 +169,29 @@ class EnhancedAPI {
       ErrorCategory.CALENDAR,
       'deleteEvent'
     );
+  }
+
+  // Convenience: schedule a task by creating a linked calendar event
+  async scheduleTaskOnCalendar(taskId: string, data: {
+    summary: string;
+    description?: string;
+    startTime: string;
+    endTime: string;
+    timeZone?: string;
+    location?: string;
+    isAllDay?: boolean;
+  }): Promise<any> {
+    return this.createEvent({
+      summary: data.summary,
+      description: data.description,
+      startTime: data.startTime,
+      endTime: data.endTime,
+      timeZone: data.timeZone,
+      location: data.location,
+      isAllDay: data.isAllDay,
+      eventType: 'task',
+      taskId,
+    });
   }
 
   async syncCalendar(): Promise<any> {

@@ -76,8 +76,9 @@ export const EventCard = React.memo<EventCardProps>(({
   };
 
   const getEventColor = () => {
-    if (isTask) {
-      switch (task?.priority) {
+    // Helper to map priority to color
+    const mapPriorityToColor = (p?: string) => {
+      switch (p) {
         case 'high':
           return colors.error;
         case 'medium':
@@ -85,11 +86,21 @@ export const EventCard = React.memo<EventCardProps>(({
         case 'low':
           return colors.success;
         default:
-          // If no priority is set, default tasks to green to match calendar dots
           return colors.success;
       }
+    };
+
+    if (isTask) {
+      return mapPriorityToColor(task?.priority);
     }
-    // Calendar events: use info color to distinguish from tasks
+
+    // Calendar events linked to a task → use green (or priority color if provided on event)
+    const linkedPriority = (calendarEvent as any)?.task_priority || (calendarEvent as any)?.priority;
+    if ((calendarEvent as any)?.task_id) {
+      return mapPriorityToColor(typeof linkedPriority === 'string' ? linkedPriority.toLowerCase() : undefined);
+    }
+
+    // Plain calendar events → blue info color
     return colors.info;
   };
 
@@ -317,6 +328,27 @@ export const EventCard = React.memo<EventCardProps>(({
           <View style={styles.titleContainer}>
             <Text style={styles.title}>{getEventTitle()}</Text>
             {getStatusIndicator()}
+            {/* Priority badge for task-linked events (if priority is available on the event) */}
+            {!isTask && (calendarEvent as any)?.task_id && ((calendarEvent as any)?.task_priority || (calendarEvent as any)?.priority) ? (
+              <View style={[
+                styles.priorityBadge,
+                {
+                  backgroundColor:
+                    ((p => {
+                      const pl = typeof p === 'string' ? p.toLowerCase() : undefined;
+                      return pl === 'high'
+                        ? colors.error
+                        : pl === 'medium'
+                        ? colors.warning
+                        : colors.success;
+                    })((calendarEvent as any)?.task_priority || (calendarEvent as any)?.priority))
+                }
+              ]}>
+                <Text style={styles.priorityText}>
+                  {String(((calendarEvent as any)?.task_priority || (calendarEvent as any)?.priority) || '').replace(/^./, c => c.toUpperCase())}
+                </Text>
+              </View>
+            ) : null}
           </View>
                      <View style={styles.headerRight}>
              <Text style={styles.time}>{getEventTime()}</Text>
@@ -496,6 +528,7 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     textTransform: 'capitalize',
   },
+  // Removed Task link badge styles; using priorityBadge instead
   statusIndicator: {
     width: 8,
     height: 8,

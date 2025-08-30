@@ -39,7 +39,7 @@ import {
   useFadeAnimation, 
   useScaleAnimation 
 } from '../../utils/animations';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Octicons';
 
 // const { width } = Dimensions.get('window');
@@ -73,10 +73,13 @@ export default function CalendarScreen() {
   const [showImportPrompt, setShowImportPrompt] = useState(false);
   const [importing, setImporting] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
-  
+
   // Enhanced error handling state
   const [currentError, setCurrentError] = useState<UserFriendlyError | null>(null);
   const [_errorVisible, setErrorVisible] = useState(false);
+
+  // Track if this is the first load to avoid double loading
+  const [isFirstLoad, setIsFirstLoad] = useState(true);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -218,7 +221,18 @@ export default function CalendarScreen() {
   // Load data on mount
   useEffect(() => {
     loadCalendarData();
+    setIsFirstLoad(false);
   }, [loadCalendarData]);
+
+  // Refresh data when screen comes into focus (e.g., when user navigates to calendar tab)
+  useFocusEffect(
+    React.useCallback(() => {
+      // Skip refresh on first load to avoid double loading
+      if (!isFirstLoad) {
+        loadCalendarData();
+      }
+    }, [isFirstLoad, loadCalendarData])
+  );
 
   // Check first-visit import conditions
   useEffect(() => {
@@ -294,42 +308,78 @@ export default function CalendarScreen() {
     setFormModalVisible(true);
   }, []);
 
-  // Handle event delete with enhanced error handling
+  // Handle event delete with optimistic updates
   const handleEventDelete = useCallback(async (eventId: string) => {
-    let event: CalendarEvent | undefined;
-    let task: Task | undefined;
-    
+    let deletedEvent: CalendarEvent | undefined;
+
     try {
-      // Determine if it's an event or task based on the ID
-      event = state.events.find(e => e.id === eventId);
-      task = state.tasks.find(t => t.id === eventId);
-      
-      if (event) {
-        await enhancedAPI.deleteEvent(eventId);
-      } else if (task) {
-        await enhancedAPI.deleteTask(eventId);
-      } else {
-        throw new Error('Event or task not found');
+      // Find the event to delete
+      deletedEvent = state.events.find(e => e.id === eventId);
+
+      if (!deletedEvent) {
+        throw new Error('Event not found');
       }
-      
-      // Reload data to reflect changes
-      await loadCalendarData();
+
+      // Optimistic update: immediately remove the event from UI
+      setState(prev => ({
+        ...prev,
+        events: prev.events.filter(e => e.id !== eventId)
+      }));
+
+      // Also remove from filtered events if it exists there
+      setFilteredEvents(prev => prev.filter(e => e.id !== eventId));
+
       hapticFeedback.success();
-    } catch (_error) {
-      // error deleting event
+
+      // Make the API call in the background
+      try {
+        await enhancedAPI.deleteEvent(eventId);
+        // Success - optimistic update was correct, no further action needed
+      } catch (apiError) {
+        // API call failed - restore the event and show error
+        if (deletedEvent) {
+          setState(prev => ({
+            ...prev,
+            events: [...prev.events, deletedEvent!]
+          }));
+          setFilteredEvents(prev => [...prev, deletedEvent!]);
+        }
+
+        hapticFeedback.error();
+
+        // Handle error with enhanced error handling
+        if (apiError && typeof apiError === 'object' && 'title' in apiError) {
+          setCurrentError(apiError as UserFriendlyError);
+          setErrorVisible(true);
+        } else {
+          const userError = await errorHandlingService.handleError(
+            apiError,
+            ErrorCategory.CALENDAR,
+            {
+              operation: 'deleteEvent',
+              endpoint: `calendar/events/${eventId}`,
+              timestamp: Date.now(),
+              retryCount: 0,
+            }
+          );
+          setCurrentError(userError);
+          setErrorVisible(true);
+        }
+      }
+    } catch (initialError) {
+      // Error finding event or other initial error
       hapticFeedback.error();
-      
-      // Handle error with enhanced error handling
-      if (_error && typeof _error === 'object' && 'title' in _error) {
-        setCurrentError(_error as UserFriendlyError);
+
+      if (initialError && typeof initialError === 'object' && 'title' in initialError) {
+        setCurrentError(initialError as UserFriendlyError);
         setErrorVisible(true);
       } else {
         const userError = await errorHandlingService.handleError(
-          _error,
-          event ? ErrorCategory.CALENDAR : ErrorCategory.TASKS,
+          initialError,
+          ErrorCategory.CALENDAR,
           {
             operation: 'deleteEvent',
-            endpoint: event ? `calendar/events/${eventId}` : `tasks/${eventId}`,
+            endpoint: `calendar/events/${eventId}`,
             timestamp: Date.now(),
             retryCount: 0,
           }
@@ -338,7 +388,7 @@ export default function CalendarScreen() {
         setErrorVisible(true);
       }
     }
-  }, [state.events, state.tasks, loadCalendarData]);
+  }, [state.events]);
 
   // Handle task completion with enhanced error handling
   const handleTaskComplete = useCallback(async (taskId: string) => {
@@ -403,18 +453,15 @@ export default function CalendarScreen() {
     }
   }, [state.tasks]);
 
-  // Handle event/task rescheduling with enhanced error handling
+  // Handle event rescheduling with enhanced error handling
   const handleReschedule = useCallback(async (eventId: string, newDate: Date) => {
     let event: CalendarEvent | undefined;
-    let task: Task | undefined;
     
     try {
-      // Determine if it's an event or task based on the ID
+      // Only reschedule calendar events from Calendar screen
       event = state.events.find(e => e.id === eventId);
-      task = state.tasks.find(t => t.id === eventId);
       
       if (event) {
-        // Reschedule calendar event
         const startTime = event.start_time || event.start?.dateTime;
         const endTime = event.end_time || event.end?.dateTime;
         
@@ -435,17 +482,8 @@ export default function CalendarScreen() {
             location: event.location,
           });
         }
-      } else if (task) {
-        // Reschedule task
-        const newDueDate = new Date(newDate);
-        if (task.due_date) {
-          const originalDate = new Date(task.due_date);
-          newDueDate.setHours(originalDate.getHours(), originalDate.getMinutes(), 0, 0);
-        }
-        
-        await enhancedAPI.updateTask(eventId, {
-          due_date: newDueDate.toISOString(),
-        });
+      } else {
+        throw new Error('Event not found');
       }
       
       // Refresh data
@@ -462,10 +500,10 @@ export default function CalendarScreen() {
       } else {
         const userError = await errorHandlingService.handleError(
           _error,
-          event ? ErrorCategory.CALENDAR : ErrorCategory.TASKS,
+          ErrorCategory.CALENDAR,
           {
             operation: 'rescheduleEvent',
-            endpoint: event ? `calendar/events/${eventId}` : `tasks/${eventId}`,
+            endpoint: `calendar/events/${eventId}`,
             timestamp: Date.now(),
             retryCount: 0,
           }
@@ -474,7 +512,7 @@ export default function CalendarScreen() {
         setErrorVisible(true);
       }
     }
-  }, [state.events, state.tasks, loadCalendarData]);
+  }, [state.events, loadCalendarData]);
 
   // Create new event
   const handleCreateEvent = useCallback(() => {
@@ -499,12 +537,15 @@ export default function CalendarScreen() {
             location: formData.location,
           });
         } else {
-          // It's a task
-          await enhancedAPI.updateTask(editingEvent.id, {
-            title: formData.title,
+          // It's a task – instead of modifying the task, create a linked calendar event
+          await enhancedAPI.createEvent({
+            summary: formData.title,
             description: formData.description,
-            due_date: formData.startTime.toISOString(),
-            estimated_duration_minutes: Math.round((formData.endTime.getTime() - formData.startTime.getTime()) / (1000 * 60)),
+            startTime: formData.startTime.toISOString(),
+            endTime: formData.endTime.toISOString(),
+            location: formData.location,
+            eventType: 'task',
+            taskId: (editingEvent as any).id,
           });
         }
       } else {
@@ -571,7 +612,7 @@ export default function CalendarScreen() {
     });
   }, [state.goals]);
 
-  // Get events for selected date
+  // Get events for selected date (only calendar events; tasks are no longer rendered directly as events)
   const getEventsForSelectedDate = useCallback(() => {
     const selectedDateStr = formatDateToYYYYMMDD(state.selectedDate);
     const dayEvents: DayViewEvent[] = [];
@@ -620,27 +661,7 @@ export default function CalendarScreen() {
       }
     });
 
-    // Add tasks
-    filteredTasks.forEach(task => {
-      if (task.due_date) {
-        try {
-          const taskDate = new Date(task.due_date);
-          if (getLocalDateKey(taskDate) === selectedDateStr) {
-            dayEvents.push({
-              id: task.id,
-              title: task.title,
-              startTime: new Date(task.due_date),
-              endTime: new Date(new Date(task.due_date).getTime() + (task.estimated_duration_minutes || 30) * 60 * 1000),
-              type: 'task',
-              data: task,
-              color: task.priority === 'high' ? colors.error : task.priority === 'medium' ? colors.warning : colors.success,
-            });
-          }
-        } catch (error) {
-          // invalid task date
-        }
-      }
-    });
+    // Do not render raw tasks as events anymore; tasks should appear as linked calendar events via task_id
 
     // Collect goals due today for a lightweight summary card in Day view
     state.goals.forEach(goal => {
@@ -657,7 +678,7 @@ export default function CalendarScreen() {
     (getEventsForSelectedDate as any)._goalsDueToday = goalsDueToday;
 
     return dayEvents.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
-  }, [filteredEvents, filteredTasks, state.selectedDate]);
+  }, [filteredEvents, state.selectedDate]);
 
   // Get goals due in the current month
   const getGoalsForCurrentMonth = useCallback(() => {
@@ -696,7 +717,7 @@ export default function CalendarScreen() {
       return marked[date];
     };
 
-    // Events → blue dot (info) to match EventCard accents; skip goal markers
+    // Events → blue dot (info) for regular events, green dot (success) for task-linked events; skip goal markers
     filteredEvents.forEach(event => {
       try {
         let eventStartTime: string | undefined;
@@ -710,23 +731,17 @@ export default function CalendarScreen() {
         if ((event as any).event_type === 'goal') {return;}
         const date = getLocalDateKey(new Date(eventStartTime));
         const entry = ensureEntry(date);
-        if (!entry.dots.some(d => d.color === colors.info)) {
-          entry.dots.push({ color: colors.info });
+
+        // Determine dot color based on whether event is linked to a task
+        const dotColor = (event as any).task_id ? colors.success : colors.info;
+
+        if (!entry.dots.some(d => d.color === dotColor)) {
+          entry.dots.push({ color: dotColor });
         }
       } catch {}
     });
 
-    // Tasks → green dot (success)
-    filteredTasks.forEach(task => {
-      if (!task.due_date) {return;}
-      try {
-        const date = getLocalDateKey(new Date(task.due_date));
-        const entry = ensureEntry(date);
-        if (!entry.dots.some(d => d.color === colors.success)) {
-          entry.dots.push({ color: colors.success });
-        }
-      } catch {}
-    });
+    // Task-linked events get green dots, regular events get blue dots
 
     // Goals → amber dot (warning)
     state.goals.forEach(goal => {
@@ -741,7 +756,7 @@ export default function CalendarScreen() {
     });
 
     return marked;
-  }, [filteredEvents, filteredTasks, state.goals]);
+  }, [filteredEvents, state.goals]);
 
   // Render day view with time blocks
   const renderDayView = useCallback(() => {
@@ -922,7 +937,7 @@ export default function CalendarScreen() {
       });
     }
     
-    // Distribute events into date groups
+    // Distribute events into date groups (calendar events only)
     filteredEvents.forEach(event => {
       try {
         // Handle both database format and Google Calendar API format
@@ -947,31 +962,7 @@ export default function CalendarScreen() {
       }
     });
     
-    // Add tasks to date groups
-    filteredTasks.forEach(task => {
-      if (task.due_date) {
-        try {
-          const taskDate = new Date(task.due_date);
-          const taskDateStr = getLocalDateKey(taskDate);
-          
-          const group = dateGroups.find(g => g.dateString === taskDateStr);
-          if (group) {
-            group.events.push({
-              id: task.id,
-              title: task.title,
-              startTime: taskDate,
-              endTime: new Date(taskDate.getTime() + (task.estimated_duration_minutes || 60) * 60 * 1000),
-              day: taskDate.getDay(),
-              type: 'task' as const,
-              data: task,
-              color: task.priority === 'high' ? colors.error : task.priority === 'medium' ? colors.warning : colors.success,
-            });
-          }
-        } catch (error) {
-          // error processing task
-        }
-      }
-    });
+    // Do not add raw tasks to date groups; tasks should appear as calendar events linked via task_id
     
     // Sort events within each date group by start time
     dateGroups.forEach(group => {
@@ -1140,7 +1131,7 @@ export default function CalendarScreen() {
           </View>
           <View style={styles.legendItem}>
             <View style={[styles.legendDot, { backgroundColor: colors.success }]} />
-            <Text style={styles.legendLabel}>Tasks</Text>
+            <Text style={styles.legendLabel}>Task Events</Text>
           </View>
           <View style={styles.legendItem}>
             <View style={[styles.legendDot, { backgroundColor: colors.warning }]} />
