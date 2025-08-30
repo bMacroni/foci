@@ -120,6 +120,28 @@ router.get('/events/date', requireAuth, async (req, res) => {
   }
 });
 
+// Get calendar events for a specific task
+router.get('/events/task/:taskId', requireAuth, async (req, res) => {
+  try {
+    const { taskId } = req.params;
+
+    if (!taskId) {
+      return res.status(400).json({ error: 'Task ID is required' });
+    }
+
+    logger.info(`[Calendar API] Getting events for task ${taskId} for user ${req.user.id}`);
+
+    const events = await getCalendarEventsFromDB(req.user.id, 10, null, null, taskId);
+
+    logger.info(`[Calendar API] Found ${events.length} events for task ${taskId}`);
+
+    res.json(events);
+  } catch (error) {
+    logger.error('Error getting events for task from database:', error);
+    res.status(500).json({ error: 'Failed to fetch events for task' });
+  }
+});
+
 // Create a new calendar event (supports both Google Calendar and direct Supabase)
 router.post('/events', requireAuth, async (req, res) => {
   try {

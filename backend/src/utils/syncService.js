@@ -74,15 +74,12 @@ export async function syncGoogleCalendarEvents(userId) {
  * @param {number} maxResults - maximum number of events to return
  * @param {Date} timeMin - start time filter (optional)
  * @param {Date} timeMax - end time filter (optional)
+ * @param {string} taskId - filter by task ID (optional)
  * @returns {Promise<Array>} events from database
  */
-export async function getCalendarEventsFromDB(userId, maxResults = 100, timeMin = null, timeMax = null) {
+export async function getCalendarEventsFromDB(userId, maxResults = 100, timeMin = null, timeMax = null, taskId = null) {
   try {
-    logger.debug('=== DATABASE QUERY DEBUG ===');
-    logger.debug('UserId:', userId);
-    logger.debug('MaxResults:', maxResults);
-    logger.debug('TimeMin:', timeMin ? timeMin.toISOString() : 'null');
-    logger.debug('TimeMax:', timeMax ? timeMax.toISOString() : 'null');
+
 
     let query = supabase
       .from('calendar_events')
@@ -94,23 +91,17 @@ export async function getCalendarEventsFromDB(userId, maxResults = 100, timeMin 
     // Add time filters if provided
     if (timeMin) {
       query = query.gte('start_time', timeMin.toISOString());
-      logger.debug('Added timeMin filter:', timeMin.toISOString());
     }
     if (timeMax) {
       query = query.lte('start_time', timeMax.toISOString());
-      logger.debug('Added timeMax filter:', timeMax.toISOString());
+    }
+
+    // Add task ID filter if provided
+    if (taskId) {
+      query = query.eq('task_id', taskId);
     }
 
     const { data, error } = await query;
-    logger.debug('Database query result - count:', data ? data.length : 0);
-    if (data && data.length > 0) {
-      logger.debug('Sample events:', data.slice(0, 2).map(e => ({
-        id: e.id,
-        title: e.title,
-        start_time: e.start_time,
-        end_time: e.end_time
-      })));
-    }
 
     if (error) {
       logger.error('Error fetching events from database:', error);
@@ -171,25 +162,28 @@ export async function getUserSubscriptionTier(userId) {
  */
 export function calculateDateRangeForTier(subscriptionTier) {
   const now = new Date();
-  
+
+  // Calculate start of today (00:00:00) to include all events from today
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
   switch (subscriptionTier) {
     case 'premium':
       // Premium users: today to 365 days ahead
       return {
-        timeMin: now,
+        timeMin: startOfToday,
         timeMax: new Date(now.getTime() + (365 * 24 * 60 * 60 * 1000))
       };
     case 'basic':
       // Basic users: today to 60 days ahead
       return {
-        timeMin: now,
+        timeMin: startOfToday,
         timeMax: new Date(now.getTime() + (60 * 24 * 60 * 60 * 1000))
       };
     case 'free':
     default:
       // Free users: today to 60 days ahead (same as basic for now)
       return {
-        timeMin: now,
+        timeMin: startOfToday,
         timeMax: new Date(now.getTime() + (60 * 24 * 60 * 60 * 1000))
       };
   }
