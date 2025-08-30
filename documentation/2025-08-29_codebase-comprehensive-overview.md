@@ -364,10 +364,12 @@ The platform consists of three main applications:
 - `filterTasks()`: Applies filters to task list
 - `updateTask()`: Updates task information
 - `toggleComplete()`: Toggles task completion status
-- `findAvailableTimeSlot()`: Finds optimal calendar slots for tasks
+- `findAvailableTimeSlot()`: Finds optimal calendar slots for tasks with smart date/time selection
 - `handleQuickSchedule()`: Schedules tasks to calendar with conflict detection
+- `handleFocusSkip()`: Removes current focus task events and schedules new ones
 - Focus workflow: Automatically schedules today's focus tasks to calendar
 - Event cleanup: Removes previous focus task's calendar events when changing focus
+- Momentum mode integration: Handles calendar events for both completion and skipping
 
 #### `mobile/src/screens/goals/GoalsScreen.tsx` (75KB, 2058 lines)
 **Purpose**: Goal management screen with hierarchy display.
@@ -540,8 +542,10 @@ The platform consists of three main applications:
 
 #### Today's Focus Auto-Scheduling
 - **Feature**: Automatically schedules today's focus tasks to available calendar slots
-- **Implementation**: Smart slot finding algorithm with conflict detection
+- **Implementation**: Smart slot finding algorithm with conflict detection and future-aware scheduling
 - **Workflow**: Set task as focus → Find available slot → Create calendar event → Show confirmation
+- **Smart Scheduling**: Automatically schedules for tomorrow when current time is after working hours
+- **Future-Proof**: Ensures scheduled slots are at least 15 minutes in the future
 - **Momentum Mode Integration**: Automatically schedules next focus task when current one is completed
 
 #### Focus Task Calendar Event Cleanup
@@ -549,6 +553,7 @@ The platform consists of three main applications:
 - **Fix**: Added automatic removal of previous focus task's calendar events
 - **Implementation**: `getEventsForTask()` API + event deletion logic
 - **Momentum Mode**: Automatically removes completed focus task events and schedules new ones
+- **Skip Functionality**: Automatically removes current focus task events and schedules new ones when skipping
 
 #### Enhanced API Methods
 - **New Endpoints**:
