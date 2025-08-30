@@ -946,11 +946,23 @@ export const TasksScreen: React.FC = () => {
     const focus = getFocusTask();
     if (!focus) { return; }
     try {
+      // Remove the current focus task's calendar event
+      try {
+        const currentEvents = await enhancedAPI.getEventsForTask(focus.id);
+        for (const event of currentEvents) {
+          await enhancedAPI.deleteEvent(event.id);
+        }
+      } catch (removeError) {
+        console.warn('Failed to remove current focus task calendar event:', removeError);
+        // Continue anyway - this is not critical
+      }
+
       const next = await tasksAPI.focusNext({
         current_task_id: focus.id,
         travel_preference: travelPreference,
         exclude_ids: [focus.id],
       });
+
       setTasks(prev => {
         const mapped = prev.map(t => {
           if (t.id === focus.id) { return { ...t, is_today_focus: false }; }
@@ -962,8 +974,43 @@ export const TasksScreen: React.FC = () => {
         }
         return mapped;
       });
-      setToastMessage(`Next up: ${next.title}`);
-      setToastCalendarEvent(false);
+
+      // Schedule the new focus task to calendar
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const todaysEvents = await enhancedAPI.getEventsForDate(today);
+        const taskDuration = (next as any).estimated_duration_minutes || 60;
+
+        // Find available time slot using the full algorithm
+        const availableSlot = findAvailableTimeSlot(todaysEvents, taskDuration);
+
+        if (availableSlot) {
+          await enhancedAPI.scheduleTaskOnCalendar(next.id, {
+            summary: next.title,
+            description: next.description,
+            startTime: availableSlot.start.toISOString(),
+            endTime: availableSlot.end.toISOString(),
+            isAllDay: false,
+          });
+
+          const timeString = availableSlot.start.toLocaleTimeString([], {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+          });
+
+          setToastMessage(`Next up: ${next.title} (scheduled at ${timeString})`);
+          setToastCalendarEvent(true);
+        } else {
+          setToastMessage(`Next up: ${next.title} (no available calendar slots)`);
+          setToastCalendarEvent(false);
+        }
+      } catch (calendarError) {
+        console.warn('Failed to schedule next focus task on calendar:', calendarError);
+        setToastMessage(`Next up: ${next.title}`);
+        setToastCalendarEvent(false);
+      }
+
       setShowToast(true);
     } catch (err: any) {
       if (err?.code === 404) {
