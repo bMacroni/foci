@@ -305,6 +305,7 @@ export const TasksScreen: React.FC = () => {
   const findAvailableTimeSlot = (events: any[], taskDuration: number = 60) => {
     const now = new Date();
     const today = now.toISOString().split('T')[0];
+    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString().split('T')[0];
     const currentHour = now.getHours();
 
     // Working hours: 9 AM to 6 PM
@@ -325,8 +326,9 @@ export const TasksScreen: React.FC = () => {
           return; // Skip events without time
         }
 
-        // Only consider events for today
-        if (startTime.toISOString().split('T')[0] === today) {
+        // Only consider events for today and tomorrow (since we might schedule for tomorrow)
+        const eventDate = startTime.toISOString().split('T')[0];
+        if (eventDate === today || eventDate === tomorrow) {
           bookedSlots.push({ start: startTime, end: endTime });
         }
       });
@@ -335,14 +337,34 @@ export const TasksScreen: React.FC = () => {
     // Sort booked slots by start time
     bookedSlots.sort((a, b) => a.start.getTime() - b.start.getTime());
 
-    // Find available slot starting from current time or 9 AM, whichever is later
-    let searchStart = Math.max(currentHour, workingHours.start);
+    const currentTime = new Date();
 
+    // Determine if we should schedule for today or tomorrow
+    const scheduleForTomorrow = currentHour >= workingHours.end; // After 6 PM
+
+    let targetDate: Date;
+    let searchStart: number;
+
+    if (scheduleForTomorrow) {
+      // Schedule for tomorrow starting from 9 AM
+      targetDate = new Date(currentTime.getFullYear(), currentTime.getMonth(), currentTime.getDate() + 1);
+      searchStart = workingHours.start;
+    } else {
+      // Schedule for today starting from current hour or 9 AM, whichever is later
+      targetDate = new Date(currentTime.getFullYear(), currentTime.getMonth(), currentTime.getDate());
+      searchStart = Math.max(currentHour + 1, workingHours.start); // +1 to ensure future slot
+    }
+
+    // First, try working hours (9 AM - 6 PM)
     for (let hour = searchStart; hour < workingHours.end; hour++) {
-      // Create slot for today at the specified hour in local timezone
-      const today = new Date();
-      const slotStart = new Date(today.getFullYear(), today.getMonth(), today.getDate(), hour, 0, 0, 0);
-      const slotEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), hour, taskDuration, 0, 0);
+      const slotStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), hour, 0, 0, 0);
+      const slotEnd = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), hour, taskDuration, 0, 0);
+
+      // Ensure slot is in the future (at least 15 minutes from now)
+      const minFutureTime = new Date(currentTime.getTime() + 15 * 60 * 1000);
+      if (slotStart <= minFutureTime) {
+        continue; // Skip slots that are too soon
+      }
 
       // Check if this slot conflicts with any booked events
       const conflicts = bookedSlots.some(booked => {
@@ -354,19 +376,42 @@ export const TasksScreen: React.FC = () => {
       }
     }
 
-    // If no slots found in working hours, try after 6 PM
-    for (let hour = workingHours.end; hour < 22; hour++) {
-      // Create slot for today at the specified hour in local timezone
-      const today = new Date();
-      const slotStart = new Date(today.getFullYear(), today.getMonth(), today.getDate(), hour, 0, 0, 0);
-      const slotEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), hour, taskDuration, 0, 0);
+    // If no slots found in working hours, try after 6 PM (but only if scheduling for today)
+    if (!scheduleForTomorrow) {
+      for (let hour = workingHours.end; hour < 22; hour++) {
+        const slotStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), hour, 0, 0, 0);
+        const slotEnd = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), hour, taskDuration, 0, 0);
 
-      const conflicts = bookedSlots.some(booked => {
-        return (slotStart < booked.end && slotEnd > booked.start);
-      });
+        // Ensure slot is in the future (at least 15 minutes from now)
+        const minFutureTime = new Date(currentTime.getTime() + 15 * 60 * 1000);
+        if (slotStart <= minFutureTime) {
+          continue; // Skip slots that are too soon
+        }
 
-      if (!conflicts) {
-        return { start: slotStart, end: slotEnd };
+        const conflicts = bookedSlots.some(booked => {
+          return (slotStart < booked.end && slotEnd > booked.start);
+        });
+
+        if (!conflicts) {
+          return { start: slotStart, end: slotEnd };
+        }
+      }
+    }
+
+    // If still no slots found and we were scheduling for today, try tomorrow
+    if (!scheduleForTomorrow) {
+      const tomorrow = new Date(currentTime.getFullYear(), currentTime.getMonth(), currentTime.getDate() + 1);
+      for (let hour = workingHours.start; hour < workingHours.end; hour++) {
+        const slotStart = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), hour, 0, 0, 0);
+        const slotEnd = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), hour, taskDuration, 0, 0);
+
+        const conflicts = bookedSlots.some(booked => {
+          return (slotStart < booked.end && slotEnd > booked.start);
+        });
+
+        if (!conflicts) {
+          return { start: slotStart, end: slotEnd };
+        }
       }
     }
 
@@ -665,13 +710,16 @@ export const TasksScreen: React.FC = () => {
                       isAllDay: false,
                     });
 
-                    const timeString = availableSlot.start.toLocaleTimeString([], {
-                      hour: 'numeric',
-                      minute: '2-digit',
-                      hour12: true
-                    });
+                                      const timeString = availableSlot.start.toLocaleTimeString([], {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true
+                  });
 
-                    setToastMessage(`Set as Today's Focus & scheduled at ${timeString}.`);
+                  const isTomorrow = availableSlot.start.toDateString() !== new Date().toDateString();
+                  const dateLabel = isTomorrow ? 'tomorrow' : 'today';
+
+                  setToastMessage(`Set as Today's Focus & scheduled ${dateLabel} at ${timeString}.`);
                   } catch (apiError) {
                     console.error('Calendar API error:', apiError);
                     // Still set as focus but don't show scheduling success
@@ -867,7 +915,9 @@ export const TasksScreen: React.FC = () => {
                 hour12: true
               });
 
-              setToastMessage(`Next up: ${next.title} (scheduled at ${timeString})`);
+              const isTomorrow = availableSlot.start.toDateString() !== new Date().toDateString();
+              const dateLabel = isTomorrow ? 'tomorrow' : 'today';
+              setToastMessage(`Next up: ${next.title} (scheduled ${dateLabel} at ${timeString})`);
               setToastCalendarEvent(true);
             } else {
               setToastMessage(`Next up: ${next.title} (no available calendar slots)`);
@@ -999,7 +1049,9 @@ export const TasksScreen: React.FC = () => {
             hour12: true
           });
 
-          setToastMessage(`Next up: ${next.title} (scheduled at ${timeString})`);
+          const isTomorrow = availableSlot.start.toDateString() !== new Date().toDateString();
+          const dateLabel = isTomorrow ? 'tomorrow' : 'today';
+          setToastMessage(`Next up: ${next.title} (scheduled ${dateLabel} at ${timeString})`);
           setToastCalendarEvent(true);
         } else {
           setToastMessage(`Next up: ${next.title} (no available calendar slots)`);
