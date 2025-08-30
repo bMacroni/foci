@@ -542,11 +542,13 @@ The platform consists of three main applications:
 - **Feature**: Automatically schedules today's focus tasks to available calendar slots
 - **Implementation**: Smart slot finding algorithm with conflict detection
 - **Workflow**: Set task as focus → Find available slot → Create calendar event → Show confirmation
+- **Momentum Mode Integration**: Automatically schedules next focus task when current one is completed
 
 #### Focus Task Calendar Event Cleanup
 - **Issue**: Previous focus task's calendar event remained when changing focus
 - **Fix**: Added automatic removal of previous focus task's calendar events
 - **Implementation**: `getEventsForTask()` API + event deletion logic
+- **Momentum Mode**: Automatically removes completed focus task events and schedules new ones
 
 #### Enhanced API Methods
 - **New Endpoints**:
