@@ -704,11 +704,11 @@ export const TasksScreen: React.FC = () => {
               // First, remove any existing focus task's calendar event
               if (currentFocusTask) {
                 try {
-                  console.log('Removing calendar event for previous focus task:', currentFocusTask.id);
+                  // Removing calendar event for previous focus task
                   const focusEvents = await enhancedAPI.getEventsForTask(currentFocusTask.id);
                   for (const event of focusEvents) {
                     await enhancedAPI.deleteEvent(event.id);
-                    console.log('Deleted calendar event:', event.id);
+                    // Deleted calendar event
                   }
                 } catch (removeError) {
                   console.warn('Failed to remove previous focus task calendar event:', removeError);

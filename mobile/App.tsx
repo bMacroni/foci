@@ -20,7 +20,7 @@ function App() {
       android: '416233535798-g0enucudvioslu32ditbja3q0pn4iom7.apps.googleusercontent.com', // Firebase-generated Android client ID
       ios: '416233535798-...', // Firebase-generated iOS client ID (if you have one)
     });
-    console.log('[App] Setting up Google Sign-In...');
+    // Setting up Google Sign-In...
     try {
       const baseConfig: any = {
         webClientId: configService.getGoogleWebClientId(), // Firebase web client ID
@@ -36,7 +36,7 @@ function App() {
         redirectUri: `${configService.getBaseUrl()}/auth/google/callback`,
       };
       GoogleSignin.configure(baseConfig);
-      console.log('[App] Google Sign-In configured successfully');
+      // Google Sign-In configured successfully
     } catch (e) {
       console.warn('Failed to configure Google Sign-In at app init:', e);
     }

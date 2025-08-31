@@ -346,30 +346,37 @@ The platform consists of three main applications:
 
 ### Screen Components
 
-#### `mobile/src/screens/calendar/CalendarScreen.tsx` (62KB, 1876 lines)
-**Purpose**: Main calendar interface for mobile with event management.
+#### `mobile/src/screens/calendar/CalendarScreen.tsx` (62KB, 1886 lines)
+**Purpose**: Main calendar interface for mobile with event management and task integration.
 
 **Key Functions:**
-- `renderCalendarView()`: Renders calendar grid
-- `handleEventPress()`: Handles event selection
-- `createNewEvent()`: Creates new calendar events
-- `syncCalendar()`: Syncs with Google Calendar
-- `handleDragDrop()`: Handles drag-and-drop operations
+- `loadCalendarData()`: Loads calendar events with enhanced error handling
+- `handleEventPress()`: Handles event selection and navigation
+- `handleSaveEvent()`: Creates/updates calendar events with task/goal linkage preservation
+- `syncCalendar()`: Syncs with Google Calendar with conflict resolution
+- `handleFilterChange()`: Manages search and filtering for events and tasks
+- `getEventsForSelectedDate()`: Retrieves events for specific date with task/goal integration
+- `getLapsedGoals()`: Identifies overdue goals for display
+- Enhanced error handling with user-friendly error messages and retry functionality
+- Event preservation logic maintains task and goal associations during updates
 
 #### `mobile/src/screens/tasks/TasksScreen.tsx` (46KB, 1299 lines)
-**Purpose**: Task management screen with filtering and actions.
+**Purpose**: Task management screen with advanced calendar integration and focus workflow.
 
 **Key Functions:**
-- `loadTasks()`: Loads and displays tasks
-- `filterTasks()`: Applies filters to task list
-- `updateTask()`: Updates task information
-- `toggleComplete()`: Toggles task completion status
-- `findAvailableTimeSlot()`: Finds optimal calendar slots for tasks using user scheduling preferences
-- `handleQuickSchedule()`: Schedules tasks to calendar with conflict detection
+- `loadTasks()`: Loads and displays tasks with enhanced error handling
+- `filterTasks()`: Applies filters to task list with real-time updates
+- `updateTask()`: Updates task information with optimistic UI updates
+- `toggleComplete()`: Toggles task completion status with momentum mode integration
+- `findAvailableTimeSlot()`: Finds optimal calendar slots using user scheduling preferences
+- `handleQuickSchedule()`: Schedules tasks to calendar with smart conflict detection
 - `handleFocusSkip()`: Removes current focus task events and schedules new ones
-- Focus workflow: Automatically schedules today's focus tasks to calendar
-- Event cleanup: Removes previous focus task's calendar events when changing focus
-- Momentum mode integration: Handles calendar events for both completion and skipping
+- `handleFocusComplete()`: Completes focus task and schedules next one in momentum mode
+- Focus workflow: Automatically schedules today's focus tasks to calendar with smart time selection
+- Event cleanup: Automatically removes previous focus task's calendar events when changing focus
+- Momentum mode integration: Handles calendar events for both completion and skipping with seamless transitions
+- Smart scheduling prevention: Prevents scheduling events in the past
+- Enhanced error handling: Proper user feedback for scheduling success/failure
 
 #### `mobile/src/screens/goals/GoalsScreen.tsx` (75KB, 2058 lines)
 **Purpose**: Goal management screen with hierarchy display.
@@ -572,6 +579,50 @@ The platform consists of three main applications:
 - **Accurate Toast Messages**: Different messages for scheduling success/failure
 - **Optimistic Updates**: Immediate UI updates for event deletion
 - **Calendar Auto-Refresh**: Automatic refresh when navigating to calendar tab
+
+### Latest Feature Branch Enhancements (refactor_calendar-task-display)
+
+#### Smart Calendar Scheduling Prevention
+- **Issue**: Calendar events could be scheduled in the past
+- **Fix**: Enhanced scheduling logic to prevent past event creation
+- **Implementation**: Added time validation before creating calendar events
+- **Impact**: Improved user experience with proper scheduling constraints
+
+#### Skip Button Calendar Integration
+- **Feature**: Skip button now properly integrates with calendar events
+- **Implementation**: Automatic calendar event cleanup when skipping focus tasks
+- **Workflow**: Skip task → Remove calendar event → Schedule next focus task
+- **User Experience**: Seamless integration between task management and calendar
+
+#### Momentum Mode Calendar Integration
+- **Feature**: Enhanced momentum mode with proper calendar event management
+- **Implementation**: Automatic calendar event cleanup and rescheduling
+- **Workflow**: Complete task → Remove event → Schedule next focus → Create new event
+- **User Experience**: Smooth transitions between focus tasks with calendar sync
+
+#### Calendar Sync Issues Resolution
+- **Issue**: Calendar synchronization had timing and data consistency issues
+- **Fix**: Improved sync logic with better error handling and retry mechanisms
+- **Implementation**: Enhanced `syncCalendarEvents()` with conflict resolution
+- **Impact**: More reliable calendar synchronization across devices
+
+#### Event Update Issue Correction
+- **Issue**: Calendar events weren't updating properly when edited
+- **Fix**: Corrected event update logic in CalendarScreen.tsx
+- **Implementation**: Fixed event preservation logic for task/goal linkages
+- **Impact**: Proper event updates maintain task and goal associations
+
+#### Code Quality Improvements
+- **Debug Log Cleanup**: Removed non-essential console.log statements
+- **Error Handling**: Enhanced error handling with proper user feedback
+- **Code Organization**: Improved code structure and readability
+- **Performance**: Optimized calendar rendering and event handling
+
+#### Enhanced Calendar-Task Display Integration
+- **Feature**: Improved visual integration between calendar events and tasks
+- **Implementation**: Better event card design with task/goal indicators
+- **User Experience**: Clearer distinction between different event types
+- **Accessibility**: Enhanced touch targets and visual feedback
 
 ---
 
