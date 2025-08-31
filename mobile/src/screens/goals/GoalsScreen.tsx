@@ -805,7 +805,14 @@ export default function GoalsScreen({ navigation }: any) {
         </View>
 
         {/* Steps expander below Next Step */}
-        <TouchableOpacity style={styles.stepsHeader} onPress={() => toggleExpand(goal.id)}>
+        <TouchableOpacity
+          style={styles.stepsHeader}
+          onPress={() => toggleExpand(goal.id)}
+          accessibilityRole="button"
+          accessibilityLabel="Toggle steps"
+          accessibilityState={{ expanded: !!expandedGoals[goal.id] }}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
           <View style={styles.stepsHeaderContent}>
             <Text style={styles.stepsHeaderText}>
               Steps ({currentCompleted}/{currentTotal})
@@ -1841,7 +1848,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.sm,
     paddingHorizontal: spacing.sm,
     borderWidth: 1,
-    borderColor: colors.border?.light,
+    borderColor: colors.border.light,
   },
   stepsHeaderContent: {
     flexDirection: 'row',
@@ -1855,10 +1862,10 @@ const styles = StyleSheet.create({
   },
   stepsExpandIcon: {
     padding: spacing.xs,
-    borderRadius: borderRadius.xs,
-    backgroundColor: colors.background.primary || '#ffffff',
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.background.primary,
     borderWidth: 1,
-    borderColor: colors.border?.light || '#e9ecef',
+    borderColor: colors.border.light,
   },
   stepsList: {
     marginTop: spacing.xs,
