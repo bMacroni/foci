@@ -80,9 +80,11 @@ export const TasksScreen: React.FC = () => {
   const [momentumEnabled, setMomentumEnabled] = useState<boolean>(false);
   const [travelPreference, setTravelPreference] = useState<'allow_travel' | 'home_only'>('allow_travel');
   const [userNotificationPrefs, setUserNotificationPrefs] = useState<any | null>(null);
+  const [userSchedulingPreferences, setUserSchedulingPreferences] = useState<any>(null);
 
   useEffect(() => {
     loadData();
+    loadSchedulingPreferences();
   }, []);
 
   // Auto refresh whenever the Tasks tab/screen gains focus (silent background refresh)
@@ -93,6 +95,22 @@ export const TasksScreen: React.FC = () => {
       return () => {};
     }, [])
   );
+
+  const loadSchedulingPreferences = async () => {
+    try {
+      const prefs = await (enhancedAPI as any).getSchedulingPreferences();
+      setUserSchedulingPreferences(prefs);
+    } catch (error) {
+      console.warn('Failed to load scheduling preferences:', error);
+      // Use defaults if preferences can't be loaded
+      setUserSchedulingPreferences({
+        preferred_start_time: '09:00:00',
+        preferred_end_time: '17:00:00',
+        buffer_time_minutes: 15,
+        work_days: [1, 2, 3, 4, 5]
+      });
+    }
+  };
 
   const loadData = async (options?: { silent?: boolean }) => {
     const silent = !!options?.silent;
@@ -302,14 +320,24 @@ export const TasksScreen: React.FC = () => {
   };
 
   // Find available time slot for today's focus
-  const findAvailableTimeSlot = (events: any[], taskDuration: number = 60) => {
+  const findAvailableTimeSlot = (events: any[], taskDuration: number = 60, userPreferences?: any) => {
     const now = new Date();
     const today = now.toISOString().split('T')[0];
     const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString().split('T')[0];
     const currentHour = now.getHours();
 
-    // Working hours: 9 AM to 6 PM
-    const workingHours = { start: 9, end: 18 };
+    // Use user preferences or fall back to defaults
+    const workingHours = {
+      start: userPreferences?.preferred_start_time
+        ? parseInt(userPreferences.preferred_start_time.split(':')[0])
+        : 9,
+      end: userPreferences?.preferred_end_time
+        ? parseInt(userPreferences.preferred_end_time.split(':')[0])
+        : 18
+    };
+
+    // Use user buffer time preference
+    const bufferMinutes = userPreferences?.buffer_time_minutes || 15;
 
     // Convert events to time slots
     const bookedSlots: { start: Date; end: Date }[] = [];
@@ -360,8 +388,8 @@ export const TasksScreen: React.FC = () => {
       const slotStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), hour, 0, 0, 0);
       const slotEnd = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), hour, taskDuration, 0, 0);
 
-      // Ensure slot is in the future (at least 15 minutes from now)
-      const minFutureTime = new Date(currentTime.getTime() + 15 * 60 * 1000);
+      // Ensure slot is in the future (respecting user buffer time)
+      const minFutureTime = new Date(currentTime.getTime() + bufferMinutes * 60 * 1000);
       if (slotStart <= minFutureTime) {
         continue; // Skip slots that are too soon
       }
@@ -382,8 +410,8 @@ export const TasksScreen: React.FC = () => {
         const slotStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), hour, 0, 0, 0);
         const slotEnd = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), hour, taskDuration, 0, 0);
 
-        // Ensure slot is in the future (at least 15 minutes from now)
-        const minFutureTime = new Date(currentTime.getTime() + 15 * 60 * 1000);
+        // Ensure slot is in the future (respecting user buffer time)
+        const minFutureTime = new Date(currentTime.getTime() + bufferMinutes * 60 * 1000);
         if (slotStart <= minFutureTime) {
           continue; // Skip slots that are too soon
         }
@@ -697,7 +725,7 @@ export const TasksScreen: React.FC = () => {
                 const taskDuration = (task as any).estimated_duration_minutes || 60;
 
                 // Find available time slot using the full algorithm
-                availableSlot = findAvailableTimeSlot(todaysEvents, taskDuration);
+                availableSlot = findAvailableTimeSlot(todaysEvents, taskDuration, userSchedulingPreferences);
 
                 if (availableSlot) {
                   try {
@@ -898,7 +926,7 @@ export const TasksScreen: React.FC = () => {
             const taskDuration = (next as any).estimated_duration_minutes || 60;
 
             // Find available time slot using the full algorithm
-            const availableSlot = findAvailableTimeSlot(todaysEvents, taskDuration);
+            const availableSlot = findAvailableTimeSlot(todaysEvents, taskDuration, userSchedulingPreferences);
 
             if (availableSlot) {
               await enhancedAPI.scheduleTaskOnCalendar(next.id, {
@@ -1032,7 +1060,7 @@ export const TasksScreen: React.FC = () => {
         const taskDuration = (next as any).estimated_duration_minutes || 60;
 
         // Find available time slot using the full algorithm
-        const availableSlot = findAvailableTimeSlot(todaysEvents, taskDuration);
+        const availableSlot = findAvailableTimeSlot(todaysEvents, taskDuration, userSchedulingPreferences);
 
         if (availableSlot) {
           await enhancedAPI.scheduleTaskOnCalendar(next.id, {

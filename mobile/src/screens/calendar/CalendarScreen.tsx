@@ -526,18 +526,37 @@ export default function CalendarScreen() {
     setFormLoading(true);
     try {
       if (editingEvent) {
-        // Update existing event
-        if ('start_time' in editingEvent) {
-          // It's a calendar event
+        // Determine if the item being edited is a calendar event (DB or Google) or a raw task
+        const isCalendarEventLike = (obj: any) => {
+          try {
+            return !!(
+              obj?.start_time ||
+              obj?.end_time ||
+              obj?.start?.dateTime ||
+              obj?.end?.dateTime
+            );
+          } catch { return false; }
+        };
+
+        if (isCalendarEventLike(editingEvent)) {
+          // Update existing calendar event and preserve linkage/context (task/goal classification)
+          const existing: any = editingEvent as any;
+          const preservedEventType = existing.event_type || existing.eventType;
+          const preservedTaskId = existing.task_id || existing.taskId;
+          const preservedGoalId = existing.goal_id || existing.goalId;
+
           await enhancedAPI.updateEvent(editingEvent.id, {
             summary: formData.title,
             description: formData.description,
             startTime: formData.startTime.toISOString(),
             endTime: formData.endTime.toISOString(),
             location: formData.location,
+            eventType: preservedEventType,
+            taskId: preservedTaskId,
+            goalId: preservedGoalId,
           });
         } else {
-          // It's a task – instead of modifying the task, create a linked calendar event
+          // Editing a task: create a linked calendar event for the task
           await enhancedAPI.createEvent({
             summary: formData.title,
             description: formData.description,

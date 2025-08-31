@@ -364,7 +364,7 @@ The platform consists of three main applications:
 - `filterTasks()`: Applies filters to task list
 - `updateTask()`: Updates task information
 - `toggleComplete()`: Toggles task completion status
-- `findAvailableTimeSlot()`: Finds optimal calendar slots for tasks with smart date/time selection
+- `findAvailableTimeSlot()`: Finds optimal calendar slots for tasks using user scheduling preferences
 - `handleQuickSchedule()`: Schedules tasks to calendar with conflict detection
 - `handleFocusSkip()`: Removes current focus task events and schedules new ones
 - Focus workflow: Automatically schedules today's focus tasks to calendar
@@ -541,11 +541,12 @@ The platform consists of three main applications:
 - **Impact**: All today's events now appear correctly in the calendar
 
 #### Today's Focus Auto-Scheduling
-- **Feature**: Automatically schedules today's focus tasks to available calendar slots
+- **Feature**: Automatically schedules today's focus tasks to available calendar slots using user preferences
 - **Implementation**: Smart slot finding algorithm with conflict detection and future-aware scheduling
 - **Workflow**: Set task as focus → Find available slot → Create calendar event → Show confirmation
 - **Smart Scheduling**: Automatically schedules for tomorrow when current time is after working hours
-- **Future-Proof**: Ensures scheduled slots are at least 15 minutes in the future
+- **User Preferences Integration**: Respects preferred work hours, buffer time, and scheduling constraints
+- **Future-Proof**: Ensures scheduled slots are at least user's preferred buffer time in the future
 - **Momentum Mode Integration**: Automatically schedules next focus task when current one is completed
 
 #### Focus Task Calendar Event Cleanup
