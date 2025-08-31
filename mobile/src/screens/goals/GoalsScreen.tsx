@@ -1837,11 +1837,11 @@ const styles = StyleSheet.create({
   stepsHeader: {
     paddingVertical: spacing.xs,
     marginTop: spacing.xs,
-    backgroundColor: colors.background.primary || '#f8f9fa',
+    backgroundColor: colors.background.surface,
     borderRadius: borderRadius.sm,
     paddingHorizontal: spacing.sm,
     borderWidth: 1,
-    borderColor: colors.border?.light || '#e9ecef',
+    borderColor: colors.border?.light,
   },
   stepsHeaderContent: {
     flexDirection: 'row',
