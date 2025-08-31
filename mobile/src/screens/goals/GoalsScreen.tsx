@@ -798,7 +798,7 @@ export default function GoalsScreen({ navigation }: any) {
         </View>
         <View style={styles.nextStepContainer}>
           <View style={styles.inlineLabelRow}>
-            <Icon name="chevron-right" size={14} color={colors.text.secondary} />
+            <Icon name="arrow-right" size={14} color={colors.text.secondary} />
             <Text style={styles.nextStepLabel}>Next Step</Text>
           </View>
           <Text style={styles.nextStepText}>{goal.nextStep}</Text>
@@ -806,10 +806,14 @@ export default function GoalsScreen({ navigation }: any) {
 
         {/* Steps expander below Next Step */}
         <TouchableOpacity style={styles.stepsHeader} onPress={() => toggleExpand(goal.id)}>
-          <Text style={styles.stepsHeaderText}>
-            Steps ({currentCompleted}/{currentTotal})
-          </Text>
-          <Icon name="chevron-right" size={16} color={colors.text.secondary} style={{ transform: [{ rotate: expandedGoals[goal.id] ? '90deg' : '0deg' }] as any }} />
+          <View style={styles.stepsHeaderContent}>
+            <Text style={styles.stepsHeaderText}>
+              Steps ({currentCompleted}/{currentTotal})
+            </Text>
+            <View style={styles.stepsExpandIcon}>
+              <Icon name="chevron-down" size={16} color={colors.text.secondary} style={{ transform: [{ rotate: expandedGoals[goal.id] ? '180deg' : '0deg' }] as any }} />
+            </View>
+          </View>
         </TouchableOpacity>
 
         {expandedGoals[goal.id] && !editingGoals[goal.id] && (
@@ -1831,16 +1835,30 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.medium as any,
   },
   stepsHeader: {
+    paddingVertical: spacing.xs,
+    marginTop: spacing.xs,
+    backgroundColor: colors.background.primary || '#f8f9fa',
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border?.light || '#e9ecef',
+  },
+  stepsHeaderContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: spacing.xs,
-    marginTop: spacing.xs,
   },
   stepsHeaderText: {
     fontSize: typography.fontSize.sm,
     color: colors.accent?.gold || colors.text.primary,
     fontWeight: typography.fontWeight.medium as any,
+  },
+  stepsExpandIcon: {
+    padding: spacing.xs,
+    borderRadius: borderRadius.xs,
+    backgroundColor: colors.background.primary || '#ffffff',
+    borderWidth: 1,
+    borderColor: colors.border?.light || '#e9ecef',
   },
   stepsList: {
     marginTop: spacing.xs,
@@ -1983,6 +2001,7 @@ const styles = StyleSheet.create({
   goalActions: {
     flexDirection: 'row',
     gap: spacing.sm,
+    marginTop: spacing.md,
   },
   actionButton: {
     flex: 1,
