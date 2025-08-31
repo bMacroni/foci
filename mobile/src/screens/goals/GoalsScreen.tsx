@@ -1854,12 +1854,16 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.medium as any,
   },
   stepsExpandIcon: {
-    padding: spacing.xs,
-    borderRadius: borderRadius.xs,
-    backgroundColor: colors.background.primary || '#ffffff',
+   stepsExpandIcon: {
+     padding: spacing.xs,
+-    borderRadius: borderRadius.xs,
+-    backgroundColor: colors.background.primary || '#ffffff',
+-    borderWidth: 1,
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.background.primary,
     borderWidth: 1,
-    borderColor: colors.border?.light || '#e9ecef',
-  },
+    borderColor: colors.border.light,
+   },
   stepsList: {
     marginTop: spacing.xs,
     marginBottom: spacing.sm,
