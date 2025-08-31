@@ -20,6 +20,7 @@ import { TaskForm } from '../../components/tasks/TaskForm';
 import { AutoSchedulingPreferencesModal } from '../../components/tasks/AutoSchedulingPreferencesModal';
 import { SuccessToast } from '../../components/common/SuccessToast';
 import { tasksAPI, goalsAPI, calendarAPI, autoSchedulingAPI, appPreferencesAPI } from '../../services/api';
+import { enhancedAPI } from '../../services/enhancedApi';
 import { offlineService } from '../../services/offline';
 import Icon from 'react-native-vector-icons/Octicons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -79,9 +80,11 @@ export const TasksScreen: React.FC = () => {
   const [momentumEnabled, setMomentumEnabled] = useState<boolean>(false);
   const [travelPreference, setTravelPreference] = useState<'allow_travel' | 'home_only'>('allow_travel');
   const [userNotificationPrefs, setUserNotificationPrefs] = useState<any | null>(null);
+  const [userSchedulingPreferences, setUserSchedulingPreferences] = useState<any>(null);
 
   useEffect(() => {
     loadData();
+    loadSchedulingPreferences();
   }, []);
 
   // Auto refresh whenever the Tasks tab/screen gains focus (silent background refresh)
@@ -92,6 +95,22 @@ export const TasksScreen: React.FC = () => {
       return () => {};
     }, [])
   );
+
+  const loadSchedulingPreferences = async () => {
+    try {
+      const prefs = await (enhancedAPI as any).getSchedulingPreferences();
+      setUserSchedulingPreferences(prefs);
+    } catch (error) {
+      console.warn('Failed to load scheduling preferences:', error);
+      // Use defaults if preferences can't be loaded
+      setUserSchedulingPreferences({
+        preferred_start_time: '09:00:00',
+        preferred_end_time: '17:00:00',
+        buffer_time_minutes: 15,
+        work_days: [1, 2, 3, 4, 5]
+      });
+    }
+  };
 
   const loadData = async (options?: { silent?: boolean }) => {
     const silent = !!options?.silent;
@@ -300,44 +319,218 @@ export const TasksScreen: React.FC = () => {
     }
   };
 
+  // Find available time slot for today's focus
+  const findAvailableTimeSlot = (events: any[], taskDuration: number = 60, userPreferences?: any) => {
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString().split('T')[0];
+    const currentHour = now.getHours();
+
+    // Use user preferences or fall back to defaults
+    const workingHours = {
+      start: userPreferences?.preferred_start_time
+        ? parseInt(userPreferences.preferred_start_time.split(':')[0])
+        : 9,
+      end: userPreferences?.preferred_end_time
+        ? parseInt(userPreferences.preferred_end_time.split(':')[0])
+        : 18
+    };
+
+    // Use user buffer time preference
+    const bufferMinutes = userPreferences?.buffer_time_minutes || 15;
+
+    // Convert events to time slots
+    const bookedSlots: { start: Date; end: Date }[] = [];
+    if (events && Array.isArray(events)) {
+      events.forEach(event => {
+        let startTime, endTime;
+        if (event.start_time) {
+          startTime = new Date(event.start_time);
+          endTime = new Date(event.end_time || event.start_time);
+        } else if (event.start?.dateTime) {
+          startTime = new Date(event.start.dateTime);
+          endTime = new Date(event.end?.dateTime || event.start.dateTime);
+        } else {
+          return; // Skip events without time
+        }
+
+        // Only consider events for today and tomorrow (since we might schedule for tomorrow)
+        const eventDate = startTime.toISOString().split('T')[0];
+        if (eventDate === today || eventDate === tomorrow) {
+          bookedSlots.push({ start: startTime, end: endTime });
+        }
+      });
+    }
+
+    // Sort booked slots by start time
+    bookedSlots.sort((a, b) => a.start.getTime() - b.start.getTime());
+
+    const currentTime = new Date();
+
+    // Determine if we should schedule for today or tomorrow
+    const scheduleForTomorrow = currentHour >= workingHours.end; // After 6 PM
+
+    let targetDate: Date;
+    let searchStart: number;
+
+    if (scheduleForTomorrow) {
+      // Schedule for tomorrow starting from 9 AM
+      targetDate = new Date(currentTime.getFullYear(), currentTime.getMonth(), currentTime.getDate() + 1);
+      searchStart = workingHours.start;
+    } else {
+      // Schedule for today starting from current hour or 9 AM, whichever is later
+      targetDate = new Date(currentTime.getFullYear(), currentTime.getMonth(), currentTime.getDate());
+      searchStart = Math.max(currentHour + 1, workingHours.start); // +1 to ensure future slot
+    }
+
+    // First, try working hours (9 AM - 6 PM)
+    for (let hour = searchStart; hour < workingHours.end; hour++) {
+      const slotStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), hour, 0, 0, 0);
+      const slotEnd = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), hour, taskDuration, 0, 0);
+
+      // Ensure slot is in the future (respecting user buffer time)
+      const minFutureTime = new Date(currentTime.getTime() + bufferMinutes * 60 * 1000);
+      if (slotStart <= minFutureTime) {
+        continue; // Skip slots that are too soon
+      }
+
+      // Check if this slot conflicts with any booked events
+      const conflicts = bookedSlots.some(booked => {
+        return (slotStart < booked.end && slotEnd > booked.start);
+      });
+
+      if (!conflicts) {
+        return { start: slotStart, end: slotEnd };
+      }
+    }
+
+    // If no slots found in working hours, try after 6 PM (but only if scheduling for today)
+    if (!scheduleForTomorrow) {
+      for (let hour = workingHours.end; hour < 22; hour++) {
+        const slotStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), hour, 0, 0, 0);
+        const slotEnd = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), hour, taskDuration, 0, 0);
+
+        // Ensure slot is in the future (respecting user buffer time)
+        const minFutureTime = new Date(currentTime.getTime() + bufferMinutes * 60 * 1000);
+        if (slotStart <= minFutureTime) {
+          continue; // Skip slots that are too soon
+        }
+
+        const conflicts = bookedSlots.some(booked => {
+          return (slotStart < booked.end && slotEnd > booked.start);
+        });
+
+        if (!conflicts) {
+          return { start: slotStart, end: slotEnd };
+        }
+      }
+    }
+
+    // If still no slots found and we were scheduling for today, try tomorrow
+    if (!scheduleForTomorrow) {
+      const tomorrow = new Date(currentTime.getFullYear(), currentTime.getMonth(), currentTime.getDate() + 1);
+      for (let hour = workingHours.start; hour < workingHours.end; hour++) {
+        const slotStart = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), hour, 0, 0, 0);
+        const slotEnd = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), hour, taskDuration, 0, 0);
+
+        const conflicts = bookedSlots.some(booked => {
+          return (slotStart < booked.end && slotEnd > booked.start);
+        });
+
+        if (!conflicts) {
+          return { start: slotStart, end: slotEnd };
+        }
+      }
+    }
+
+    return null; // No available slots
+  };
+
   const handleQuickSchedule = async (
     taskId: string,
     preset: 'today' | 'tomorrow' | 'this_week' | 'next_week'
   ) => {
     try {
       const base = new Date();
-      const format = (d: Date) => {
-        const yyyy = d.getFullYear();
-        const mm = String(d.getMonth() + 1).padStart(2, '0');
-        const dd = String(d.getDate()).padStart(2, '0');
-        return `${yyyy}-${mm}-${dd}`;
-      };
-
       const target = new Date(base);
 
       if (preset === 'today') {
-        // no change
+        // Schedule for 2 hours from now
+        target.setHours(target.getHours() + 2);
       } else if (preset === 'tomorrow') {
         target.setDate(target.getDate() + 1);
+        target.setHours(9, 0, 0, 0); // 9 AM tomorrow
       } else if (preset === 'this_week') {
         const dow = target.getDay(); // 0 Sun .. 6 Sat
         const daysLeftThisWeek = 6 - dow; // up to Saturday
         const move = Math.min(2, Math.max(1, daysLeftThisWeek));
         target.setDate(target.getDate() + (daysLeftThisWeek > 0 ? move : 0));
+        target.setHours(9, 0, 0, 0); // 9 AM
       } else if (preset === 'next_week') {
         const dow = target.getDay();
         const daysUntilNextMon = ((8 - dow) % 7) || 7; // next Monday
         target.setDate(target.getDate() + daysUntilNextMon);
+        target.setHours(9, 0, 0, 0); // 9 AM
       }
 
-      const updated = await tasksAPI.updateTask(taskId, { due_date: format(target) });
-      setTasks(prev => prev.map(t => t.id === taskId ? updated : t));
-      setToastMessage(`Scheduled: ${preset.replace('_', ' ')}`);
-      setToastCalendarEvent(false);
+      // Find the task to get its details for the calendar event
+      const task = tasks.find(t => t.id === taskId);
+      if (!task) {
+        throw new Error('Task not found');
+      }
+
+      // Calculate end time (use estimated duration or default to 1 hour)
+      const durationMinutes = task.estimated_duration_minutes || 60;
+      const endTime = new Date(target.getTime() + durationMinutes * 60 * 1000);
+
+      // Check if a calendar event already exists for this task
+      const allEvents = await enhancedAPI.getEvents(500); // Get a large number to find existing events
+      const existingEvent = allEvents.find((event: any) => event.task_id === taskId);
+
+      let wasRescheduled = false;
+
+      if (existingEvent) {
+        // Update existing event (reschedule it)
+        await enhancedAPI.updateEvent(existingEvent.id, {
+          summary: task.title,
+          description: task.description,
+          startTime: target.toISOString(),
+          endTime: endTime.toISOString(),
+          isAllDay: false,
+          taskId: taskId,
+          eventType: 'task'
+        });
+        wasRescheduled = true;
+      } else {
+        // Create new calendar event linked to this task
+        await enhancedAPI.scheduleTaskOnCalendar(taskId, {
+          summary: task.title,
+          description: task.description,
+          startTime: target.toISOString(),
+          endTime: endTime.toISOString(),
+          isAllDay: false,
+        });
+      }
+
+      // Format the scheduled date/time for the toast message
+      const timeString = target.toLocaleTimeString([], {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+      const dateString = target.toLocaleDateString([], {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric'
+      });
+
+      const actionText = wasRescheduled ? 'Rescheduled' : 'Scheduled';
+      setToastMessage(`${actionText}: ${dateString} at ${timeString}`);
+      setToastCalendarEvent(true);
       setShowToast(true);
     } catch (error) {
       console.error('Quick schedule error:', error);
-      Alert.alert('Error', 'Failed to quick-schedule task');
+      Alert.alert('Error', 'Failed to schedule task on calendar');
     }
   };
 
@@ -490,14 +683,88 @@ export const TasksScreen: React.FC = () => {
       task={item}
       onPress={(task) => {
         if (selectingFocus) {
+          // Prevent duplicate API calls
+          if ((task as any).is_today_focus) {
+            setToastMessage("This task is already today's focus.");
+            setToastCalendarEvent(false);
+            setShowToast(true);
+            setShowInbox(false);
+            setSelectingFocus(false);
+            return;
+          }
+
+          // Find the current focus task (if any) - we'll remove its calendar event after setting the new focus
+          const currentFocusTask = tasks.find(t => (t as any).is_today_focus && t.id !== task.id);
+
+          // Then, set the task as today's focus
           tasksAPI.updateTask(task.id, { ...(undefined as any), is_today_focus: true } as any)
-            .then(updated => {
+            .then(async (updated) => {
               setTasks(prev => prev.map(t => t.id === updated.id ? updated : { ...t, is_today_focus: false }));
+
+              // First, remove any existing focus task's calendar event
+              if (currentFocusTask) {
+                try {
+                  // Removing calendar event for previous focus task
+                  const focusEvents = await enhancedAPI.getEventsForTask(currentFocusTask.id);
+                  for (const event of focusEvents) {
+                    await enhancedAPI.deleteEvent(event.id);
+                    // Deleted calendar event
+                  }
+                } catch (removeError) {
+                  console.warn('Failed to remove previous focus task calendar event:', removeError);
+                  // Continue anyway - this is not critical
+                }
+              }
+
+              // Try to schedule the task on today's calendar
+              let availableSlot: { start: Date; end: Date } | null = null;
+              try {
+                const now = new Date();
+                const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                const todaysEvents = await enhancedAPI.getEventsForDate(today);
+                const taskDuration = (task as any).estimated_duration_minutes || 60;
+
+                // Find available time slot using the full algorithm
+                availableSlot = findAvailableTimeSlot(todaysEvents, taskDuration, userSchedulingPreferences);
+
+                if (availableSlot) {
+                  try {
+                    // Schedule the task on the calendar
+                    await enhancedAPI.scheduleTaskOnCalendar(task.id, {
+                      summary: task.title,
+                      description: task.description,
+                      startTime: availableSlot.start.toISOString(),
+                      endTime: availableSlot.end.toISOString(),
+                      isAllDay: false,
+                    });
+
+                                      const timeString = availableSlot.start.toLocaleTimeString([], {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true
+                  });
+
+                  const isTomorrow = availableSlot.start.toDateString() !== new Date().toDateString();
+                  const dateLabel = isTomorrow ? 'tomorrow' : 'today';
+
+                  setToastMessage(`Set as Today's Focus & scheduled ${dateLabel} at ${timeString}.`);
+                  } catch (apiError) {
+                    console.error('Calendar API error:', apiError);
+                    // Still set as focus but don't show scheduling success
+                    setToastMessage("Set as Today's Focus (calendar scheduling failed).");
+                  }
+                } else {
+                  setToastMessage("Set as Today's Focus (no available calendar slots).");
+                }
+              } catch (calendarError) {
+                console.warn('Failed to schedule focus task on calendar:', calendarError);
+                setToastMessage("Set as Today's Focus.");
+              }
+
+              setToastCalendarEvent(availableSlot ? true : false);
+              setShowToast(true);
               setShowInbox(false);
               setSelectingFocus(false);
-              setToastMessage("Set as Today's Focus.");
-              setToastCalendarEvent(false);
-              setShowToast(true);
             })
             .catch(() => {
               Alert.alert('Error', 'Failed to set Today\'s Focus');
@@ -628,6 +895,18 @@ export const TasksScreen: React.FC = () => {
             travel_preference: travelPreference,
             exclude_ids: [],
           });
+
+          // Remove the completed task's calendar event
+          try {
+            const completedEvents = await enhancedAPI.getEventsForTask(task.id);
+            for (const event of completedEvents) {
+              await enhancedAPI.deleteEvent(event.id);
+            }
+          } catch (removeError) {
+            console.warn('Failed to remove completed focus task calendar event:', removeError);
+            // Continue anyway - this is not critical
+          }
+
           setTasks(prev => {
             const mapped = prev.map(t => {
               if (t.id === task.id) { return { ...t, is_today_focus: false }; }
@@ -639,12 +918,54 @@ export const TasksScreen: React.FC = () => {
             }
             return mapped;
           });
-          setToastMessage(`Next up: ${next.title}`);
-          setToastCalendarEvent(false);
+
+          // Schedule the new focus task to calendar
+          try {
+            const today = new Date().toISOString().split('T')[0];
+            const todaysEvents = await enhancedAPI.getEventsForDate(today);
+            const taskDuration = (next as any).estimated_duration_minutes || 60;
+
+            // Find available time slot using the full algorithm
+            const availableSlot = findAvailableTimeSlot(todaysEvents, taskDuration, userSchedulingPreferences);
+
+            if (availableSlot) {
+              await enhancedAPI.scheduleTaskOnCalendar(next.id, {
+                summary: next.title,
+                description: next.description,
+                startTime: availableSlot.start.toISOString(),
+                endTime: availableSlot.end.toISOString(),
+                isAllDay: false,
+              });
+
+              const timeString = availableSlot.start.toLocaleTimeString([], {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+              });
+
+              const isTomorrow = availableSlot.start.toDateString() !== new Date().toDateString();
+              const dateLabel = isTomorrow ? 'tomorrow' : 'today';
+              setToastMessage(`Next up: ${next.title} (scheduled ${dateLabel} at ${timeString})`);
+              setToastCalendarEvent(true);
+            } else {
+              setToastMessage(`Next up: ${next.title} (no available calendar slots)`);
+              setToastCalendarEvent(false);
+            }
+          } catch (calendarError) {
+            console.warn('Failed to schedule next focus task on calendar:', calendarError);
+            setToastMessage(`Next up: ${next.title}`);
+            setToastCalendarEvent(false);
+          }
+
           setShowToast(true);
         } catch (err: any) {
           if (err?.code === 404) {
             setToastMessage("Great work, you've cleared all your tasks!");
+            setToastCalendarEvent(false);
+            setShowToast(true);
+          } else {
+            console.error('Momentum mode error:', err);
+            setToastMessage("Great job! Focus task completed.");
             setToastCalendarEvent(false);
             setShowToast(true);
           }
@@ -703,11 +1024,23 @@ export const TasksScreen: React.FC = () => {
     const focus = getFocusTask();
     if (!focus) { return; }
     try {
+      // Remove the current focus task's calendar event
+      try {
+        const currentEvents = await enhancedAPI.getEventsForTask(focus.id);
+        for (const event of currentEvents) {
+          await enhancedAPI.deleteEvent(event.id);
+        }
+      } catch (removeError) {
+        console.warn('Failed to remove current focus task calendar event:', removeError);
+        // Continue anyway - this is not critical
+      }
+
       const next = await tasksAPI.focusNext({
         current_task_id: focus.id,
         travel_preference: travelPreference,
         exclude_ids: [focus.id],
       });
+
       setTasks(prev => {
         const mapped = prev.map(t => {
           if (t.id === focus.id) { return { ...t, is_today_focus: false }; }
@@ -719,8 +1052,45 @@ export const TasksScreen: React.FC = () => {
         }
         return mapped;
       });
-      setToastMessage(`Next up: ${next.title}`);
-      setToastCalendarEvent(false);
+
+      // Schedule the new focus task to calendar
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const todaysEvents = await enhancedAPI.getEventsForDate(today);
+        const taskDuration = (next as any).estimated_duration_minutes || 60;
+
+        // Find available time slot using the full algorithm
+        const availableSlot = findAvailableTimeSlot(todaysEvents, taskDuration, userSchedulingPreferences);
+
+        if (availableSlot) {
+          await enhancedAPI.scheduleTaskOnCalendar(next.id, {
+            summary: next.title,
+            description: next.description,
+            startTime: availableSlot.start.toISOString(),
+            endTime: availableSlot.end.toISOString(),
+            isAllDay: false,
+          });
+
+          const timeString = availableSlot.start.toLocaleTimeString([], {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+          });
+
+          const isTomorrow = availableSlot.start.toDateString() !== new Date().toDateString();
+          const dateLabel = isTomorrow ? 'tomorrow' : 'today';
+          setToastMessage(`Next up: ${next.title} (scheduled ${dateLabel} at ${timeString})`);
+          setToastCalendarEvent(true);
+        } else {
+          setToastMessage(`Next up: ${next.title} (no available calendar slots)`);
+          setToastCalendarEvent(false);
+        }
+      } catch (calendarError) {
+        console.warn('Failed to schedule next focus task on calendar:', calendarError);
+        setToastMessage(`Next up: ${next.title}`);
+        setToastCalendarEvent(false);
+      }
+
       setShowToast(true);
     } catch (err: any) {
       if (err?.code === 404) {

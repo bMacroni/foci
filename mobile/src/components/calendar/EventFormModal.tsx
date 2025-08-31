@@ -16,6 +16,7 @@ import { spacing } from '../../themes/spacing';
 import { Button } from '../common/Button';
 import { CalendarEvent, Task } from '../../types/calendar';
 import { hapticFeedback } from '../../utils/hapticFeedback';
+import { enhancedAPI } from '../../services/enhancedApi';
 
 interface EventFormData {
   title: string;
@@ -55,6 +56,7 @@ export const EventFormModal: React.FC<EventFormModalProps> = ({
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [linkedTaskDurationMinutes, setLinkedTaskDurationMinutes] = useState<number | null>(null);
 
   const isEditing = !!event;
 
@@ -77,7 +79,10 @@ export const EventFormModal: React.FC<EventFormModalProps> = ({
         // It's a Task
         const task = event as Task;
         startTime = new Date(task.due_date || Date.now());
-        endTime = new Date(task.due_date || Date.now());
+        // Default endTime from task estimated duration if available, else same as start
+        endTime = task.estimated_duration_minutes && task.estimated_duration_minutes > 0
+          ? new Date((new Date(task.due_date || Date.now())).getTime() + task.estimated_duration_minutes * 60000)
+          : new Date(task.due_date || Date.now());
       }
       
       const computedTitle = 'summary' in event ? (event.title || (event as any).summary || '') : (event.title || '');
@@ -90,6 +95,28 @@ export const EventFormModal: React.FC<EventFormModalProps> = ({
         isRecurring: false, // TODO: Add recurring support
         recurringPattern: 'weekly',
       });
+
+      // Populate linked task estimated duration for task-linked events
+      (async () => {
+        try {
+          // CalendarEvent (DB) with task_id
+          const maybeTaskId = (event as any)?.task_id || (event as any)?.taskId;
+          if (maybeTaskId) {
+            const task = await enhancedAPI.getTaskById(maybeTaskId);
+            const minutes = Number(task?.estimated_duration_minutes);
+            setLinkedTaskDurationMinutes(Number.isFinite(minutes) && minutes > 0 ? minutes : null);
+            return;
+          }
+          // If editing a Task directly
+          if (!('start_time' in event) && !('start' in event)) {
+            const task = event as Task;
+            const minutes = Number(task?.estimated_duration_minutes);
+            setLinkedTaskDurationMinutes(Number.isFinite(minutes) && minutes > 0 ? minutes : null);
+          }
+        } catch (_e) {
+          setLinkedTaskDurationMinutes(null);
+        }
+      })();
     } else {
       // Reset form for new event
       const now = new Date();
@@ -104,6 +131,7 @@ export const EventFormModal: React.FC<EventFormModalProps> = ({
         isRecurring: false,
         recurringPattern: 'weekly',
       });
+      setLinkedTaskDurationMinutes(null);
     }
     setErrors({});
   }, [event, visible]);
@@ -141,11 +169,19 @@ export const EventFormModal: React.FC<EventFormModalProps> = ({
 
   const handleStartTimeChange = (selectedDate: Date) => {
     hapticFeedback.light();
-    setFormData(prev => ({
-      ...prev,
-      startTime: selectedDate,
-      endTime: selectedDate > prev.endTime ? selectedDate : prev.endTime,
-    }));
+    setFormData(prev => {
+      let nextEnd = prev.endTime;
+      if (linkedTaskDurationMinutes && linkedTaskDurationMinutes > 0) {
+        nextEnd = new Date(selectedDate.getTime() + linkedTaskDurationMinutes * 60000);
+      } else if (selectedDate > prev.endTime) {
+        nextEnd = selectedDate;
+      }
+      return {
+        ...prev,
+        startTime: selectedDate,
+        endTime: nextEnd,
+      };
+    });
     setShowStartPicker(false);
   };
 

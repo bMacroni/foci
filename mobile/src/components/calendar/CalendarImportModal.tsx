@@ -38,18 +38,18 @@ export function CalendarImportModal({
       setImportStatus('checking');
       setStatusMessage('Checking Google Calendar connection...');
       
-      console.log('[CalendarImportModal] Checking calendar status...');
+      // Checking calendar status...
       const status = await enhancedAPI.getCalendarStatus();
-      console.log('[CalendarImportModal] Calendar status response:', status);
+              // Calendar status response received
       
       if (!status.connected) {
-        console.log('[CalendarImportModal] Calendar not connected. Error:', status.error, 'Details:', status.details);
+                  // Calendar not connected
         setImportStatus('error');
         setStatusMessage(`Calendar not connected: ${status.details || status.error || 'Unknown error'}`);
         return false;
       }
       
-      console.log('[CalendarImportModal] Calendar is connected successfully');
+                // Calendar is connected successfully
       setStatusMessage('Google Calendar is connected and ready for import.');
       return true;
     } catch (error) {
@@ -111,7 +111,7 @@ export function CalendarImportModal({
       
       // Sign out from Google
       await googleAuthService.signOut();
-      console.log('[CalendarImportModal] Signed out from Google');
+              // Signed out from Google
       
       setStatusMessage('Please sign back in with Google to get calendar permissions...');
       
