@@ -24,7 +24,11 @@ import { enhancedAPI } from '../../services/enhancedApi';
 import { offlineService } from '../../services/offline';
 import Icon from 'react-native-vector-icons/Octicons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { HelpIcon } from '../../components/help/HelpIcon';
+import HelpTarget from '../../components/help/HelpTarget';
+import { useHelp, HelpContent } from '../../contexts/HelpContext';
 
 interface Task {
   id: string;
@@ -55,6 +59,8 @@ interface Goal {
 
 export const TasksScreen: React.FC = () => {
   const navigation = useNavigation<any>();
+  const { setHelpContent } = useHelp();
+  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isCompact = width < 1000; // Icon-only on phones; show labels only on very wide/tablet screens
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -82,6 +88,17 @@ export const TasksScreen: React.FC = () => {
   const [userNotificationPrefs, setUserNotificationPrefs] = useState<any | null>(null);
   const [userSchedulingPreferences, setUserSchedulingPreferences] = useState<any>(null);
 
+  useEffect(() => {
+    const helpContent: HelpContent = {
+      'tasks-header-summary': 'This shows how many tasks are auto-scheduled and how many have a scheduled time.',
+      'tasks-bulk-auto-schedule': 'Tap to auto-schedule all eligible tasks using your preferences.',
+      'tasks-momentum-toggle': 'Momentum mode picks your next focus task automatically when you complete one.',
+      'tasks-inbox-toggle': 'Open your Inbox to choose a new focus task or view remaining tasks.',
+      'tasks-fab-add': 'Create a new task. You can add details like due date and duration.',
+    };
+    setHelpContent(helpContent);
+    return () => setHelpContent({});
+  }, [setHelpContent]);
   useEffect(() => {
     loadData();
     loadSchedulingPreferences();
@@ -787,9 +804,11 @@ export const TasksScreen: React.FC = () => {
   const renderHeaderActions = () => (
     <View style={styles.headerActions}>
       <View style={styles.autoScheduleSummary}>
-        <Text style={styles.summaryText}>
-          {getAutoScheduledTasks().length} auto-scheduled • {getScheduledTasks().length} scheduled
-        </Text>
+        <HelpTarget helpId="tasks-header-summary">
+          <Text style={styles.summaryText}>
+            {getAutoScheduledTasks().length} auto-scheduled • {getScheduledTasks().length} scheduled
+          </Text>
+        </HelpTarget>
       </View>
       
       <View style={styles.actionButtons}>
@@ -801,24 +820,26 @@ export const TasksScreen: React.FC = () => {
           <Icon name="gear" size={20} color={colors.text.secondary} />
         </TouchableOpacity>
         
-        <TouchableOpacity
-          style={[
-            styles.bulkScheduleButton,
-            bulkScheduling && styles.bulkScheduleButtonDisabled
-          ]}
-          onPress={handleBulkAutoSchedule}
-          disabled={bulkScheduling}
-          activeOpacity={0.7}
-        >
-          {bulkScheduling ? (
-            <ActivityIndicator size="small" color={colors.secondary} />
-          ) : (
-            <Icon name="checklist" size={16} color={colors.secondary} />
-          )}
-          <Text style={styles.bulkScheduleText}>
-            {bulkScheduling ? 'Scheduling...' : 'Auto-Schedule All'}
-          </Text>
-        </TouchableOpacity>
+        <HelpTarget helpId="tasks-bulk-auto-schedule">
+          <TouchableOpacity
+            style={[
+              styles.bulkScheduleButton,
+              bulkScheduling && styles.bulkScheduleButtonDisabled
+            ]}
+            onPress={handleBulkAutoSchedule}
+            disabled={bulkScheduling}
+            activeOpacity={0.7}
+          >
+            {bulkScheduling ? (
+              <ActivityIndicator size="small" color={colors.secondary} />
+            ) : (
+              <Icon name="checklist" size={16} color={colors.secondary} />
+            )}
+            <Text style={styles.bulkScheduleText}>
+              {bulkScheduling ? 'Scheduling...' : 'Auto-Schedule All'}
+            </Text>
+          </TouchableOpacity>
+        </HelpTarget>
       </View>
     </View>
   );
@@ -1130,15 +1151,17 @@ export const TasksScreen: React.FC = () => {
                 <Text style={styles.focusTitle}>Today's Focus</Text>
                 <View style={styles.focusHeaderControls}>
                   {/* Momentum toggle placed next to Inbox; icon-only on compact */}
-                  <TouchableOpacity
-                    testID="momentumToggle"
-                    style={[styles.momentumToggle, momentumEnabled && styles.momentumToggleOn, isCompact && styles.compactBtn]}
-                    onPress={handleToggleMomentum}
-                    activeOpacity={0.7}
-                    accessibilityLabel={momentumEnabled ? 'Momentum On' : 'Momentum Off'}
-                  >
-                    <Icon name="zap" size={16} color={momentumEnabled ? colors.secondary : colors.text.secondary} />
-                  </TouchableOpacity>
+                  <HelpTarget helpId="tasks-momentum-toggle">
+                    <TouchableOpacity
+                      testID="momentumToggle"
+                      style={[styles.momentumToggle, momentumEnabled && styles.momentumToggleOn, isCompact && styles.compactBtn]}
+                      onPress={handleToggleMomentum}
+                      activeOpacity={0.7}
+                      accessibilityLabel={momentumEnabled ? 'Momentum On' : 'Momentum Off'}
+                    >
+                      <Icon name="zap" size={16} color={momentumEnabled ? colors.secondary : colors.text.secondary} />
+                    </TouchableOpacity>
+                  </HelpTarget>
 
                   <TouchableOpacity
                     testID="travelPrefButton"
@@ -1150,11 +1173,13 @@ export const TasksScreen: React.FC = () => {
                     <Icon name={travelPreference === 'home_only' ? 'home' : 'globe'} size={16} color={colors.text.secondary} />
                   </TouchableOpacity>
 
-                  <TouchableOpacity style={styles.inboxButton} onPress={() => { setShowInbox(!showInbox); setSelectingFocus(false); }}>
-                    <Icon name="inbox" size={14} color={colors.text.primary} />
-                    <Text style={styles.inboxText}>Inbox{inboxCount > 0 ? ` (${inboxCount})` : ''}</Text>
-                    <Icon name={showInbox ? 'chevron-up' : 'chevron-down'} size={14} color={colors.text.primary} />
-                  </TouchableOpacity>
+                  <HelpTarget helpId="tasks-inbox-toggle">
+                    <TouchableOpacity style={styles.inboxButton} onPress={() => { setShowInbox(!showInbox); setSelectingFocus(false); }}>
+                      <Icon name="inbox" size={14} color={colors.text.primary} />
+                      <Text style={styles.inboxText}>Inbox{inboxCount > 0 ? ` (${inboxCount})` : ''}</Text>
+                      <Icon name={showInbox ? 'chevron-up' : 'chevron-down'} size={14} color={colors.text.primary} />
+                    </TouchableOpacity>
+                  </HelpTarget>
                 </View>
               </View>
               {focus ? (
@@ -1235,13 +1260,20 @@ export const TasksScreen: React.FC = () => {
       />
 
       {/* Floating Action Button */}
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={handleCreateTask}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.fabText}>+</Text>
-      </TouchableOpacity>
+      <HelpTarget helpId="tasks-fab-add">
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={handleCreateTask}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.fabText}>+</Text>
+        </TouchableOpacity>
+      </HelpTarget>
+
+      {/* Absolute-positioned Help icon under the system tray */}
+      <View style={{ position: 'absolute', top: insets.top + spacing.sm, right: spacing.sm }}>
+        <HelpIcon />
+      </View>
 
       {/* Task Form Modal */}
       <Modal

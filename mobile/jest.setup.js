@@ -13,6 +13,10 @@ jest.mock('react-native', () => {
 
 jest.mock('react-native-vector-icons/Octicons', () => 'Icon');
 jest.mock('react-native-draggable-flatlist', () => 'DraggableFlatList');
+jest.mock('react-native-popable', () => {
+  return { Popable: ({ children }) => children };
+});
+
 jest.mock('react-native-haptic-feedback', () => ({
   __esModule: true,
   default: { trigger: jest.fn() },

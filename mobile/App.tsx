@@ -11,6 +11,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AppNavigator from './src/navigation/AppNavigator';
 import { configService } from './src/services/config';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { HelpProvider } from './src/contexts/HelpContext';
+import HelpOverlay from './src/components/help/HelpOverlay';
 
 function App() {
   useEffect(() => {
@@ -44,7 +46,10 @@ function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <AppNavigator />
+        <HelpProvider>
+          <AppNavigator />
+          <HelpOverlay />
+        </HelpProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

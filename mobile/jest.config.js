@@ -1,7 +1,7 @@
 module.exports = {
   preset: 'react-native',
   transformIgnorePatterns: [
-    'node_modules/(?!(react-native|@react-native|react-native-gesture-handler|react-native-reanimated|react-native-safe-area-context|react-native-screens|@react-navigation|react-native-vector-icons|@react-native-community/datetimepicker|react-native-calendars|react-native-swipe-gestures|@react-native-firebase)/)'
+    'node_modules/(?!(react-native|@react-native|react-native-gesture-handler|react-native-reanimated|react-native-safe-area-context|react-native-screens|@react-navigation|react-native-vector-icons|@react-native-community/datetimepicker|react-native-calendars|react-native-swipe-gestures|@react-native-firebase|react-native-popable)/)'
   ],
   setupFiles: [
     '<rootDir>/node_modules/react-native-gesture-handler/jestSetup.js'
