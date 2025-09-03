@@ -11,10 +11,6 @@ export const HelpOverlay: React.FC = () => {
   const { isHelpOverlayActive, setIsHelpOverlayActive, targetLayouts } = useHelp();
   const insets = useSafeAreaInsets();
 
-  if (!isHelpOverlayActive) {
-    return null;
-  }
-
   // Gather target rects
   const targets = Object.values(targetLayouts);
 
@@ -80,6 +76,10 @@ export const HelpOverlay: React.FC = () => {
     }
     return rects;
   }, [targets]);
+
+  if (!isHelpOverlayActive) {
+    return null;
+  }
 
   return (
     <View style={styles.container} pointerEvents="box-none">

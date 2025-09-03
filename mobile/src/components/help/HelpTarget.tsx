@@ -28,7 +28,11 @@ export const HelpTarget: React.FC<HelpTargetProps> = ({ helpId, children, style 
     return () => { clearInterval(id); unregisterTargetLayout(helpId); };
   }, [measure, helpId, unregisterTargetLayout]);
 
-  const content = helpContent?.[helpId] || '';
+  const baseId = React.useMemo(() => {
+    const idx = helpId.indexOf(':');
+    return idx > -1 ? helpId.slice(0, idx) : helpId;
+  }, [helpId]);
+  const content = helpContent?.[helpId] || helpContent?.[baseId] || '';
 
   // Do not alter layout when help mode is inactive
   if (!isHelpOverlayActive) {
@@ -40,8 +44,8 @@ export const HelpTarget: React.FC<HelpTargetProps> = ({ helpId, children, style 
   }
 
   return (
-    <View ref={ref} onLayout={measure}>
-      <Popable content={content} position="bottom" wrapperStyle={style} visible={isHelpOverlayActive ? undefined : false}>
+    <View ref={ref} onLayout={measure} style={style}>
+      <Popable content={content} position="bottom" visible={isHelpOverlayActive ? undefined : false}>
         {/* Disable child interactions while help is active so only tooltip opens */}
         <View pointerEvents={isHelpOverlayActive ? 'none' : 'auto'}>
           {children}
