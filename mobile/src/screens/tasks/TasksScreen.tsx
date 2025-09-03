@@ -28,7 +28,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { HelpIcon } from '../../components/help/HelpIcon';
 import HelpTarget from '../../components/help/HelpTarget';
-import { useHelp, HelpContent } from '../../contexts/HelpContext';
+import { useHelp, HelpContent, HelpScope } from '../../contexts/HelpContext';
 
 interface Task {
   id: string;
@@ -59,7 +59,7 @@ interface Goal {
 
 export const TasksScreen: React.FC = () => {
   const navigation = useNavigation<any>();
-  const { setHelpContent } = useHelp();
+  const { setHelpContent, setIsHelpOverlayActive, setHelpScope } = useHelp();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isCompact = width < 1000; // Icon-only on phones; show labels only on very wide/tablet screens
@@ -88,26 +88,22 @@ export const TasksScreen: React.FC = () => {
   const [userNotificationPrefs, setUserNotificationPrefs] = useState<any | null>(null);
   const [userSchedulingPreferences, setUserSchedulingPreferences] = useState<any>(null);
 
-  useEffect(() => {
-    const helpContent: HelpContent = {
-      'tasks-header-summary': 'This shows how many tasks are auto-scheduled and how many have a scheduled time.',
-      'tasks-bulk-auto-schedule': 'Tap to auto-schedule all eligible tasks using your preferences.',
-      'tasks-momentum-toggle': 'Momentum mode picks your next focus task automatically when you complete one.',
-      'tasks-travel-toggle': 'Switch between allowing travel or home-only tasks for momentum mode.',
-      'tasks-inbox-toggle': 'Open your Inbox to choose a new focus task or view remaining tasks.',
-      'tasks-focus-complete': 'Mark today’s focus task as done.',
-      'tasks-focus-skip': 'Skip this focus and we will pick the next one.',
-      'tasks-focus-change': 'Manually choose a different task as Today’s Focus.',
-      'task-complete': 'Mark the task complete.',
-      'task-schedule': 'Open quick scheduling options for this task.',
-      'task-ai': 'Ask AI for help planning or breaking down this task.',
-      'task-edit': 'Edit task details.',
-      'task-delete': 'Delete this task.',
-      'tasks-fab-add': 'Create a new task. You can add details like due date and duration.',
-    };
-    setHelpContent(helpContent);
-    return () => setHelpContent({});
-  }, [setHelpContent]);
+  const getTasksHelpContent = React.useCallback((): HelpContent => ({
+    'tasks-header-summary': 'This shows how many tasks are auto-scheduled and how many have a scheduled time.',
+    'tasks-bulk-auto-schedule': 'Tap to auto-schedule all eligible tasks using your preferences.',
+    'tasks-momentum-toggle': 'Momentum mode picks your next focus task automatically when you complete one.',
+    'tasks-travel-toggle': 'Switch between allowing travel or home-only tasks for momentum mode.',
+    'tasks-inbox-toggle': 'Open your Inbox to choose a new focus task or view remaining tasks.',
+    'tasks-focus-complete': 'Mark today’s focus task as done.',
+    'tasks-focus-skip': 'Skip this focus and we will pick the next one.',
+    'tasks-focus-change': 'Manually choose a different task as Today’s Focus.',
+    'task-complete': 'Mark the task complete.',
+    'task-schedule': 'Open quick scheduling options for this task.',
+    'task-ai': 'Ask AI for help planning or breaking down this task.',
+    'task-edit': 'Edit task details.',
+    'task-delete': 'Delete this task.',
+    'tasks-fab-add': 'Create a new task. You can add details like due date and duration.',
+  }), []);
   useEffect(() => {
     loadData();
     loadSchedulingPreferences();
@@ -116,10 +112,18 @@ export const TasksScreen: React.FC = () => {
   // Auto refresh whenever the Tasks tab/screen gains focus (silent background refresh)
   useFocusEffect(
     React.useCallback(() => {
+      // Set help scope for this screen and reset overlay when leaving
+      try { setHelpScope('tasks'); } catch {}
+      try { setHelpContent(getTasksHelpContent()); } catch {}
+      // If user navigated with overlay ON from a previous screen, ensure tooltips will populate
+      // by briefly toggling it off (state stays off due to blur reset anyway)
+      try { setIsHelpOverlayActive(false); } catch {}
       // Avoid showing a spinner if we already have content; fetch fresh in background
       loadData({ silent: true });
-      return () => {};
-    }, [])
+      return () => {
+        try { setIsHelpOverlayActive(false); } catch {}
+      };
+    }, [setHelpScope, setIsHelpOverlayActive, setHelpContent, getTasksHelpContent])
   );
 
   const loadSchedulingPreferences = async () => {
@@ -1143,6 +1147,7 @@ export const TasksScreen: React.FC = () => {
   }
 
   return (
+    <HelpScope scope="tasks">
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Tasks</Text>
@@ -1383,6 +1388,7 @@ export const TasksScreen: React.FC = () => {
         duration={5000}
       />
     </View>
+    </HelpScope>
   );
 };
 

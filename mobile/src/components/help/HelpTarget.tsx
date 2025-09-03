@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { View, StyleSheet, findNodeHandle, UIManager } from 'react-native';
 import { Popable } from 'react-native-popable';
-import { useHelp } from '../../contexts/HelpContext';
+import { useHelp, useHelpLocalScope } from '../../contexts/HelpContext';
 import { colors } from '../../themes/colors';
 
 interface HelpTargetProps {
@@ -11,22 +11,46 @@ interface HelpTargetProps {
 }
 
 export const HelpTarget: React.FC<HelpTargetProps> = ({ helpId, children, style }) => {
-  const { isHelpOverlayActive, helpContent, registerTargetLayout, unregisterTargetLayout } = useHelp();
+  const { isHelpOverlayActive, helpContent, registerTargetLayout, unregisterTargetLayout, currentScope } = useHelp();
+  const localScope = useHelpLocalScope();
   const ref = useRef<View>(null);
+  const lastLayoutRef = useRef<{ x: number; y: number; width: number; height: number; pageX: number; pageY: number } | null>(null);
 
   const measure = useCallback(() => {
     const node = findNodeHandle(ref.current);
     if (!node) { return; }
     UIManager.measure(node, (_x, _y, width, height, pageX, pageY) => {
-      registerTargetLayout(helpId, { x: pageX, y: pageY, width, height, pageX, pageY });
+      const next = { x: pageX, y: pageY, width, height, pageX, pageY };
+      const prev = lastLayoutRef.current;
+      const changed = !prev
+        || Math.abs(prev.x - next.x) > 0.5
+        || Math.abs(prev.y - next.y) > 0.5
+        || Math.abs(prev.width - next.width) > 0.5
+        || Math.abs(prev.height - next.height) > 0.5;
+      if (changed) {
+        lastLayoutRef.current = next;
+        if (!localScope || localScope === (currentScope || 'default')) {
+          registerTargetLayout(helpId, next);
+        }
+      }
     });
-  }, [helpId, registerTargetLayout]);
+  }, [helpId, registerTargetLayout, currentScope, localScope]);
 
   useEffect(() => {
     measure();
-    const id = setInterval(measure, 500);
-    return () => { clearInterval(id); unregisterTargetLayout(helpId); };
+    return () => { unregisterTargetLayout(helpId); };
   }, [measure, helpId, unregisterTargetLayout]);
+
+  // Re-measure when help mode toggles to ensure accurate layout while overlay is active
+  useEffect(() => {
+    measure();
+  }, [measure, isHelpOverlayActive]);
+
+  // Re-measure when the help scope changes so targets register under the active screen
+  useEffect(() => {
+    lastLayoutRef.current = null;
+    measure();
+  }, [measure, currentScope, localScope]);
 
   const baseId = React.useMemo(() => {
     const idx = helpId.indexOf(':');

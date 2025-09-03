@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import BrainDumpSubNav from './BrainDumpSubNav';
 import Icon from 'react-native-vector-icons/Octicons';
 import { colors } from '../../themes/colors';
@@ -21,6 +21,7 @@ type IncomingItem = {
 };
 
 export default function BrainDumpInputScreen({ navigation }: any) {
+  const insets = useSafeAreaInsets();
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -190,6 +191,18 @@ export default function BrainDumpInputScreen({ navigation }: any) {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Help button to reopen onboarding */}
+      <View style={{ position: 'absolute', top: insets.top + spacing.sm, right: spacing.sm }}>
+        <TouchableOpacity
+          accessibilityLabel="Help"
+          onPress={() => navigation.navigate('BrainDumpOnboarding')}
+          activeOpacity={0.7}
+          style={styles.helpBtn}
+        >
+          <Icon name="question" size={18} color={colors.text.secondary} />
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
@@ -224,6 +237,7 @@ const styles = StyleSheet.create({
   privacyBox: { flexDirection: 'row', alignItems: 'flex-start', padding: spacing.md, marginTop: spacing.md },
   privacyText: { color: colors.text.secondary, fontSize: typography.fontSize.xs, flex: 1 },
   error: { color: colors.error, marginBottom: spacing.sm },
+  helpBtn: { padding: 8, borderWidth: 1, borderColor: colors.border.light, borderRadius: borderRadius.sm, backgroundColor: colors.background.surface },
 });
 
 
