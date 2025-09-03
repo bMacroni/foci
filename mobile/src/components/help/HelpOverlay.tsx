@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, StyleSheet, TouchableWithoutFeedback, Dimensions } from 'react-native';
+import { View, StyleSheet, TouchableWithoutFeedback, TouchableOpacity, Dimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Octicons';
 import { useHelp } from '../../contexts/HelpContext';
@@ -92,11 +92,17 @@ export const HelpOverlay: React.FC = () => {
 
       {/* Close button in the top-right corner */}
       <View style={[styles.closeContainer, { top: insets.top + 16 }]} pointerEvents="box-none">
-        <TouchableWithoutFeedback onPress={() => setIsHelpOverlayActive(false)}>
-          <View style={styles.closeButton}>
-            <Icon name="x" size={18} color={colors.secondary} />
-          </View>
-        </TouchableWithoutFeedback>
+        <TouchableOpacity 
+          style={styles.closeButton}
+          onPress={() => setIsHelpOverlayActive(false)}
+          activeOpacity={0.7}
+          accessibilityLabel="Close help overlay"
+          accessibilityRole="button"
+          accessible={true}
+          onAccessibilityTap={() => setIsHelpOverlayActive(false)}
+        >
+          <Icon name="x" size={18} color={colors.secondary} />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -121,14 +127,15 @@ const styles = StyleSheet.create({
     right: 16,
   },
   closeButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: colors.border.light,
+    padding: 12, // Ensures 20px from edge to icon center (44-18)/2 = 13, but 12 gives us 20px from edge
   },
 });
 

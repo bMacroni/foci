@@ -13,8 +13,8 @@ interface HelpContextValue {
   setHelpScope: (scope: string) => void;
   helpContent: HelpContent;
   setHelpContent: (content: HelpContent) => void;
-  registerTargetLayout: (helpId: string, layout: LayoutRectangle & { pageX: number; pageY: number }) => void;
-  unregisterTargetLayout: (helpId: string) => void;
+  registerTargetLayout: (helpId: string, layout: LayoutRectangle & { pageX: number; pageY: number }, scope: string) => void;
+  unregisterTargetLayout: (helpId: string, scope: string) => void;
   targetLayouts: TargetLayouts;
 }
 
@@ -32,15 +32,13 @@ export const HelpProvider: React.FC<{ children: React.ReactNode }> = ({ children
     _setHelpContent(content || {});
   }, []);
 
-  const registerTargetLayout = useCallback((helpId: string, layout: LayoutRectangle & { pageX: number; pageY: number }) => {
-    const scope = currentScope || 'default';
+  const registerTargetLayout = useCallback((helpId: string, layout: LayoutRectangle & { pageX: number; pageY: number }, scope: string) => {
     const scopeMap = allTargetLayoutsRef.current[scope] || {};
     allTargetLayoutsRef.current = { ...allTargetLayoutsRef.current, [scope]: { ...scopeMap, [helpId]: layout } };
     forceRender(v => v + 1);
-  }, [currentScope]);
+  }, []);
 
-  const unregisterTargetLayout = useCallback((helpId: string) => {
-    const scope = currentScope || 'default';
+  const unregisterTargetLayout = useCallback((helpId: string, scope: string) => {
     const scopeMap = allTargetLayoutsRef.current[scope] || {};
     if (scopeMap[helpId]) {
       const nextScopeMap = { ...scopeMap };
@@ -48,7 +46,7 @@ export const HelpProvider: React.FC<{ children: React.ReactNode }> = ({ children
       allTargetLayoutsRef.current = { ...allTargetLayoutsRef.current, [scope]: nextScopeMap };
       forceRender(v => v + 1);
     }
-  }, [currentScope]);
+  }, []);
 
   const value = useMemo<HelpContextValue>(() => ({
     isHelpOverlayActive,

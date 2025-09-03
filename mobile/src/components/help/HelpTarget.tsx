@@ -30,7 +30,7 @@ export const HelpTarget: React.FC<HelpTargetProps> = ({ helpId, children, style 
       if (changed) {
         lastLayoutRef.current = next;
         if (!localScope || localScope === (currentScope || 'default')) {
-          registerTargetLayout(helpId, next);
+          registerTargetLayout(helpId, next, localScope || 'default');
         }
       }
     });
@@ -38,7 +38,7 @@ export const HelpTarget: React.FC<HelpTargetProps> = ({ helpId, children, style 
 
   useEffect(() => {
     measure();
-    return () => { unregisterTargetLayout(helpId); };
+    return () => { unregisterTargetLayout(helpId, localScope || 'default'); };
   }, [measure, helpId, unregisterTargetLayout]);
 
   // Re-measure when help mode toggles to ensure accurate layout while overlay is active

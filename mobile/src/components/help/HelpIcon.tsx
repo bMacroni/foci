@@ -9,11 +9,13 @@ export const HelpIcon: React.FC = () => {
   return (
     <TouchableOpacity
       accessibilityLabel={isHelpOverlayActive ? 'Exit help' : 'Enter help'}
+      accessibilityRole="button"
+      accessibilityHint="Toggle help overlay"
       style={styles.button}
-      onPress={() => setIsHelpOverlayActive(!isHelpOverlayActive)}
+      onPress={() => setIsHelpOverlayActive(prev => !prev)}
       activeOpacity={0.7}
     >
-      <Icon name="question" size={18} color={colors.text.secondary} />
+      <Icon name="question" size={20} color={colors.text.secondary} />
     </TouchableOpacity>
   );
 };

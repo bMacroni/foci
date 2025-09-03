@@ -751,19 +751,21 @@ export default function GoalsScreen({ navigation }: any) {
             <Text style={styles.goalDescription}>{goal.description}</Text>
             <View style={styles.dueRow}>
               <Icon name="calendar" size={14} color={colors.accent?.gold || colors.text.secondary} />
-              <TouchableOpacity
-                onPress={() => (editingDate[goal.id] ? cancelEditDate(goal.id) : startEditDate(goal.id, goal.targetDate))}
-              >
-                <Text
-                  style={[
-                    styles.dueText,
-                    due.tone === 'warn' && { color: colors.accent?.gold || colors.warning },
-                    due.tone === 'danger' && { color: colors.error },
-                  ]}
+              <HelpTarget helpId={`goal-target-date:${goal.id}`}>
+                <TouchableOpacity
+                  onPress={() => (editingDate[goal.id] ? cancelEditDate(goal.id) : startEditDate(goal.id, goal.targetDate))}
                 >
-                  {due.text}
-                </Text>
-              </TouchableOpacity>
+                  <Text
+                    style={[
+                      styles.dueText,
+                      due.tone === 'warn' && { color: colors.accent?.gold || colors.warning },
+                      due.tone === 'danger' && { color: colors.error },
+                    ]}
+                  >
+                    {due.text}
+                  </Text>
+                </TouchableOpacity>
+              </HelpTarget>
             </View>
             {editingDate[goal.id] && (
               <View style={styles.dateEditContainer}>
