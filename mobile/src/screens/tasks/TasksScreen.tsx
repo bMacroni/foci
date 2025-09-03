@@ -842,6 +842,8 @@ export const TasksScreen: React.FC = () => {
             onPress={handleBulkAutoSchedule}
             disabled={bulkScheduling}
             activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={bulkScheduling ? 'Scheduling all tasks' : 'Auto-schedule all tasks'}
           >
             {bulkScheduling ? (
               <ActivityIndicator size="small" color={colors.secondary} />
