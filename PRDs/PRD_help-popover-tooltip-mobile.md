@@ -2,7 +2,7 @@
 
 ### Summary
 
-This document outlines the requirements for a screen-specific, contextual help system for the Foci **mobile application**. After re-evaluation, this system will be implemented using the `react-native-popable` library to provide flexible, on-demand tooltips. The system is activated by a help icon placed on each screen. When active, users can tap highlighted UI elements to reveal a pop-up containing a verbose description of that element's function.
+This document outlines the requirements for a screen-specific, contextual help system for the MindClear **mobile application**. After re-evaluation, this system will be implemented using the `react-native-popable` library to provide flexible, on-demand tooltips. The system is activated by a help icon placed on each screen. When active, users can tap highlighted UI elements to reveal a pop-up containing a verbose description of that element's function.
 
 -----
 
