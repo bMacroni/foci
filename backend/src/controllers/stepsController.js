@@ -26,9 +26,7 @@ export async function updateStep(req, res) {
   const { text, order, completed } = req.body;
   const token = req.headers.authorization?.split(' ')[1];
   
-  console.log('updateStep: Received request for stepId:', stepId);
-  console.log('updateStep: Request body:', req.body);
-  console.log('updateStep: Token present:', !!token);
+  // Update step request received
   
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
     global: { headers: { Authorization: `Bearer ${token}` } }
@@ -37,7 +35,7 @@ export async function updateStep(req, res) {
   const updateFields = { text, order, updated_at: new Date().toISOString() };
   if (typeof completed === 'boolean') updateFields.completed = completed;
   
-  console.log('updateStep: Update fields:', updateFields);
+  // Update fields prepared
   
   const { data, error } = await supabase
     .from('steps')
@@ -51,7 +49,7 @@ export async function updateStep(req, res) {
     return res.status(400).json({ error: error.message });
   }
   
-  console.log('updateStep: Successfully updated step:', data);
+  // Successfully updated step
   res.json(data);
 }
 

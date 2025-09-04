@@ -654,7 +654,7 @@ export async function createGoalFromAI(args, userId, userContext) {
 }
 
 export async function updateGoalFromAI(args, userId, userContext) {
-  const { id, title, description, due_date, priority } = args;
+  const { id, title, description, due_date, priority, milestones, milestone_behavior = 'add' } = args;
   const token = userContext?.token;
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
     global: {
@@ -680,24 +680,125 @@ export async function updateGoalFromAI(args, userId, userContext) {
     return { error: "Goal ID or title is required to update a goal." };
   }
 
-  // Prepare update data
-  const updateData = {};
-  if (description !== undefined) updateData.description = description;
-  if (due_date !== undefined) updateData.target_completion_date = due_date;
-  if (priority !== undefined) updateData.category = priority;
+  try {
+    // Prepare update data
+    const updateData = {};
+    if (title !== undefined) updateData.title = title;
+    if (description !== undefined) updateData.description = description;
+    if (due_date !== undefined) updateData.target_completion_date = due_date;
+    if (priority !== undefined) updateData.category = priority;
 
-  const { data, error } = await supabase
-    .from('goals')
-    .update(updateData)
-    .eq('id', goalId)
-    .eq('user_id', userId)
-    .select()
-    .single();
+    // Update the goal if there are changes
+    if (Object.keys(updateData).length > 0) {
+      const { data, error } = await supabase
+        .from('goals')
+        .update(updateData)
+        .eq('id', goalId)
+        .eq('user_id', userId)
+        .select()
+        .single();
 
-  if (error) {
-    return { error: error.message };
+      if (error) {
+        return { error: error.message };
+      }
+    }
+
+    // If milestones are provided, handle them based on milestone_behavior
+    if (milestones && Array.isArray(milestones) && milestones.length > 0) {
+      // If behavior is 'replace', delete existing milestones and their steps first
+      if (milestone_behavior === 'replace') {
+        // Get existing milestones to delete their steps
+        const { data: existingMilestones } = await supabase
+          .from('milestones')
+          .select('id')
+          .eq('goal_id', goalId);
+        
+        if (existingMilestones && existingMilestones.length > 0) {
+          const milestoneIds = existingMilestones.map(m => m.id);
+          
+          // Delete steps first (foreign key constraint)
+          const { error: stepsDeleteError } = await supabase
+            .from('steps')
+            .delete()
+            .in('milestone_id', milestoneIds);
+          
+          if (stepsDeleteError) {
+            return { error: `Failed to delete existing steps: ${stepsDeleteError.message}` };
+          }
+          
+          // Delete milestones
+          const { error: milestonesDeleteError } = await supabase
+            .from('milestones')
+            .delete()
+            .eq('goal_id', goalId);
+          
+          if (milestonesDeleteError) {
+            return { error: `Failed to delete existing milestones: ${milestonesDeleteError.message}` };
+          }
+        }
+      }
+      
+      // Create new milestones and their steps
+      for (let i = 0; i < milestones.length; i++) {
+        const milestone = milestones[i];
+        const { title: milestoneTitle, steps: milestoneSteps, order: milestoneOrder = i + 1 } = milestone;
+        
+        // Create the milestone
+        const { data: createdMilestone, error: milestoneError } = await supabase
+          .from('milestones')
+          .insert([{ 
+            goal_id: goalId, 
+            title: milestoneTitle, 
+            order: milestoneOrder 
+          }])
+          .select()
+          .single();
+        
+        if (milestoneError) {
+          return { error: `Failed to create milestone: ${milestoneError.message}` };
+        }
+
+        // If steps are provided for this milestone, create them
+        if (milestoneSteps && Array.isArray(milestoneSteps) && milestoneSteps.length > 0) {
+          const stepsToInsert = milestoneSteps.map((step, stepIndex) => ({
+            milestone_id: createdMilestone.id,
+            text: step.text || step,
+            order: step.order || stepIndex + 1,
+            completed: step.completed || false
+          }));
+
+          const { error: stepsError } = await supabase
+            .from('steps')
+            .insert(stepsToInsert);
+
+          if (stepsError) {
+            return { error: `Failed to create steps: ${stepsError.message}` };
+          }
+        }
+      }
+    }
+
+    // Fetch the complete goal with milestones and steps
+    const { data: completeGoal, error: fetchError } = await supabase
+      .from('goals')
+      .select(`
+        *,
+        milestones (
+          *,
+          steps (*)
+        )
+      `)
+      .eq('id', goalId)
+      .single();
+
+    if (fetchError) {
+      return { error: fetchError.message };
+    }
+
+    return completeGoal;
+  } catch (error) {
+    return { error: 'Internal server error' };
   }
-  return data;
 } 
 
 // === Milestone Logic (migrated from milestonesController.js) ===

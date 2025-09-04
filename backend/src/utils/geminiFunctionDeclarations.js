@@ -171,6 +171,11 @@ export const updateGoalFunctionDeclaration = {
           },
           required: ['title']
         }
+      },
+      milestone_behavior: { 
+        type: Type.STRING, 
+        enum: ['add', 'replace'], 
+        description: 'How to handle milestones: "add" to add new milestones to existing ones, "replace" to replace all existing milestones with new ones. Defaults to "add" if not specified.' 
       }
     },
     required: ['id'] // id is now required since we get it from lookup_goal
@@ -192,7 +197,7 @@ export const deleteGoalFunctionDeclaration = {
 
 export const lookupGoalbyTitleFunctionDeclaration = {
   name: 'lookup_goal',
-  description: 'STRICTLY use this to look up a goal ID before taking any action on a goal. Do NOT use read_goal for lookups. This returns only minimal data (id and title). Always pass the search text the user provided (partial match OK). Prefer limit: 1 to fetch a single best match. After getting the ID, immediately call the requested action (update_goal, delete_goal, or read_goal if details are requested). Example user prompts: "Update my fitness goal", "Delete the goal about learning React", "Show details for my marathon goal".',
+  description: 'CRITICAL: Use this function when the user wants to UPDATE, MODIFY, CHANGE, ADD TO, IMPROVE, or REFINE a goal. Do NOT use read_goal for these requests. This function returns only minimal data (id and title) and MUST be followed immediately by update_goal, delete_goal, or another action function. Always pass the search text the user provided (partial match OK). Prefer limit: 1 to fetch a single best match. After getting the ID, immediately call the requested action. Example user prompts: "Update my fitness goal", "Add milestones to my app goal", "Modify my learning goal", "Refine my project goal".',
   parameters: {
     type: Type.OBJECT,
     properties: {
@@ -209,7 +214,7 @@ export const lookupGoalbyTitleFunctionDeclaration = {
 
 export const readGoalFunctionDeclaration = {
   name: 'read_goal',
-  description: `Reads goal details for the user. Use this when the user specifically asks for goal details beyond the title (e.g., description, status, due date, milestones) or asks to filter by those fields. For a simple list of titles like "What are my current goals?", prefer the 'get_goal_titles' function which is optimized to return only titles.
+  description: `Reads goal details for the user. Use this ONLY when the user explicitly asks to "show", "display", "view", or "see" goal details without any modification intent. Do NOT use this for update, modify, change, add, improve, or refine requests - use lookup_goal instead. For a simple list of titles like "What are my current goals?", prefer the 'get_goal_titles' function which is optimized to return only titles.
 
 When returning data to the frontend after a detailed read, use this format for compatibility:
 {

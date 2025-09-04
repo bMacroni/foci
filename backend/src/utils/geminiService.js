@@ -217,6 +217,12 @@ GOAL Setting guidelines:
   - Each milestone can be comprised of 2 or more steps, to only limit should be how many steps it will take to complete the milestone.
 - Step: A specific, actionable task that helps complete a milestone.
 
+GOAL UPDATE BEHAVIOR:
+- When updating a goal with new milestones, ALWAYS ask the user: "Would you like me to add these new milestones to your existing ones, or replace all existing milestones with these new ones?"
+- Use milestone_behavior: "add" when the user wants to keep existing milestones and add new ones
+- Use milestone_behavior: "replace" when the user wants to replace all existing milestones with new ones
+- Default to "add" behavior if the user doesn't specify their preference
+
 CONVERSATIONAL GOAL CREATION PROCESS:
 1. **Engage and Understand**: When a user mentions wanting to achieve something, engage them in a conversation about their goal.
    - Ask clarifying questions: "What specifically do you want to achieve?" "When would you like to complete this by?" "How important is this to you?"
@@ -274,6 +280,9 @@ AI: "Excellent! I'm excited to help you on this journey. Let me create this goal
 
 IMPORTANT: 
 > - When you call lookup_goal and receive a list of goals, you MUST immediately call update_goal or delete_goal with the appropriate goal ID from that list. Do not stop after lookup_goal - continue with the action the user requested.
+> - CRITICAL: If the user asks to "update", "modify", "change", "add to", "improve", or "refine" a goal, you MUST use lookup_goal first to find the goal ID, then call update_goal. Do NOT use read_goal for update requests.
+> - Use read_goal ONLY when the user explicitly asks to "show", "display", "view", or "see" goal details without any modification intent.
+> - Use lookup_goal when the user wants to perform ANY action on a specific goal (update, delete, modify, add milestones, etc.).
 > - Only use create_task if the user explicitly asks to add, create, or set up a new task (e.g., "Add a task", "Create a new task", "Remind me to...").
 > - For questions like "What are my tasks?", "Show me my tasks", or "List my tasks", use ONLY the read_task function. Do NOT call create_task unless the user clearly requests a new task.
 > - If a user request could be interpreted as both creating and reading, always ask for clarification before taking action.
@@ -286,7 +295,7 @@ CONVERSATIONAL FLOW: After providing information (especially after read operatio
 
 Be conversational, supportive, and encouraging throughout the goal creation process. Celebrate their commitment and show enthusiasm for their goals.`;
 
-      if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] System prompt length:', systemPrompt.length);
+      // System prompt loaded
 
       // Trim conversation history to the last MAX_HISTORY_MESSAGES
       const MAX_HISTORY_MESSAGES = 10;
@@ -342,10 +351,10 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
       // Prevent multiple READs of the same entity in a single turn (e.g., read_task twice)
       const executedReadEntities = new Set();
       if (functionCalls && functionCalls.length > 0) {
-        console.log('🔍 [GEMINI DEBUG] Processing function calls...');
+        if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Processing function calls...');
         for (const functionCall of functionCalls) {
-          console.log('🔍 [GEMINI DEBUG] Executing function call:', functionCall.name);
-          console.log('🔍 [GEMINI DEBUG] Function call args:', JSON.stringify(functionCall.args, null, 2));
+          if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Executing function call:', functionCall.name);
+          if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Function call args:', JSON.stringify(functionCall.args, null, 2));
           
           // Create a unique key for the function call (name + args JSON)
           const callKey = `${functionCall.name}:${JSON.stringify(functionCall.args)}`;
@@ -355,29 +364,29 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
             const match = functionCall.name.match(/^read_(.*)$/);
             const entity = match ? match[1] : functionCall.name;
             if (executedReadEntities.has(entity)) {
-              console.log('🔍 [GEMINI DEBUG] Skipping duplicate read for entity:', entity);
+              if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Skipping duplicate read for entity:', entity);
               continue;
             }
             executedReadEntities.add(entity);
           }
           let execResult = await this._executeFunctionCall(functionCall, userId, userContext);
           
-          console.log('🔍 [GEMINI DEBUG] Function execution result:', JSON.stringify(execResult, null, 2));
+          if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Function execution result:', JSON.stringify(execResult, null, 2));
           
           // Due date normalization for tests (mock mode)
           let details = execResult !== undefined && execResult !== null ? execResult : functionCall.args;
           // Gemini API expects functionResponse.response to be an object, not an array
           if (functionCall.name === 'read_goal' && Array.isArray(details)) {
             details = { goals: details };
-            console.log('🔍 [GEMINI DEBUG] Converted read_goal array to object with goals property');
+            if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Converted read_goal array to object with goals property');
           }
           if (functionCall.name === 'read_task' && Array.isArray(details)) {
             details = { tasks: details };
-            console.log('🔍 [GEMINI DEBUG] Converted read_task array to object with tasks property');
+            if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Converted read_task array to object with tasks property');
           }
           if (functionCall.name === 'read_calendar_event' && Array.isArray(details)) {
             details = { events: details };
-            console.log('🔍 [GEMINI DEBUG] Converted read_calendar_event array to object with events property');
+            if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Converted read_calendar_event array to object with events property');
           }
           if (details && details.due_date) {
             // Normalize past year to current year
@@ -421,7 +430,7 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
               details,
               args: functionCall.args || {}
             });
-            console.log('🔍 [GEMINI DEBUG] Added action:', { action_type, entity_type });
+            if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Added action:', { action_type, entity_type });
           }
           functionResults.push({ name: functionCall.name, response: details });
         }
@@ -431,7 +440,7 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
           response: fr.response
         }));
         
-        console.log('🔍 [GEMINI DEBUG] Function responses to send back to Gemini:', JSON.stringify(functionResponses, null, 2));
+        if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Function responses to send back to Gemini:', JSON.stringify(functionResponses, null, 2));
         
         const followupContents = [
           ...contents,
@@ -458,30 +467,30 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
               const payload = { category: 'task', title: 'Your Tasks', tasks: mergedTasks };
               const leadIn = this._buildReadLeadIn('task', mergedTasks?.length || 0, userContext);
               message = `${leadIn}\n\n\`\`\`json\n${JSON.stringify(payload, null, 2)}\n\`\`\``;
-              console.log('🔍 [GEMINI DEBUG] Merged multiple read_task actions into category block');
+              if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Merged multiple read_task actions into category block');
             } else if (entity === 'calendar_event') {
               const mergedEvents = actions.flatMap(a => Array.isArray(a.details?.events) ? a.details.events : (Array.isArray(a.details) ? a.details : []));
               const payload = { category: 'schedule', title: "Here's your schedule:", events: mergedEvents };
               const leadIn = this._buildReadLeadIn('calendar_event', mergedEvents?.length || 0, userContext);
               message = `${leadIn}\n\n\`\`\`json\n${JSON.stringify(payload, null, 2)}\n\`\`\``;
-              console.log('🔍 [GEMINI DEBUG] Merged multiple read_calendar_event actions into category block');
+              if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Merged multiple read_calendar_event actions into category block');
             } else {
               message = `created ${actions.length} actions`;
-              console.log('🔍 [GEMINI DEBUG] Multiple actions (unsupported merge), using simple message:', message);
+              if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Multiple actions (unsupported merge), using simple message:', message);
             }
           } else {
             message = `created ${actions.length} actions`;
-            console.log('🔍 [GEMINI DEBUG] Multiple actions (heterogeneous), using simple message:', message);
+            if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Multiple actions (heterogeneous), using simple message:', message);
           }
           } else {
-          console.log('🔍 [GEMINI DEBUG] Sending followup request to Gemini for final response');
+          if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Sending followup request to Gemini for final response');
           const finalResponse = await this._generateContentWithRetry({
             contents: followupContents,
             tools: [{ functionDeclarations: allGeminiFunctionDeclarations }]
           });
           
-          console.log('🔍 [GEMINI DEBUG] Received final response from Gemini');
-          console.log('🔍 [GEMINI DEBUG] Final response has function calls:', !!finalResponse.functionCalls);
+          if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Received final response from Gemini');
+          if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Final response has function calls:', !!finalResponse.functionCalls);
           
           // Check for additional function calls in the final response
           let finalFunctionCalls = finalResponse.functionCalls ? await finalResponse.functionCalls() : [];
@@ -489,21 +498,21 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
           // Defensive check to ensure finalFunctionCalls is always an array
           if (!finalFunctionCalls || !Array.isArray(finalFunctionCalls)) {
             finalFunctionCalls = [];
-            console.log('🔍 [GEMINI DEBUG] Final function calls was not an array, set to empty array');
+            if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Final function calls was not an array, set to empty array');
           }
           
-          console.log('🔍 [GEMINI DEBUG] Final function calls count:', finalFunctionCalls.length);
+          if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Final function calls count:', finalFunctionCalls.length);
           
           if (finalFunctionCalls && finalFunctionCalls.length > 0) {
-            console.log('🔍 [GEMINI DEBUG] Processing additional function calls in final response...');
+            if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Processing additional function calls in final response...');
             // Process the additional function calls
             for (const functionCall of finalFunctionCalls) {
-              console.log('🔍 [GEMINI DEBUG] Executing additional function call:', functionCall.name);
+              if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Executing additional function call:', functionCall.name);
               // Create a unique key for the function call (name + args JSON)
               const callKey = `${functionCall.name}:${JSON.stringify(functionCall.args)}`;
               if (executedFunctionCalls.has(callKey)) {
                 // Skip duplicate function call
-                console.log('🔍 [GEMINI DEBUG] Skipping duplicate function call:', functionCall.name);
+                if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Skipping duplicate function call:', functionCall.name);
                 continue;
               }
               executedFunctionCalls.add(callKey);
@@ -512,14 +521,14 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
                 const match = functionCall.name.match(/^read_(.*)$/);
                 const entity = match ? match[1] : functionCall.name;
                 if (executedReadEntities.has(entity)) {
-                  console.log('🔍 [GEMINI DEBUG] Skipping duplicate read for entity (final pass):', entity);
+                  if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Skipping duplicate read for entity (final pass):', entity);
                   continue;
                 }
                 executedReadEntities.add(entity);
               }
               const details = await this._executeFunctionCall(functionCall, userId, userContext);
               
-              console.log('🔍 [GEMINI DEBUG] Additional function execution result:', JSON.stringify(details, null, 2));
+              if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Additional function execution result:', JSON.stringify(details, null, 2));
               
               // Determine action type and entity type
               let action_type = 'unknown';
@@ -544,12 +553,12 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
                 details,
                 args: functionCall.args || {}
               });
-              console.log('🔍 [GEMINI DEBUG] Added additional action:', { action_type, entity_type });
+              if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Added additional action:', { action_type, entity_type });
             }
           }
           
           message = finalResponse.text ? await finalResponse.text() : '';
-          console.log('🔍 [GEMINI DEBUG] Final response text:', message);
+          if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Final response text:', message);
           
           // Standardize READ responses to category blocks for frontend rendering
           const firstReadTask = actions.find(a => a.action_type === 'read' && a.entity_type === 'task');
@@ -561,7 +570,7 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
             const schedulePayload = { category: 'schedule', title: "Here's your schedule:", events };
             const leadIn = this._buildReadLeadIn('calendar_event', events?.length || 0, userContext);
             message = `${leadIn}\n\n\`\`\`json\n${JSON.stringify(schedulePayload, null, 2)}\n\`\`\``;
-            console.log('🔍 [GEMINI DEBUG] Injected schedule category block');
+            if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Injected schedule category block');
           } else if (firstReadGoal) {
             const details = firstReadGoal.details ?? {};
             const rawGoals = details?.goals ?? firstReadGoal.details;
@@ -574,7 +583,7 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
               const payload = { category: 'goal', title: 'Your Goals', goals: titlesArray };
               const leadIn = this._buildReadLeadIn('goal', titlesArray.length, userContext);
               message = `${leadIn}\n\n\`\`\`json\n${JSON.stringify(payload, null, 2)}\n\`\`\``;
-              console.log('🔍 [GEMINI DEBUG] Injected goal titles category block');
+              if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Injected goal titles category block');
             } else {
               // Fallback: focus a single goal object
               const goalsPayload = details?.goals ?? details;
@@ -584,7 +593,7 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
                 const goalPayload = { category: 'goal', title: firstGoal.title || 'Goal', goal: firstGoal };
                 const leadIn = this._buildReadLeadIn('goal', 1, userContext);
                 message = `${leadIn}\n\n\`\`\`json\n${JSON.stringify(goalPayload, null, 2)}\n\`\`\``;
-                console.log('🔍 [GEMINI DEBUG] Injected goal category block');
+                if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Injected goal category block');
               }
             }
           } else if (firstReadTask) {
@@ -592,7 +601,7 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
             const taskPayload = { category: 'task', title: 'Your Tasks', tasks };
             const leadIn = this._buildReadLeadIn('task', tasks?.length || 0, userContext, firstReadTask.args || {});
             message = `${leadIn}\n\n\`\`\`json\n${JSON.stringify(taskPayload, null, 2)}\n\`\`\``;
-            console.log('🔍 [GEMINI DEBUG] Injected task category block');
+            if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Injected task category block');
           }
 
           // If we created or updated a calendar event in this cycle, append a precise confirmation line
@@ -633,7 +642,32 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
             message = `${confirmations}\n\n${message}`.trim();
           }
           
-          // No special confirmation flow for goals; create immediately when requested.
+          // Add confirmation flow for goal updates
+          const updatedGoalAction = actions.find(a => a.action_type === 'update' && a.entity_type === 'goal');
+          if (updatedGoalAction && updatedGoalAction.details) {
+            const goal = updatedGoalAction.details;
+            const goalTitle = goal.title || 'your goal';
+            const milestoneBehavior = updatedGoalAction.args?.milestone_behavior || 'add';
+            const hasMilestones = updatedGoalAction.args?.milestones && updatedGoalAction.args.milestones.length > 0;
+            
+            let confirmationMessage = `I've updated "${goalTitle}".`;
+            
+            if (hasMilestones) {
+              if (milestoneBehavior === 'replace') {
+                confirmationMessage += ` I've replaced all existing milestones with the new ones from our conversation.`;
+              } else {
+                confirmationMessage += ` I've added the new milestones to your existing ones.`;
+              }
+            }
+            
+            // If the original message is empty or very short, use our confirmation
+            if (!message || message.trim().length < 10) {
+              message = confirmationMessage;
+            } else {
+              message = `${confirmationMessage}\n\n${message}`;
+            }
+            if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Added goal update confirmation');
+          }
 
           // Add directional guidance after read actions to keep conversation flowing
           //const readGoalAction = actions.find(a => a.action_type === 'read' && a.entity_type === 'goal');
@@ -650,16 +684,37 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
             //console.log('🔍 [GEMINI DEBUG] Added directional guidance to message');
           //}
         }
+        // Fallback: if message is still empty, provide a generic confirmation
+        if (!message || message.trim().length === 0) {
+          if (actions.length > 0) {
+            const actionTypes = actions.map(a => a.action_type);
+            const entityTypes = actions.map(a => a.entity_type);
+            if (actionTypes.includes('update') && entityTypes.includes('goal')) {
+              message = "I've updated your goal successfully.";
+            } else if (actionTypes.includes('create')) {
+              message = "I've created that for you.";
+            } else if (actionTypes.includes('delete')) {
+              message = "I've deleted that for you.";
+            } else {
+              message = "I've completed that action for you.";
+            }
+            if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Added fallback confirmation message');
+          } else {
+            message = "I've processed your request.";
+            if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Added generic fallback message');
+          }
+        }
+        
         // Add to conversation history
         this._addToHistory(userId, { role: 'model', content: message });
         
         // Defensive check to ensure actions is always an array
         if (!actions || !Array.isArray(actions)) {
           actions = [];
-          console.log('🔍 [GEMINI DEBUG] Actions was not an array, set to empty array');
+          if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Actions was not an array, set to empty array');
         }
         
-        console.log('🔍 [GEMINI DEBUG] Final return object:', {
+        if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Final return object:', {
           message: message.substring(0, 200) + (message.length > 200 ? '...' : ''),
           actionsCount: actions.length,
           actions: actions.map(a => ({ action_type: a.action_type, entity_type: a.entity_type }))
@@ -678,10 +733,10 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
         // Defensive check to ensure actions is always an array
         if (!actions || !Array.isArray(actions)) {
           actions = [];
-          console.log('🔍 [GEMINI DEBUG] Actions was not an array, set to empty array');
+          if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Actions was not an array, set to empty array');
         }
         
-        console.log('🔍 [GEMINI DEBUG] Final return object (text only):', {
+        if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Final return object (text only):', {
           message: message.substring(0, 200) + (message.length > 200 ? '...' : ''),
           actionsCount: actions.length
         });
@@ -847,53 +902,53 @@ Make the milestones and steps specific to this goal, encouraging, and achievable
   async _executeFunctionCall(functionCall, userId, userContext) {
     const { name, args } = functionCall;
     
-    console.log('🔍 [GEMINI DEBUG] _executeFunctionCall - Function name:', name);
-    console.log('🔍 [GEMINI DEBUG] _executeFunctionCall - Function args:', JSON.stringify(args, null, 2));
-    console.log('🔍 [GEMINI DEBUG] _executeFunctionCall - User ID:', userId);
-    console.log('🔍 [GEMINI DEBUG] _executeFunctionCall - User context keys:', Object.keys(userContext));
+    if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] _executeFunctionCall - Function name:', name);
+    if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] _executeFunctionCall - Function args:', JSON.stringify(args, null, 2));
+    if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] _executeFunctionCall - User ID:', userId);
+    if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] _executeFunctionCall - User context keys:', Object.keys(userContext));
     
     try {
       let result;
       
       switch (name) {
         case 'create_task':
-          console.log('🔍 [GEMINI DEBUG] Executing create_task');
+          if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Executing create_task');
           result = await tasksController.createTaskFromAI(args, userId, userContext);
           break;
         case 'update_task':
-          console.log('🔍 [GEMINI DEBUG] Executing update_task');
+          if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Executing update_task');
           result = await tasksController.updateTaskFromAI(args, userId, userContext);
           break;
         case 'delete_task':
-          console.log('🔍 [GEMINI DEBUG] Executing delete_task');
+          if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Executing delete_task');
           result = await tasksController.deleteTaskFromAI(args, userId, userContext);
           break;
         case 'read_task':
-          console.log('🔍 [GEMINI DEBUG] Executing read_task');
+          if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Executing read_task');
           result = await tasksController.readTaskFromAI(args, userId, userContext);
           break;
         case 'lookup_task':
-          console.log('🔍 [GEMINI DEBUG] Executing lookup_task');
+          if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Executing lookup_task');
           result = await tasksController.lookupTaskbyTitle(userId, userContext.token);
           break;
         case 'create_goal':
-          console.log('🔍 [GEMINI DEBUG] Executing create_goal');
+          if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Executing create_goal');
           result = await goalsController.createGoalFromAI(args, userId, userContext);
           break;
         case 'update_goal':
-          console.log('🔍 [GEMINI DEBUG] Executing update_goal');
+          if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Executing update_goal');
           result = await goalsController.updateGoalFromAI(args, userId, userContext);
           break;
         case 'delete_goal':
-          console.log('🔍 [GEMINI DEBUG] Executing delete_goal');
+          if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Executing delete_goal');
           result = await goalsController.deleteGoalFromAI(args, userId, userContext);
           break;
         case 'lookup_goal':
-          console.log('🔍 [GEMINI DEBUG] Executing lookup_goal');
+          if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Executing lookup_goal');
           result = await goalsController.lookupGoalbyTitle(userId, userContext.token, args);
           break;
         case 'read_goal':
-          console.log('🔍 [GEMINI DEBUG] Executing read_goal');
+          if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Executing read_goal');
           // Map search parameter to title for compatibility with getGoalsForUser
           const readGoalArgs = { ...args };
           if (args.search) {
@@ -903,31 +958,31 @@ Make the milestones and steps specific to this goal, encouraging, and achievable
           result = await goalsController.getGoalsForUser(userId, userContext.token, readGoalArgs);
           break;
         case 'get_goal_titles':
-          console.log('🔍 [GEMINI DEBUG] Executing get_goal_titles');
+          if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Executing get_goal_titles');
           result = await goalsController.getGoalTitlesForUser(userId, userContext.token, args);
           break;
         case 'create_task_from_next_goal_step':
-          console.log('🔍 [GEMINI DEBUG] Executing create_task_from_next_goal_step');
+          if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Executing create_task_from_next_goal_step');
           result = await goalsController.createTaskFromNextGoalStep(userId, userContext.token, args);
           break;
         case 'create_calendar_event':
-          console.log('🔍 [GEMINI DEBUG] Executing create_calendar_event');
+          if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Executing create_calendar_event');
           result = await calendarService.createCalendarEventFromAI(args, userId, userContext);
           break;
         case 'update_calendar_event':
-          console.log('🔍 [GEMINI DEBUG] Executing update_calendar_event');
+          if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Executing update_calendar_event');
           result = await calendarService.updateCalendarEventFromAI(args, userId, userContext);
           break;
         case 'delete_calendar_event':
-          console.log('🔍 [GEMINI DEBUG] Executing delete_calendar_event');
+          if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Executing delete_calendar_event');
           result = await calendarService.deleteCalendarEventFromAI(args, userId, userContext);
           break;
         case 'read_calendar_event':
-          console.log('🔍 [GEMINI DEBUG] Executing read_calendar_event');
+          if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Executing read_calendar_event');
           result = await calendarService.readCalendarEventFromAI(args, userId, userContext);
           break;
         case 'lookup_calendar_event':
-          console.log('🔍 [GEMINI DEBUG] Executing lookup_calendar_event');
+          if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Executing lookup_calendar_event');
           // Ensure a date is always provided; default to 'today'
           {
             const safeArgs = { ...args };
@@ -936,17 +991,17 @@ Make the milestones and steps specific to this goal, encouraging, and achievable
           }
           break;
         default:
-          console.log('🔍 [GEMINI DEBUG] Unknown function call:', name);
+          if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Unknown function call:', name);
           result = { error: `Unknown function call: ${name}` };
       }
       
-      console.log('🔍 [GEMINI DEBUG] _executeFunctionCall - Result type:', typeof result);
-      console.log('🔍 [GEMINI DEBUG] _executeFunctionCall - Result:', JSON.stringify(result, null, 2));
+      if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] _executeFunctionCall - Result type:', typeof result);
+      if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] _executeFunctionCall - Result:', JSON.stringify(result, null, 2));
       
       return result;
     } catch (err) {
-      console.error('🔍 [GEMINI DEBUG] Error in _executeFunctionCall:', err);
-      console.error('🔍 [GEMINI DEBUG] Error stack:', err.stack);
+      if (this.DEBUG) console.error('🔍 [GEMINI DEBUG] Error in _executeFunctionCall:', err);
+      if (this.DEBUG) console.error('🔍 [GEMINI DEBUG] Error stack:', err.stack);
       return { error: err.message || String(err) };
     }
   }

@@ -492,10 +492,15 @@ export default function AIChatScreen({ navigation, route }: any) {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       
+      // Extract message and actions from response
+      const responseData = response.data || response;
+      const message = responseData.message;
+      const actions = responseData.actions || [];
+      
       // Add AI response to conversation
       const aiMessage: Message = {
         id: Date.now() + 1,
-        text: response.data.message,
+        text: message,
         sender: 'ai',
       };
       
@@ -509,6 +514,27 @@ export default function AIChatScreen({ navigation, route }: any) {
         }
         return c;
       }));
+
+      // Handle actions (show toast notifications for completed actions)
+      actions.forEach((action: any) => {
+        // Only handle create/update/delete actions
+        if (["create", "update", "delete"].includes(action.action_type)) {
+          let actionVerb = '';
+          if (action.action_type === 'create') actionVerb = 'created';
+          if (action.action_type === 'update') actionVerb = 'updated';
+          if (action.action_type === 'delete') actionVerb = 'deleted';
+          const entity = action.entity_type.replace('_', ' ');
+          const title = action.details?.title || action.details?.name || '';
+          // Show success message
+          const successMessage = `${entity.charAt(0).toUpperCase() + entity.slice(1)}${title ? ` "${title}"` : ''} ${actionVerb}.`;
+          // Action completed successfully
+        }
+        // If error
+        if (action.details && action.details.error) {
+          const errorMessage = `Failed to ${action.action_type} ${action.entity_type}: ${action.details.error}`;
+          console.error('❌ Action failed:', errorMessage);
+        }
+      });
     } catch (err: any) {
       console.error('AI Chat error:', err.message);
       
@@ -610,13 +636,39 @@ export default function AIChatScreen({ navigation, route }: any) {
              { headers: { Authorization: `Bearer ${token}` } }
            );
           
-          const aiMessage: Message = { id: Date.now() + 1, text: response.data.message, sender: 'ai' };
+          // Extract message and actions from response
+          const responseData = response.data || response;
+          const message = responseData.message;
+          const actions = responseData.actions || [];
+          
+          const aiMessage: Message = { id: Date.now() + 1, text: message, sender: 'ai' };
           setConversations(prev => prev.map(c => {
             if (c.id === newConversation.id) {
               return { ...c, messages: [...c.messages, aiMessage], lastMessageAt: new Date() };
             }
             return c;
           }));
+
+          // Handle actions (show toast notifications for completed actions)
+          actions.forEach((action: any) => {
+            // Only handle create/update/delete actions
+            if (["create", "update", "delete"].includes(action.action_type)) {
+              let actionVerb = '';
+              if (action.action_type === 'create') actionVerb = 'created';
+              if (action.action_type === 'update') actionVerb = 'updated';
+              if (action.action_type === 'delete') actionVerb = 'deleted';
+              const entity = action.entity_type.replace('_', ' ');
+              const title = action.details?.title || action.details?.name || '';
+              // Show success message
+              const successMessage = `${entity.charAt(0).toUpperCase() + entity.slice(1)}${title ? ` "${title}"` : ''} ${actionVerb}.`;
+              // Action completed successfully
+            }
+            // If error
+            if (action.details && action.details.error) {
+              const errorMessage = `Failed to ${action.action_type} ${action.entity_type}: ${action.details.error}`;
+              console.error('❌ Action failed:', errorMessage);
+            }
+          });
                  } catch (err: any) {
            console.error('AI Chat auto-send error:', err.message);
           

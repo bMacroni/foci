@@ -1,12 +1,6 @@
 export async function storeGoogleTokens(userId, tokens) {
   try {
-    console.log(`[TokenStorage] Storing tokens for user ${userId}:`, {
-      hasAccessToken: !!tokens.access_token,
-      hasRefreshToken: !!tokens.refresh_token,
-      scope: tokens.scope,
-      tokenType: tokens.token_type,
-      expiryDate: tokens.expiry_date
-    });
+    // Storing tokens for user
     
     const { createClient } = await import('@supabase/supabase-js');
     const supabase = createClient(
@@ -24,14 +18,7 @@ export async function storeGoogleTokens(userId, tokens) {
       updated_at: new Date().toISOString()
     };
     
-    console.log(`[TokenStorage] Token data to store:`, {
-      user_id: tokenData.user_id,
-      hasAccessToken: !!tokenData.access_token,
-      hasRefreshToken: !!tokenData.refresh_token,
-      scope: tokenData.scope,
-      tokenType: tokenData.token_type,
-      expiryDate: tokenData.expiry_date
-    });
+    // Token data to store
     
     const { data, error } = await supabase
       .from('google_tokens')
@@ -44,7 +31,7 @@ export async function storeGoogleTokens(userId, tokens) {
       throw error;
     }
     
-    console.log(`[TokenStorage] Successfully stored tokens for user ${userId}`);
+    // Successfully stored tokens for user
     return data;
   } catch (error) {
     console.error('[TokenStorage] Failed to store Google tokens:', error);
@@ -54,7 +41,7 @@ export async function storeGoogleTokens(userId, tokens) {
 
 export async function getGoogleTokens(userId) {
   try {
-    console.log(`[TokenStorage] Retrieving tokens for user ${userId}`);
+    // Retrieving tokens for user
     
     const { createClient } = await import('@supabase/supabase-js');
     const supabase = createClient(
@@ -70,21 +57,13 @@ export async function getGoogleTokens(userId) {
     if (error) {
       if (error.code === 'PGRST116') {
         // No tokens found for user
-        console.log(`[TokenStorage] No tokens found for user ${userId}`);
         return null;
       }
       console.error(`[TokenStorage] Error retrieving tokens for user ${userId}:`, error);
       throw error;
     }
     
-    console.log(`[TokenStorage] Retrieved tokens for user ${userId}:`, {
-      hasAccessToken: !!data.access_token,
-      hasRefreshToken: !!data.refresh_token,
-      scope: data.scope,
-      tokenType: data.token_type,
-      expiryDate: data.expiry_date,
-      updatedAt: data.updated_at
-    });
+    // Retrieved tokens for user
     
     return data;
   } catch (error) {

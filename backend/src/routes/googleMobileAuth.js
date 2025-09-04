@@ -274,14 +274,7 @@ router.post('/mobile-signin', async (req, res) => {
         } catch (_) {}
         const { tokens } = await mobileOauthClient.getToken(serverAuthCode);
         
-        console.log(`[GoogleAuth] Token exchange result:`, {
-          hasAccessToken: !!tokens.access_token,
-          hasRefreshToken: !!tokens.refresh_token,
-          scope: tokens.scope,
-          tokenType: tokens.token_type,
-          expiryDate: tokens.expiry_date,
-          fullTokens: tokens // Log the full tokens object to see what Google is actually returning
-        });
+        // Token exchange result
         
         if (!tokens.refresh_token) {
           console.warn(`[GoogleAuth] WARNING: No refresh token received from Google!`);

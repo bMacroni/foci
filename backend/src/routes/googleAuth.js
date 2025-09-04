@@ -34,13 +34,7 @@ router.get('/callback', async (req, res) => {
     const { tokens } = await oauth2Client.getToken(code);
     logger.info('Google tokens received successfully');
     
-    console.log(`[GoogleAuth Callback] Token exchange result:`, {
-      hasAccessToken: !!tokens.access_token,
-      hasRefreshToken: !!tokens.refresh_token,
-      scope: tokens.scope,
-      tokenType: tokens.token_type,
-      expiryDate: tokens.expiry_date
-    });
+    // Token exchange result
 
     // 2. Get user info from Google
     oauth2Client.setCredentials(tokens);

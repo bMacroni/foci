@@ -32,12 +32,12 @@ export const conversationController = {
       // If no title, try to generate one from messages
       let finalTitle = title;
       if (!finalTitle && Array.isArray(messages) && messages.length > 0) {
-        console.log('[createThread] Generating title from messages:', messages);
+        // Generating title from messages
         finalTitle = await geminiService.generateConversationTitle(messages);
-        console.log('[createThread] Gemini generated title:', finalTitle);
+        // Gemini generated title
       }
       if (!finalTitle) finalTitle = 'New Conversation';
-      console.log('[createThread] Final title to insert:', finalTitle);
+      // Final title to insert
 
       const { data: thread, error } = await supabase
         .from('conversation_threads')
@@ -53,7 +53,7 @@ export const conversationController = {
         console.error('Error creating conversation thread:', error);
         throw new Error('Failed to create conversation thread');
       }
-      console.log('[createThread] Created thread:', thread);
+      // Created thread successfully
       return thread;
     } catch (error) {
       console.error('Conversation thread creation error:', error);
@@ -299,15 +299,15 @@ export const conversationController = {
       // If no title, try to generate one from messages
       let finalTitle = title;
       if (!finalTitle && Array.isArray(messages) && messages.length > 0) {
-        console.log('[createThreadExpress] Generating title from messages:', messages);
+        // Generating title from messages
         finalTitle = await geminiService.generateConversationTitle(messages);
-        console.log('[createThreadExpress] Gemini generated title:', finalTitle);
+        // Gemini generated title
       }
       if (!finalTitle) finalTitle = 'New Conversation';
-      console.log('[createThreadExpress] Final title to insert:', finalTitle);
+      // Final title to insert
 
       const thread = await conversationController.createThread(userId, finalTitle, summary, token);
-      console.log('[createThreadExpress] Created thread:', thread);
+      // Created thread successfully
       res.status(201).json(thread);
     } catch (error) {
       console.error('Conversation thread creation error:', error);
