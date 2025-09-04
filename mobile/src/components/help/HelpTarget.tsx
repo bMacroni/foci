@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useRef } from 'react';
-import { View, StyleSheet, findNodeHandle, UIManager } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { View, StyleSheet } from 'react-native';
 import { Popable } from 'react-native-popable';
 import { useHelp, useHelpLocalScope } from '../../contexts/HelpContext';
 import { colors } from '../../themes/colors';
@@ -15,11 +15,12 @@ export const HelpTarget: React.FC<HelpTargetProps> = ({ helpId, children, style 
   const localScope = useHelpLocalScope();
   const ref = useRef<View>(null);
   const lastLayoutRef = useRef<{ x: number; y: number; width: number; height: number; pageX: number; pageY: number } | null>(null);
+  const [lastRegisteredScope, setLastRegisteredScope] = useState<string | null>(null);
 
   const measure = useCallback(() => {
-    const node = findNodeHandle(ref.current);
-    if (!node) { return; }
-    UIManager.measure(node, (_x, _y, width, height, pageX, pageY) => {
+    if (!ref.current) { return; }
+    
+    ref.current.measure((x, y, width, height, pageX, pageY) => {
       const next = { x: pageX, y: pageY, width, height, pageX, pageY };
       const prev = lastLayoutRef.current;
       const changed = !prev
@@ -27,19 +28,33 @@ export const HelpTarget: React.FC<HelpTargetProps> = ({ helpId, children, style 
         || Math.abs(prev.y - next.y) > 0.5
         || Math.abs(prev.width - next.width) > 0.5
         || Math.abs(prev.height - next.height) > 0.5;
+      
       if (changed) {
         lastLayoutRef.current = next;
+        const targetScope = localScope || 'default';
+        
+        // Unregister from previous scope if it exists and is different
+        if (lastRegisteredScope && lastRegisteredScope !== targetScope) {
+          unregisterTargetLayout(helpId, lastRegisteredScope);
+        }
+        
         if (!localScope || localScope === (currentScope || 'default')) {
-          registerTargetLayout(helpId, next, localScope || 'default');
+          registerTargetLayout(helpId, next, targetScope);
+          setLastRegisteredScope(targetScope);
         }
       }
     });
-  }, [helpId, registerTargetLayout, currentScope, localScope]);
+  }, [helpId, registerTargetLayout, unregisterTargetLayout, currentScope, localScope, lastRegisteredScope]);
 
   useEffect(() => {
     measure();
-    return () => { unregisterTargetLayout(helpId, localScope || 'default'); };
-  }, [measure, helpId, unregisterTargetLayout]);
+    return () => { 
+      // Clean up from the last registered scope, not just the current local scope
+      if (lastRegisteredScope) {
+        unregisterTargetLayout(helpId, lastRegisteredScope);
+      }
+    };
+  }, [measure, helpId, unregisterTargetLayout, lastRegisteredScope]);
 
   // Re-measure when help mode toggles to ensure accurate layout while overlay is active
   useEffect(() => {
@@ -48,9 +63,14 @@ export const HelpTarget: React.FC<HelpTargetProps> = ({ helpId, children, style 
 
   // Re-measure when the help scope changes so targets register under the active screen
   useEffect(() => {
+    // Clean up from previous scope before changing
+    if (lastRegisteredScope) {
+      unregisterTargetLayout(helpId, lastRegisteredScope);
+      setLastRegisteredScope(null);
+    }
     lastLayoutRef.current = null;
     measure();
-  }, [measure, currentScope, localScope]);
+  }, [measure, currentScope, localScope, helpId, unregisterTargetLayout, lastRegisteredScope]);
 
   const baseId = React.useMemo(() => {
     const idx = helpId.indexOf(':');
