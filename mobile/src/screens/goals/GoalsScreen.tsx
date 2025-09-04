@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform, StatusBar, RefreshControl } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Octicons';
 import { colors } from '../../themes/colors';
 import { typography } from '../../themes/typography';
@@ -13,6 +13,10 @@ import GoalsListModal from '../../components/goals/GoalsListModal';
 import Svg, { Circle } from 'react-native-svg';
 import { format, isPast, isToday, formatDistanceToNow } from 'date-fns';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import HelpTarget from '../../components/help/HelpTarget';
+import { HelpIcon } from '../../components/help/HelpIcon';
+import { useHelp, HelpContent, HelpScope } from '../../contexts/HelpContext';
+import { useFocusEffect } from '@react-navigation/native';
 
 interface Step {
   id: string;
@@ -48,6 +52,8 @@ interface Goal {
 }
 
 export default function GoalsScreen({ navigation }: any) {
+  const insets = useSafeAreaInsets();
+  const { setHelpContent, setIsHelpOverlayActive, setHelpScope } = useHelp();
   const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(false);
   const [goalsLoading, setGoalsLoading] = useState(true);
@@ -98,6 +104,19 @@ export default function GoalsScreen({ navigation }: any) {
     } catch {}
   }, []);
   const [needsReviewExpanded, setNeedsReviewExpanded] = useState(false);
+
+  const getGoalsHelpContent = React.useCallback((): HelpContent => ({
+    'goals-overall': 'See your overall progress across active goals.',
+    'goals-view-all': 'Open the full list of your goals.',
+    'goal-edit': 'Edit the goal title, milestones, and steps inline.',
+    'goal-delete': 'Delete this goal permanently.',
+    'goal-target-date': 'Tap to set or change the goal’s target date.',
+    'goal-steps-toggle': 'Expand to view steps in the current milestone.',
+    'goal-step-toggle': 'Mark a step done or not done.',
+    'goal-schedule-next-step': 'Ask AI to schedule the next step on your calendar.',
+    'goal-ask-ai': 'Ask AI to help refine or plan this goal.',
+    'goals-ai-entry': 'Start a new conversation with AI to create a goal.',
+  }), []);
 
   const loadGoals = React.useCallback(async () => {
     let paintedFromCache = false;
@@ -257,6 +276,17 @@ export default function GoalsScreen({ navigation }: any) {
       setGoalsLoading(false);
     }
   }, [authState.isAuthenticated, authState.isLoading, loadGoals]);
+
+  // Reset help overlay when this screen gains focus
+  useFocusEffect(
+    React.useCallback(() => {
+      try { setHelpScope('goals'); } catch {}
+      try { setHelpContent(getGoalsHelpContent()); } catch {}
+      return () => {
+        try { setIsHelpOverlayActive(false); } catch {}
+      };
+    }, [setHelpScope, setHelpContent, getGoalsHelpContent, setIsHelpOverlayActive])
+  );
 
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
@@ -697,39 +727,45 @@ export default function GoalsScreen({ navigation }: any) {
             <View style={styles.titleRow}>
               <Text style={styles.goalTitle}>{goal.title}</Text>
               <View style={styles.iconActions}>
-                <TouchableOpacity
-                  style={styles.iconButton}
-                  onPress={() => (editingGoals[goal.id] ? cancelEdit(goal.id) : enterEditMode(goal))}
-                >
-                  <Icon name={editingGoals[goal.id] ? 'x' : 'pencil'} size={16} color={colors.text.secondary} />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.iconButton}
-                  onPress={(e: any) => {
-                    try { e?.stopPropagation?.(); } catch {}
-                    handleGoalDelete(goal.id);
-                  }}
-                >
-                  <Icon name="trash" size={16} color={colors.text.secondary} />
-                </TouchableOpacity>
+                <HelpTarget helpId={`goal-edit:${goal.id}`}>
+                  <TouchableOpacity
+                    style={styles.iconButton}
+                    onPress={() => (editingGoals[goal.id] ? cancelEdit(goal.id) : enterEditMode(goal))}
+                  >
+                    <Icon name={editingGoals[goal.id] ? 'x' : 'pencil'} size={16} color={colors.text.secondary} />
+                  </TouchableOpacity>
+                </HelpTarget>
+                <HelpTarget helpId={`goal-delete:${goal.id}`}>
+                  <TouchableOpacity
+                    style={styles.iconButton}
+                    onPress={(e: any) => {
+                      try { e?.stopPropagation?.(); } catch {}
+                      handleGoalDelete(goal.id);
+                    }}
+                  >
+                    <Icon name="trash" size={16} color={colors.text.secondary} />
+                  </TouchableOpacity>
+                </HelpTarget>
               </View>
             </View>
             <Text style={styles.goalDescription}>{goal.description}</Text>
             <View style={styles.dueRow}>
               <Icon name="calendar" size={14} color={colors.accent?.gold || colors.text.secondary} />
-              <TouchableOpacity
-                onPress={() => (editingDate[goal.id] ? cancelEditDate(goal.id) : startEditDate(goal.id, goal.targetDate))}
-              >
-                <Text
-                  style={[
-                    styles.dueText,
-                    due.tone === 'warn' && { color: colors.accent?.gold || colors.warning },
-                    due.tone === 'danger' && { color: colors.error },
-                  ]}
+              <HelpTarget helpId={`goal-target-date:${goal.id}`}>
+                <TouchableOpacity
+                  onPress={() => (editingDate[goal.id] ? cancelEditDate(goal.id) : startEditDate(goal.id, goal.targetDate))}
                 >
-                  {due.text}
-                </Text>
-              </TouchableOpacity>
+                  <Text
+                    style={[
+                      styles.dueText,
+                      due.tone === 'warn' && { color: colors.accent?.gold || colors.warning },
+                      due.tone === 'danger' && { color: colors.error },
+                    ]}
+                  >
+                    {due.text}
+                  </Text>
+                </TouchableOpacity>
+              </HelpTarget>
             </View>
             {editingDate[goal.id] && (
               <View style={styles.dateEditContainer}>
@@ -805,23 +841,24 @@ export default function GoalsScreen({ navigation }: any) {
         </View>
 
         {/* Steps expander below Next Step */}
-        <TouchableOpacity
-          style={styles.stepsHeader}
-          onPress={() => toggleExpand(goal.id)}
-          accessibilityRole="button"
-          accessibilityLabel="Toggle steps"
-          accessibilityState={{ expanded: !!expandedGoals[goal.id] }}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <View style={styles.stepsHeaderContent}>
-            <Text style={styles.stepsHeaderText}>
-              Steps ({currentCompleted}/{currentTotal})
-            </Text>
-            <View style={styles.stepsExpandIcon}>
-              <Icon name="chevron-down" size={16} color={colors.text.secondary} style={{ transform: [{ rotate: expandedGoals[goal.id] ? '180deg' : '0deg' }] as any }} />
+        <HelpTarget helpId={`goal-steps-toggle:${goal.id}`} style={styles.stepsHeader}>
+          <TouchableOpacity
+            onPress={() => toggleExpand(goal.id)}
+            accessibilityRole="button"
+            accessibilityLabel="Toggle steps"
+            accessibilityState={{ expanded: !!expandedGoals[goal.id] }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <View style={styles.stepsHeaderContent}>
+              <Text style={styles.stepsHeaderText}>
+                Steps ({currentCompleted}/{currentTotal})
+              </Text>
+              <View style={styles.stepsExpandIcon}>
+                <Icon name="chevron-down" size={16} color={colors.text.secondary} style={{ transform: [{ rotate: expandedGoals[goal.id] ? '180deg' : '0deg' }] as any }} />
+              </View>
             </View>
-          </View>
-        </TouchableOpacity>
+          </TouchableOpacity>
+        </HelpTarget>
 
         {expandedGoals[goal.id] && !editingGoals[goal.id] && (
           <View style={styles.stepsList}>
@@ -829,12 +866,14 @@ export default function GoalsScreen({ navigation }: any) {
               <>
                 {currentSteps.map((step) => (
                   <View key={step.id} style={styles.stepRow}>
-                    <TouchableOpacity
-                      style={styles.stepIconButton}
-                      onPress={() => toggleStepCompleted(goal.id, currentMilestone.id, step.id)}
-                    >
-                      <Icon name={step.completed ? 'check' : 'circle'} size={18} color={step.completed ? (colors.accent?.gold || colors.primary) : colors.text.secondary} />
-                    </TouchableOpacity>
+                    <HelpTarget helpId={`goal-step-toggle:${goal.id}:${step.id}`}>
+                      <TouchableOpacity
+                        style={styles.stepIconButton}
+                        onPress={() => toggleStepCompleted(goal.id, currentMilestone.id, step.id)}
+                      >
+                        <Icon name={step.completed ? 'check' : 'circle'} size={18} color={step.completed ? (colors.accent?.gold || colors.primary) : colors.text.secondary} />
+                      </TouchableOpacity>
+                    </HelpTarget>
                     <Text style={[styles.stepText, step.completed && styles.stepTextCompleted]}>
                       {step.title}
                     </Text>
@@ -1079,9 +1118,10 @@ export default function GoalsScreen({ navigation }: any) {
         )}
 
         <View style={styles.goalActions}>
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => {
+          <HelpTarget helpId={`goal-schedule-next-step:${goal.id}`} style={{ flex: 1 }}>
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => {
               try {
                 const currentMilestone = goal.milestones.find((m) => !m.completed);
                 const nextStepObj = currentMilestone?.steps?.find((s) => !s.completed);
@@ -1096,21 +1136,24 @@ export default function GoalsScreen({ navigation }: any) {
               } catch {
                 navigation.navigate('AIChat');
               }
-            }}
-          >
-            <Text style={styles.actionButtonText}>Schedule next step</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => {
+              }}
+            >
+              <Text style={styles.actionButtonText}>Schedule next step</Text>
+            </TouchableOpacity>
+          </HelpTarget>
+          <HelpTarget helpId={`goal-ask-ai:${goal.id}`} style={{ flex: 1 }}>
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => {
               // Navigate to AI Chat tab and start a new conversation with pre-filled message
               navigation.navigate('AIChat', { 
                 initialMessage: `Help me refine and improve this goal. Please ask me clarifying questions to help better establish my vision for this goal.\n\nGoal: ${goal.title}${goal.description ? `\nDescription: ${goal.description}` : ''}`
               });
-            }}
-          >
-            <Text style={styles.actionButtonText}>Ask AI Help</Text>
-          </TouchableOpacity>
+              }}
+            >
+              <Text style={styles.actionButtonText}>Ask AI Help</Text>
+            </TouchableOpacity>
+          </HelpTarget>
         </View>
       </View>
     );
@@ -1123,6 +1166,9 @@ export default function GoalsScreen({ navigation }: any) {
         <StatusBar barStyle="dark-content" backgroundColor={colors.background.primary} translucent={false} />
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Goals</Text>
+          <View style={{ position: 'absolute', top: 0, right: spacing.sm }}>
+            <HelpIcon />
+          </View>
         </View>
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Checking authentication...</Text>
@@ -1225,6 +1271,7 @@ export default function GoalsScreen({ navigation }: any) {
   const overallPct = overallTotal > 0 ? (overallCompleted / overallTotal) * 100 : 0;
 
   return (
+    <HelpScope scope="goals">
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.background.primary} translucent={false} />
       <View style={styles.header}>
@@ -1246,7 +1293,7 @@ export default function GoalsScreen({ navigation }: any) {
         }
       >
         {/* Overall Progress Section */}
-        <View style={styles.overallSection}>
+        <HelpTarget helpId="goals-overall" style={styles.overallSection}>
           <View style={styles.overallRow}>
             <View style={{ flex: 1 }}>
               <View style={styles.inlineLabelRow}>
@@ -1259,16 +1306,18 @@ export default function GoalsScreen({ navigation }: any) {
               <CircularProgress percentage={overallPct} size={46} />
             </View>
           </View>
-        </View>
+        </HelpTarget>
         
 
         {/* Goals Section */}
         <View style={styles.goalsSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Active Goals ({nonOverdueActiveGoals.length})</Text>
-            <TouchableOpacity onPress={() => setShowGoalsModal(true)}>
-              <Text style={styles.viewAllText}>View All</Text>
-            </TouchableOpacity>
+            <HelpTarget helpId="goals-view-all">
+              <TouchableOpacity onPress={() => setShowGoalsModal(true)}>
+                <Text style={styles.viewAllText}>View All</Text>
+              </TouchableOpacity>
+            </HelpTarget>
           </View>
 
           {nonOverdueActiveGoals.length === 0 ? (
@@ -1475,7 +1524,13 @@ export default function GoalsScreen({ navigation }: any) {
         onGoalPress={handleGoalPress}
         onGoalDelete={handleGoalDelete}
       />
+
+      {/* Absolute-positioned Help icon under the system tray */}
+      <View style={{ position: 'absolute', top: insets.top + spacing.sm, right: spacing.sm }}>
+        <HelpIcon />
+      </View>
     </SafeAreaView>
+    </HelpScope>
   );
 }
 

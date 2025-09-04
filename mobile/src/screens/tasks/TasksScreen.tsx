@@ -24,7 +24,11 @@ import { enhancedAPI } from '../../services/enhancedApi';
 import { offlineService } from '../../services/offline';
 import Icon from 'react-native-vector-icons/Octicons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { HelpIcon } from '../../components/help/HelpIcon';
+import HelpTarget from '../../components/help/HelpTarget';
+import { useHelp, HelpContent, HelpScope } from '../../contexts/HelpContext';
 
 interface Task {
   id: string;
@@ -55,6 +59,8 @@ interface Goal {
 
 export const TasksScreen: React.FC = () => {
   const navigation = useNavigation<any>();
+  const { setHelpContent, setIsHelpOverlayActive, setHelpScope } = useHelp();
+  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isCompact = width < 1000; // Icon-only on phones; show labels only on very wide/tablet screens
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -82,6 +88,22 @@ export const TasksScreen: React.FC = () => {
   const [userNotificationPrefs, setUserNotificationPrefs] = useState<any | null>(null);
   const [userSchedulingPreferences, setUserSchedulingPreferences] = useState<any>(null);
 
+  const getTasksHelpContent = React.useCallback((): HelpContent => ({
+    'tasks-header-summary': 'This shows how many tasks are auto-scheduled and how many have a scheduled time.',
+    'tasks-bulk-auto-schedule': 'Tap to auto-schedule all eligible tasks using your preferences.',
+    'tasks-momentum-toggle': 'Momentum mode picks your next focus task automatically when you complete one.',
+    'tasks-travel-toggle': 'Switch between allowing travel or home-only tasks for momentum mode.',
+    'tasks-inbox-toggle': 'Open your Inbox to choose a new focus task or view remaining tasks.',
+    'tasks-focus-complete': 'Mark today’s focus task as done.',
+    'tasks-focus-skip': 'Skip this focus and we will pick the next one.',
+    'tasks-focus-change': 'Manually choose a different task as Today’s Focus.',
+    'task-complete': 'Mark the task complete.',
+    'task-schedule': 'Open quick scheduling options for this task.',
+    'task-ai': 'Ask AI for help planning or breaking down this task.',
+    'task-edit': 'Edit task details.',
+    'task-delete': 'Delete this task.',
+    'tasks-fab-add': 'Create a new task. You can add details like due date and duration.',
+  }), []);
   useEffect(() => {
     loadData();
     loadSchedulingPreferences();
@@ -90,10 +112,18 @@ export const TasksScreen: React.FC = () => {
   // Auto refresh whenever the Tasks tab/screen gains focus (silent background refresh)
   useFocusEffect(
     React.useCallback(() => {
+      // Set help scope for this screen and reset overlay when leaving
+      try { setHelpScope('tasks'); } catch {}
+      try { setHelpContent(getTasksHelpContent()); } catch {}
+      // If user navigated with overlay ON from a previous screen, ensure tooltips will populate
+      // by briefly toggling it off (state stays off due to blur reset anyway)
+      try { setIsHelpOverlayActive(false); } catch {}
       // Avoid showing a spinner if we already have content; fetch fresh in background
       loadData({ silent: true });
-      return () => {};
-    }, [])
+      return () => {
+        try { setIsHelpOverlayActive(false); } catch {}
+      };
+    }, [setHelpScope, setIsHelpOverlayActive, setHelpContent, getTasksHelpContent])
   );
 
   const loadSchedulingPreferences = async () => {
@@ -787,9 +817,11 @@ export const TasksScreen: React.FC = () => {
   const renderHeaderActions = () => (
     <View style={styles.headerActions}>
       <View style={styles.autoScheduleSummary}>
-        <Text style={styles.summaryText}>
-          {getAutoScheduledTasks().length} auto-scheduled • {getScheduledTasks().length} scheduled
-        </Text>
+        <HelpTarget helpId="tasks-header-summary">
+          <Text style={styles.summaryText}>
+            {getAutoScheduledTasks().length} auto-scheduled • {getScheduledTasks().length} scheduled
+          </Text>
+        </HelpTarget>
       </View>
       
       <View style={styles.actionButtons}>
@@ -801,24 +833,28 @@ export const TasksScreen: React.FC = () => {
           <Icon name="gear" size={20} color={colors.text.secondary} />
         </TouchableOpacity>
         
-        <TouchableOpacity
-          style={[
-            styles.bulkScheduleButton,
-            bulkScheduling && styles.bulkScheduleButtonDisabled
-          ]}
-          onPress={handleBulkAutoSchedule}
-          disabled={bulkScheduling}
-          activeOpacity={0.7}
-        >
-          {bulkScheduling ? (
-            <ActivityIndicator size="small" color={colors.secondary} />
-          ) : (
-            <Icon name="checklist" size={16} color={colors.secondary} />
-          )}
-          <Text style={styles.bulkScheduleText}>
-            {bulkScheduling ? 'Scheduling...' : 'Auto-Schedule All'}
-          </Text>
-        </TouchableOpacity>
+        <HelpTarget helpId="tasks-bulk-auto-schedule" style={styles.bulkScheduleContainer}>
+          <TouchableOpacity
+            style={[
+              styles.bulkScheduleButton,
+              bulkScheduling && styles.bulkScheduleButtonDisabled
+            ]}
+            onPress={handleBulkAutoSchedule}
+            disabled={bulkScheduling}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={bulkScheduling ? 'Scheduling all tasks' : 'Auto-schedule all tasks'}
+          >
+            {bulkScheduling ? (
+              <ActivityIndicator size="small" color={colors.secondary} />
+            ) : (
+              <Icon name="checklist" size={16} color={colors.secondary} />
+            )}
+            <Text style={styles.bulkScheduleText}>
+              {bulkScheduling ? 'Scheduling...' : 'Auto-Schedule All'}
+            </Text>
+          </TouchableOpacity>
+        </HelpTarget>
       </View>
     </View>
   );
@@ -1113,6 +1149,7 @@ export const TasksScreen: React.FC = () => {
   }
 
   return (
+    <HelpScope scope="tasks">
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Tasks</Text>
@@ -1130,31 +1167,37 @@ export const TasksScreen: React.FC = () => {
                 <Text style={styles.focusTitle}>Today's Focus</Text>
                 <View style={styles.focusHeaderControls}>
                   {/* Momentum toggle placed next to Inbox; icon-only on compact */}
-                  <TouchableOpacity
-                    testID="momentumToggle"
-                    style={[styles.momentumToggle, momentumEnabled && styles.momentumToggleOn, isCompact && styles.compactBtn]}
-                    onPress={handleToggleMomentum}
-                    activeOpacity={0.7}
-                    accessibilityLabel={momentumEnabled ? 'Momentum On' : 'Momentum Off'}
-                  >
-                    <Icon name="zap" size={16} color={momentumEnabled ? colors.secondary : colors.text.secondary} />
-                  </TouchableOpacity>
+                  <HelpTarget helpId="tasks-momentum-toggle">
+                    <TouchableOpacity
+                      testID="momentumToggle"
+                      style={[styles.momentumToggle, momentumEnabled && styles.momentumToggleOn, isCompact && styles.compactBtn]}
+                      onPress={handleToggleMomentum}
+                      activeOpacity={0.7}
+                      accessibilityLabel={momentumEnabled ? 'Momentum On' : 'Momentum Off'}
+                    >
+                      <Icon name="zap" size={16} color={momentumEnabled ? colors.secondary : colors.text.secondary} />
+                    </TouchableOpacity>
+                  </HelpTarget>
 
-                  <TouchableOpacity
-                    testID="travelPrefButton"
-                    style={[styles.travelPrefButton, isCompact && styles.compactBtn]}
-                    onPress={handleToggleTravelPref}
-                    activeOpacity={0.7}
-                    accessibilityLabel={travelPreference === 'home_only' ? 'Home Only' : 'Allow Travel'}
-                  >
-                    <Icon name={travelPreference === 'home_only' ? 'home' : 'globe'} size={16} color={colors.text.secondary} />
-                  </TouchableOpacity>
+                  <HelpTarget helpId="tasks-travel-toggle">
+                    <TouchableOpacity
+                      testID="travelPrefButton"
+                      style={[styles.travelPrefButton, isCompact && styles.compactBtn]}
+                      onPress={handleToggleTravelPref}
+                      activeOpacity={0.7}
+                      accessibilityLabel={travelPreference === 'home_only' ? 'Home Only' : 'Allow Travel'}
+                    >
+                      <Icon name={travelPreference === 'home_only' ? 'home' : 'globe'} size={16} color={colors.text.secondary} />
+                    </TouchableOpacity>
+                  </HelpTarget>
 
-                  <TouchableOpacity style={styles.inboxButton} onPress={() => { setShowInbox(!showInbox); setSelectingFocus(false); }}>
-                    <Icon name="inbox" size={14} color={colors.text.primary} />
-                    <Text style={styles.inboxText}>Inbox{inboxCount > 0 ? ` (${inboxCount})` : ''}</Text>
-                    <Icon name={showInbox ? 'chevron-up' : 'chevron-down'} size={14} color={colors.text.primary} />
-                  </TouchableOpacity>
+                  <HelpTarget helpId="tasks-inbox-toggle">
+                    <TouchableOpacity style={styles.inboxButton} onPress={() => { setShowInbox(!showInbox); setSelectingFocus(false); }}>
+                      <Icon name="inbox" size={14} color={colors.text.primary} />
+                      <Text style={styles.inboxText}>Inbox{inboxCount > 0 ? ` (${inboxCount})` : ''}</Text>
+                      <Icon name={showInbox ? 'chevron-up' : 'chevron-down'} size={14} color={colors.text.primary} />
+                    </TouchableOpacity>
+                  </HelpTarget>
                 </View>
               </View>
               {focus ? (
@@ -1167,17 +1210,23 @@ export const TasksScreen: React.FC = () => {
                     <View style={[styles.badge, styles[focus.priority]]}><Text style={[styles.badgeText, styles.badgeTextDark]}>{focus.priority}</Text></View>
                   </View>
                   <View style={styles.focusActionsRow}>
-                    <TouchableOpacity testID="completeFocusButton" style={styles.focusIconBtn} onPress={() => handleFocusDone(focus)}>
-                      <Icon name="check" size={22} color={colors.text.primary} />
-                    </TouchableOpacity>
-                    {momentumEnabled && (
-                      <TouchableOpacity testID="skipFocusButton" style={styles.focusIconBtn} onPress={handleFocusSkip}>
-                        <Icon name="arrow-right" size={22} color={colors.text.primary} />
+                    <HelpTarget helpId="tasks-focus-complete">
+                      <TouchableOpacity testID="completeFocusButton" style={styles.focusIconBtn} onPress={() => handleFocusDone(focus)}>
+                        <Icon name="check" size={22} color={colors.text.primary} />
                       </TouchableOpacity>
+                    </HelpTarget>
+                    {momentumEnabled && (
+                      <HelpTarget helpId="tasks-focus-skip">
+                        <TouchableOpacity testID="skipFocusButton" style={styles.focusIconBtn} onPress={handleFocusSkip}>
+                          <Icon name="arrow-right" size={22} color={colors.text.primary} />
+                        </TouchableOpacity>
+                      </HelpTarget>
                     )}
-                    <TouchableOpacity style={styles.focusIconBtn} onPress={handleChangeFocus}>
-                      <Icon name="arrow-switch" size={22} color={colors.text.primary} />
-                    </TouchableOpacity>
+                    <HelpTarget helpId="tasks-focus-change">
+                      <TouchableOpacity style={styles.focusIconBtn} onPress={handleChangeFocus}>
+                        <Icon name="arrow-switch" size={22} color={colors.text.primary} />
+                      </TouchableOpacity>
+                    </HelpTarget>
                   </View>
                 </View>
               ) : (
@@ -1235,13 +1284,20 @@ export const TasksScreen: React.FC = () => {
       />
 
       {/* Floating Action Button */}
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={handleCreateTask}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.fabText}>+</Text>
-      </TouchableOpacity>
+      <HelpTarget helpId="tasks-fab-add">
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={handleCreateTask}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.fabText}>+</Text>
+        </TouchableOpacity>
+      </HelpTarget>
+
+      {/* Absolute-positioned Help icon under the system tray */}
+      <View style={{ position: 'absolute', top: insets.top + spacing.sm, right: spacing.sm }}>
+        <HelpIcon />
+      </View>
 
       {/* Task Form Modal */}
       <Modal
@@ -1334,6 +1390,7 @@ export const TasksScreen: React.FC = () => {
         duration={5000}
       />
     </View>
+    </HelpScope>
   );
 };
 
@@ -1465,6 +1522,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  bulkScheduleContainer: {
+    flex: 1,
+    marginLeft: spacing.sm,
+  },
   momentumToggle: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1524,8 +1585,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     backgroundColor: colors.primary,
     borderRadius: borderRadius.sm,
-    flex: 1,
-    marginLeft: spacing.sm,
   },
   bulkScheduleButtonDisabled: {
     opacity: 0.6,

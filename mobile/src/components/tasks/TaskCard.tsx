@@ -12,6 +12,7 @@ import { colors } from '../../themes/colors';
 import { spacing, borderRadius } from '../../themes/spacing';
 import { typography } from '../../themes/typography';
 import Icon from 'react-native-vector-icons/Octicons';
+import HelpTarget from '../help/HelpTarget';
 import { formatRelativeDueLabel } from '../../utils/dateUtils';
 
 interface Task {
@@ -234,34 +235,44 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             </TouchableOpacity>
 
             <View style={styles.actionIcons}>
-                <TouchableOpacity style={styles.iconBtn} onPress={toggleComplete}>
-                  <Icon name="check" size={22} color={colors.text.primary} />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.iconBtn}
-                  onPressIn={(e) => {
-                    const { pageX, pageY } = e.nativeEvent;
-                    setAnchor({ x: pageX, y: pageY });
-                  }}
-                  onPress={() => {
-                    if (onOpenQuickSchedule && anchor) {
-                      onOpenQuickSchedule(task.id, anchor);
-                    }
-                  }}
-                >
-                  <Icon name="calendar" size={22} color={colors.text.primary} />
-                </TouchableOpacity>
-                {onAIHelp && (
-                  <TouchableOpacity style={styles.iconBtn} onPress={() => onAIHelp(task)}>
-                    <Icon name="light-bulb" size={22} color={colors.text.primary} />
+                <HelpTarget helpId={`task-complete:${task.id}`}>
+                  <TouchableOpacity style={styles.iconBtn} onPress={toggleComplete}>
+                    <Icon name="check" size={22} color={colors.text.primary} />
                   </TouchableOpacity>
+                </HelpTarget>
+                <HelpTarget helpId={`task-schedule:${task.id}`}>
+                  <TouchableOpacity
+                    style={styles.iconBtn}
+                    onPressIn={(e) => {
+                      const { pageX, pageY } = e.nativeEvent;
+                      setAnchor({ x: pageX, y: pageY });
+                    }}
+                    onPress={() => {
+                      if (onOpenQuickSchedule && anchor) {
+                        onOpenQuickSchedule(task.id, anchor);
+                      }
+                    }}
+                  >
+                    <Icon name="calendar" size={22} color={colors.text.primary} />
+                  </TouchableOpacity>
+                </HelpTarget>
+                {onAIHelp && (
+                  <HelpTarget helpId={`task-ai:${task.id}`}>
+                    <TouchableOpacity style={styles.iconBtn} onPress={() => onAIHelp(task)}>
+                      <Icon name="light-bulb" size={22} color={colors.text.primary} />
+                    </TouchableOpacity>
+                  </HelpTarget>
                 )}
-                <TouchableOpacity style={styles.iconBtn} onPress={() => onPress(task)}>
-                  <Icon name="pencil" size={22} color={colors.text.primary} />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.iconBtn} onPress={() => onDelete(task.id)}>
-                  <Icon name="trash" size={22} color={colors.text.primary} />
-                </TouchableOpacity>
+                <HelpTarget helpId={`task-edit:${task.id}`}>
+                  <TouchableOpacity style={styles.iconBtn} onPress={() => onPress(task)}>
+                    <Icon name="pencil" size={22} color={colors.text.primary} />
+                  </TouchableOpacity>
+                </HelpTarget>
+                <HelpTarget helpId={`task-delete:${task.id}`}>
+                  <TouchableOpacity style={styles.iconBtn} onPress={() => onDelete(task.id)}>
+                    <Icon name="trash" size={22} color={colors.text.primary} />
+                  </TouchableOpacity>
+                </HelpTarget>
               </View>
 
             {/* Meta chips row */}
