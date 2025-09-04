@@ -54,7 +54,7 @@ export async function createTask(req, res) {
     }
   });
   
-  console.log('Creating task for user:', user_id);
+  // Creating task for user
   
   // Convert empty string goal_id to null
   const sanitizedGoalId = goal_id === '' ? null : goal_id;
@@ -92,7 +92,7 @@ export async function createTask(req, res) {
     .single();
   
   if (error) {
-    console.log('Supabase error:', error);
+    // Supabase error occurred
     
     // Check if this is a unique constraint violation for is_today_focus
     if (error.message && error.message.includes('uniq_tasks_user_focus')) {
@@ -264,7 +264,7 @@ export async function updateTask(req, res) {
     .single();
   
   if (error) {
-    console.log('Supabase error:', error);
+    // Supabase error occurred
     return res.status(400).json({ error: error.message });
   }
 
@@ -278,7 +278,7 @@ export async function updateTask(req, res) {
         return;
       }
     } catch (recurringError) {
-      console.log('Error processing recurring task:', recurringError);
+      // Error processing recurring task
       // Continue with normal response even if recurring processing fails
     }
   }
@@ -309,7 +309,7 @@ export async function deleteTask(req, res) {
     .eq('user_id', user_id);
   
   if (error) {
-    console.log('Supabase error:', error);
+    // Supabase error occurred
     return res.status(400).json({ error: error.message });
   }
   res.status(204).send();
@@ -440,7 +440,7 @@ export async function bulkCreateTasks(req, res) {
     .select('title')
     .eq('user_id', user_id);
   if (existingErr) {
-    console.log('Supabase fetch existing titles error:', existingErr);
+    // Supabase fetch existing titles error
     return res.status(400).json({ error: existingErr.message });
   }
   const existingTitleSet = new Set((existingRows || []).map(r => normalizeTitle(r.title)));
@@ -469,7 +469,7 @@ export async function bulkCreateTasks(req, res) {
       .insert(tasksToInsert)
       .select();
     if (insertResult.error) {
-      console.log('Supabase bulk insert error:', insertResult.error);
+      // Supabase bulk insert error
       return res.status(400).json({ error: insertResult.error.message });
     }
     data = insertResult.data || [];
@@ -791,7 +791,7 @@ export async function toggleAutoSchedule(req, res) {
     .single();
 
   if (error) {
-    console.log('Supabase error:', error);
+    // Supabase error occurred
     return res.status(400).json({ error: error.message });
   }
   res.json(data);
@@ -816,7 +816,7 @@ export async function getAutoSchedulingDashboard(req, res) {
     .single();
 
   if (error) {
-    console.log('Supabase error:', error);
+    // Supabase error occurred
     return res.status(400).json({ error: error.message });
   }
   res.json(data);
@@ -841,7 +841,7 @@ export async function getUserSchedulingPreferences(req, res) {
     .single();
 
   if (error) {
-    console.log('Supabase error:', error);
+    // Supabase error occurred
     return res.status(400).json({ error: error.message });
   }
   res.json(data);
@@ -888,7 +888,7 @@ export async function updateUserSchedulingPreferences(req, res) {
     .single();
 
   if (error) {
-    console.log('Supabase error:', error);
+    // Supabase error occurred
     return res.status(400).json({ error: error.message });
   }
   res.json(data);
@@ -919,7 +919,7 @@ export async function getTaskSchedulingHistory(req, res) {
   const { data, error } = await query.order('created_at', { ascending: false });
 
   if (error) {
-    console.log('Supabase error:', error);
+    // Supabase error occurred
     return res.status(400).json({ error: error.message });
   }
   res.json(data);
@@ -938,7 +938,7 @@ export async function triggerAutoScheduling(req, res) {
     
     res.json(result);
   } catch (error) {
-    console.log('Error in triggerAutoScheduling:', error);
+    // Error in triggerAutoScheduling
     res.status(500).json({ error: 'Internal server error during auto-scheduling' });
   }
 } 

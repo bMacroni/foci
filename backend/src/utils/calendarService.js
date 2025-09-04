@@ -326,9 +326,7 @@ export async function getEventsForDate(userId, date) {
 function parseDateRange(dateInput, timeZone = 'America/Chicago') {
   const DEBUG = process.env.DEBUG_LOGS === 'true';
   if (DEBUG) {
-    console.log('=== PARSE DATE RANGE DEBUG ===');
-    console.log('Input dateInput:', dateInput);
-    console.log('Using timeZone:', timeZone);
+    // Parse date range debug info
   }
   
   function getLocalToday() {
@@ -337,7 +335,9 @@ function parseDateRange(dateInput, timeZone = 'America/Chicago') {
     const mm = String(localNow.getMonth() + 1).padStart(2, '0');
     const dd = String(localNow.getDate()).padStart(2, '0');
     const result = { yyyy, mm, dd, dateStr: `${yyyy}-${mm}-${dd}`, date: localNow };
-    if (DEBUG) console.log('Local today:', result);
+    if (DEBUG) {
+      // Local today debug info
+    }
     return result;
   }
 
@@ -348,7 +348,9 @@ function parseDateRange(dateInput, timeZone = 'America/Chicago') {
       startDate: dateStr,
       endDate: dateStr
     };
-    if (DEBUG) console.log('No date input, defaulting to today:', result);
+    if (DEBUG) {
+      // No date input, defaulting to today
+    }
     return result;
   }
 
