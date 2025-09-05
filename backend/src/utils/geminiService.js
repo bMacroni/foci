@@ -1049,23 +1049,16 @@ Make the milestones and steps specific to this goal, encouraging, and achievable
     if (!action.details || !action.details.due_date) return;
     let dueDateStr = action.details.due_date;
     
-    console.log(`🔍 [DATE DEBUG] _normalizeDueDate called with: "${dueDateStr}"`);
-    
     // Handle YYYY-MM-DD format directly to avoid timezone issues
     const directMatch = dueDateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (directMatch) {
       const [_, year, month, day] = directMatch;
       const currentYear = new Date().getFullYear();
       
-      console.log(`🔍 [DATE DEBUG] Direct match found - year: ${year}, month: ${month}, day: ${day}, currentYear: ${currentYear}`);
-      
       // If year is in the past, normalize to current year
       if (parseInt(year, 10) < currentYear) {
         const normalized = `${currentYear}-${month}-${day}`;
         action.details.due_date = normalized;
-        console.log(`🔍 [DATE DEBUG] Normalized past year date: ${dueDateStr} -> ${normalized}`);
-      } else {
-        console.log(`🔍 [DATE DEBUG] Date unchanged (current/future year): ${dueDateStr}`);
       }
       return;
     }
@@ -1076,32 +1069,25 @@ Make the milestones and steps specific to this goal, encouraging, and achievable
       const [_, year, month, day] = timestampMatch;
       const currentYear = new Date().getFullYear();
       
-      console.log(`🔍 [DATE DEBUG] Timestamp match found - year: ${year}, month: ${month}, day: ${day}, currentYear: ${currentYear}`);
-      
       // If year is in the past, normalize to current year
       if (parseInt(year, 10) < currentYear) {
         const normalized = `${currentYear}-${month}-${day}`;
         action.details.due_date = normalized;
-        console.log(`🔍 [DATE DEBUG] Normalized past year timestamp: ${dueDateStr} -> ${normalized}`);
       } else {
         // Extract just the date part for current/future years
         const normalized = `${year}-${month}-${day}`;
         action.details.due_date = normalized;
-        console.log(`🔍 [DATE DEBUG] Extracted date from timestamp: ${dueDateStr} -> ${normalized}`);
       }
       return;
     }
     
     // For other formats, use DateParser
-    console.log(`🔍 [DATE DEBUG] No direct match, using DateParser for: "${dueDateStr}"`);
     let parsed = dateParser.parse(dueDateStr);
     if (parsed) {
-      console.log(`🔍 [DATE DEBUG] DateParser returned: "${parsed}"`);
       // Create date in local timezone to avoid UTC conversion issues
       const parsedDate = new Date(parsed);
       if (parsedDate && !isNaN(parsedDate)) {
         const now = new Date();
-        console.log(`🔍 [DATE DEBUG] Parsed date: ${parsedDate.toISOString()}, now: ${now.toISOString()}`);
         // If year is in the past, or not this year or next, set to this year
         if (parsedDate.getFullYear() < now.getFullYear() || parsedDate.getFullYear() > now.getFullYear() + 1) {
           parsedDate.setFullYear(now.getFullYear());
@@ -1116,10 +1102,7 @@ Make the milestones and steps specific to this goal, encouraging, and achievable
         const dd = String(parsedDate.getDate()).padStart(2, '0');
         const normalized = `${yyyy}-${mm}-${dd}`;
         action.details.due_date = normalized;
-        console.log(`🔍 [DATE DEBUG] Normalized parsed date: ${dueDateStr} -> ${normalized}`);
       }
-    } else {
-      console.log(`🔍 [DATE DEBUG] DateParser failed to parse: "${dueDateStr}"`);
     }
   }
 
