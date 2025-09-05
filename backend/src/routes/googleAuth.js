@@ -40,7 +40,7 @@ function generateMobileState(userId) {
     }
   }
   
-  return { state: `mobile:${codeChallenge}`, codeVerifier };
+  return { state: `mobile:${codeChallenge}`, codeVerifier, codeChallenge };
 }
 
 // Helper function to verify mobile state and retrieve PKCE data
