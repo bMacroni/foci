@@ -41,7 +41,6 @@ mindgarden/
 │   │   │   ├── tasksController.js             # Task management (21KB)
 │   │   │   ├── conversationController.js      # AI conversation handling (14KB)
 │   │   │   ├── milestonesController.js        # Milestone operations (4.2KB)
-│   │   │   ├── stepsController.js             # Step operations (4.0KB)
 │   │   │   ├── userController.js              # User management (1.3KB)
 │   │   │   └── feedbackController.js          # Feedback handling (996B)
 │   │   ├── 📁 routes/                   # API route definitions

@@ -501,10 +501,46 @@ export async function createTaskFromAI(args, userId, userContext) {
     if (match) goalId = match.id;
   }
 
-  // Use DateParser utility for due_date parsing
+  // Use DateParser utility for due_date parsing and normalize past years
   let parsedDueDate = due_date;
   if (due_date && typeof due_date === 'string') {
-    parsedDueDate = dateParser.parse(due_date);
+    console.log(`🔍 [TASK DEBUG] createTask received due_date: "${due_date}"`);
+    
+    // If it's already in YYYY-MM-DD format, normalize past years
+    if (/^\d{4}-\d{2}-\d{2}$/.test(due_date)) {
+      const [_, year, month, day] = due_date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      const currentYear = new Date().getFullYear();
+      
+      if (parseInt(year, 10) < currentYear) {
+        parsedDueDate = `${currentYear}-${month}-${day}`;
+        console.log(`🔍 [TASK DEBUG] Normalized past year date: ${due_date} -> ${parsedDueDate}`);
+      } else {
+        parsedDueDate = due_date;
+        console.log(`🔍 [TASK DEBUG] Date already in current/future year: "${due_date}"`);
+      }
+    } else {
+      parsedDueDate = dateParser.parse(due_date);
+      console.log(`🔍 [TASK DEBUG] DateParser returned: "${parsedDueDate}"`);
+      
+      // Also normalize DateParser results if they're in the past
+      if (parsedDueDate && /^\d{4}-\d{2}-\d{2}$/.test(parsedDueDate)) {
+        const [_, year, month, day] = parsedDueDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        const currentYear = new Date().getFullYear();
+        
+        if (parseInt(year, 10) < currentYear) {
+          parsedDueDate = `${currentYear}-${month}-${day}`;
+          console.log(`🔍 [TASK DEBUG] Normalized DateParser past year: ${parsedDueDate} -> ${parsedDueDate}`);
+        }
+      }
+    }
+  }
+
+  // Ensure due_date is stored as a proper date string to avoid timezone conversion
+  let finalDueDate = parsedDueDate;
+  if (parsedDueDate && /^\d{4}-\d{2}-\d{2}$/.test(parsedDueDate)) {
+    // Add time component to ensure it's treated as local date, not UTC
+    finalDueDate = `${parsedDueDate}T12:00:00`;
+    console.log(`🔍 [TASK DEBUG] Adding time component to avoid timezone shift: ${parsedDueDate} -> ${finalDueDate}`);
   }
 
   const { data, error } = await supabase
@@ -513,7 +549,7 @@ export async function createTaskFromAI(args, userId, userContext) {
       user_id: userId, 
       title, 
       description, 
-      due_date: parsedDueDate,
+      due_date: finalDueDate,
       priority,
       goal_id: goalId,
       preferred_time_of_day,

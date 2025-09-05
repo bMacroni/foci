@@ -427,7 +427,7 @@ export async function getGoalTitlesForUser(userId, token, args = {}) {
   // Apply filters
   if (args.search) query = query.ilike('title', `%${args.search}%`);
   if (args.category) query = query.eq('category', args.category);
-  if (args.priority) query = query.eq('priority', args.priority);
+  if (args.priority) query = query.eq('category', args.priority);
   if (args.status) query = query.eq('status', args.status);
   if (args.due_date) query = query.eq('target_completion_date', args.due_date);
 
@@ -654,7 +654,16 @@ export async function createGoalFromAI(args, userId, userContext) {
 }
 
 export async function updateGoalFromAI(args, userId, userContext) {
-  const { id, title, description, due_date, priority, milestones, milestone_behavior = 'add' } = args;
+  const {
+    id,
+    title,            // new title
+    description,
+    due_date,
+    priority,
+    milestones,
+    milestone_behavior = 'add',
+    lookup_title      // title to find the goal
+  } = args;
   const token = userContext?.token;
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
     global: {
@@ -665,19 +674,20 @@ export async function updateGoalFromAI(args, userId, userContext) {
   });
 
   let goalId = id;
-  if (!goalId && title) {
+  const selector = lookup_title;
+  if (!goalId && selector) {
     // Fetch all goals for the user and find by title
     const { data: goals, error: fetchError } = await supabase
       .from('goals')
       .select('id, title')
       .eq('user_id', userId);
     if (fetchError) return { error: fetchError.message };
-    const match = goals.find(g => g.title && g.title.trim().toLowerCase() === title.trim().toLowerCase());
-    if (!match) return { error: `No goal found with title '${title}'` };
+    const match = goals.find(g => g.title && g.title.trim().toLowerCase() === selector.trim().toLowerCase());
+    if (!match) return { error: `No goal found with title '${selector}'` };
     goalId = match.id;
   }
   if (!goalId) {
-    return { error: "Goal ID or title is required to update a goal." };
+    return { error: "Goal ID or lookup_title is required to update a goal." };
   }
 
   try {

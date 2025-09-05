@@ -30,6 +30,7 @@
     "firebase-admin": "^12.7.0",
     "google-auth-library": "^10.1.0",
     "googleapis": "^150.0.1",
+    "jsonwebtoken": "^9.0.2",
     "node-cron": "^4.2.1",
     "nodemailer": "^6.10.1"
   },

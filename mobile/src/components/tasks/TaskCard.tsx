@@ -109,7 +109,16 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
   const formatDueDate = (dueDate?: string) => {
     if (!dueDate) {return null;}
-    const date = new Date(dueDate);
+    
+    // Handle YYYY-MM-DD format to avoid timezone conversion issues
+    let date: Date;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+      const [year, month, day] = dueDate.split('-');
+      date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    } else {
+      date = new Date(dueDate);
+    }
+    
     const today = new Date();
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);

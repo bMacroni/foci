@@ -4,6 +4,7 @@ import { google } from 'googleapis';
 import oauth2Client from '../utils/googleAuth.js';
 import { createClient } from '@supabase/supabase-js';
 import { storeGoogleTokens } from '../utils/googleTokenStorage.js';
+import crypto from 'crypto';
 
 const router = express.Router();
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
@@ -14,10 +15,26 @@ router.get('/login', (req, res) => {
     'https://www.googleapis.com/auth/calendar',
     'https://www.googleapis.com/auth/userinfo.email'
   ];
+  
+  // Generate secure state parameter to prevent CSRF attacks
+  const state = Buffer.from(JSON.stringify({
+    nonce: crypto.randomUUID(),
+    ts: Date.now()
+  })).toString('base64url');
+  
+  // Store state in secure HTTP-only cookie
+  res.cookie('oauth_state', state, { 
+    httpOnly: true, 
+    sameSite: 'lax', 
+    secure: true, 
+    maxAge: 10 * 60 * 1000 // 10 minutes
+  });
+  
   const url = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: scopes,
-    prompt: 'consent'
+    prompt: 'consent',
+    state
   });
   res.redirect(url);
 });
@@ -26,8 +43,23 @@ router.get('/login', (req, res) => {
 router.get('/callback', async (req, res) => {
   const code = req.query.code;
   const state = req.query.state; // For mobile flow, state contains user info
+  const cookieState = req.cookies?.oauth_state;
 
   if (!code) return res.status(400).send('No code provided');
+  
+  // CSRF Protection: Verify state parameter
+  if (!state && !cookieState) {
+    return res.status(400).send('Missing state parameter');
+  }
+  
+  // For web flow, verify state matches cookie
+  if (!state?.startsWith('mobile:')) {
+    if (state !== cookieState) {
+      return res.status(400).send('Invalid state parameter - possible CSRF attack');
+    }
+    // Clear the state cookie after successful verification
+    res.clearCookie('oauth_state');
+  }
 
   try {
     // 1. Exchange code for tokens

@@ -129,7 +129,6 @@ The platform consists of three main applications:
 
 #### Other Controllers
 - `milestonesController.js`: Milestone CRUD operations
-- `stepsController.js`: Step CRUD operations  
 - `feedbackController.js`: User feedback handling
 
 ### Services & Utilities
