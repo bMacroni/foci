@@ -157,22 +157,42 @@ export const conversationController = {
 
   async addMessage(threadId, content, role, metadata, jwt = null) {
     try {
-      // Use service role key to bypass RLS policies
-      const supabase = createClient(
+      // Enforce ownership before inserting the message
+      if (!jwt) {
+        throw new Error('Missing JWT for message insert');
+      }
+
+      // Create user JWT client to verify ownership
+      const userSupabase = createClient(
         process.env.SUPABASE_URL, 
-        process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
+        process.env.SUPABASE_ANON_KEY,
+        {
+          global: { headers: { Authorization: `Bearer ${jwt}` } }
+        }
       );
 
-      // Get the user_id from the thread
-      const { data: thread, error: threadError } = await supabase
+      // Get the user_id from the thread using user JWT client (enforces RLS)
+      const { data: thread, error: threadError } = await userSupabase
         .from('conversation_threads')
         .select('user_id')
         .eq('id', threadId)
         .single();
 
       if (threadError || !thread) {
-        throw new Error('Conversation thread not found');
+        throw new Error('Conversation thread not found or access denied');
       }
+
+      // Verify the authenticated user matches the thread owner
+      const { data: { user }, error: userError } = await userSupabase.auth.getUser();
+      if (userError || !user || user.id !== thread.user_id) {
+        throw new Error('Forbidden: thread does not belong to you');
+      }
+
+      // Use service role client for the actual insert (now that we've verified ownership)
+      const supabase = createClient(
+        process.env.SUPABASE_URL, 
+        process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
+      );
 
       // Insert the message
       const { data: message, error: messageError } = await supabase

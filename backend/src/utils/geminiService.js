@@ -390,10 +390,13 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
           }
           if (details && details.due_date) {
             // Normalize past year to current year
-            const yearMatch = details.due_date.match(/^\(\d{4}\)-(\d{2})-(\d{2})$/);
-            if (yearMatch && parseInt(yearMatch[1]) < new Date().getFullYear()) {
-              const currentYear = String(new Date().getFullYear());
-              details.due_date = currentYear + '-' + yearMatch[2] + '-' + yearMatch[3];
+            const m = details.due_date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (m) {
+              const [_, y, mm, dd] = m;
+              const nowY = new Date().getFullYear();
+              if (parseInt(y, 10) < nowY) {
+                details.due_date = `${nowY}-${mm}-${dd}`;
+              }
             }
             // Normalize 'tomorrow' to tomorrow's date
             if (details.due_date.toLowerCase && details.due_date.toLowerCase() === 'tomorrow') {
@@ -430,6 +433,10 @@ Be conversational, supportive, and encouraging throughout the goal creation proc
               details,
               args: functionCall.args || {}
             });
+            
+            // Normalize due_date if present
+            this._normalizeDueDate(actions[actions.length - 1]);
+            
             if (this.DEBUG) console.log('🔍 [GEMINI DEBUG] Added action:', { action_type, entity_type });
           }
           functionResults.push({ name: functionCall.name, response: details });
@@ -1041,8 +1048,43 @@ Make the milestones and steps specific to this goal, encouraging, and achievable
   _normalizeDueDate(action) {
     if (!action.details || !action.details.due_date) return;
     let dueDateStr = action.details.due_date;
+    
+    // Handle YYYY-MM-DD format directly to avoid timezone issues
+    const directMatch = dueDateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (directMatch) {
+      const [_, year, month, day] = directMatch;
+      const currentYear = new Date().getFullYear();
+      
+      // If year is in the past, normalize to current year
+      if (parseInt(year, 10) < currentYear) {
+        const normalized = `${currentYear}-${month}-${day}`;
+        action.details.due_date = normalized;
+      }
+      return;
+    }
+    
+    // Handle ISO timestamp format (YYYY-MM-DDTHH:mm:ss+00:00) to avoid timezone issues
+    const timestampMatch = dueDateStr.match(/^(\d{4})-(\d{2})-(\d{2})T/);
+    if (timestampMatch) {
+      const [_, year, month, day] = timestampMatch;
+      const currentYear = new Date().getFullYear();
+      
+      // If year is in the past, normalize to current year
+      if (parseInt(year, 10) < currentYear) {
+        const normalized = `${currentYear}-${month}-${day}`;
+        action.details.due_date = normalized;
+      } else {
+        // Extract just the date part for current/future years
+        const normalized = `${year}-${month}-${day}`;
+        action.details.due_date = normalized;
+      }
+      return;
+    }
+    
+    // For other formats, use DateParser
     let parsed = dateParser.parse(dueDateStr);
     if (parsed) {
+      // Create date in local timezone to avoid UTC conversion issues
       const parsedDate = new Date(parsed);
       if (parsedDate && !isNaN(parsedDate)) {
         const now = new Date();
@@ -1054,11 +1096,12 @@ Make the milestones and steps specific to this goal, encouraging, and achievable
         if (parsedDate < now) {
           parsedDate.setFullYear(parsedDate.getFullYear() + 1);
         }
-        // Format as YYYY-MM-DD
+        // Format as YYYY-MM-DD using local date components
         const yyyy = parsedDate.getFullYear();
         const mm = String(parsedDate.getMonth() + 1).padStart(2, '0');
         const dd = String(parsedDate.getDate()).padStart(2, '0');
-        action.details.due_date = `${yyyy}-${mm}-${dd}`;
+        const normalized = `${yyyy}-${mm}-${dd}`;
+        action.details.due_date = normalized;
       }
     }
   }

@@ -150,45 +150,33 @@ router.post('/mobile-signin', async (req, res) => {
     let userId;
     let userSession;
 
-          if (existingUserRow?.id) {
-        // User exists - trust Google authentication and sign them in
-        userId = existingUserRow.id;
-        logger.info(`Existing user found: ${userId}`);
+    if (existingUserRow?.id) {
+      // User exists - trust Google authentication and sign them in
+      userId = existingUserRow.id;
+      logger.info(`Existing user found: ${userId}`);
 
-        try {
-          // Set a temporary password if they don't have one
-          const { error: passwordError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
-            password: 'temp-google-password-123'
-          });
+      try {
+        // Securely sign in the user using their Google ID token (server-side)
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithIdToken({
+          provider: 'google',
+          token: idToken,
+        });
 
-          if (passwordError) {
-            logger.error('Error setting temporary password:', passwordError);
-            return res.status(500).json({
-              error: 'Failed to create user session'
-            });
-          }
-
-          // Sign in the user to get a proper session
-          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-            email,
-            password: 'temp-google-password-123'
-          });
-
-          if (signInError) {
-            logger.error('Error signing in existing user:', signInError);
-            return res.status(500).json({
-              error: 'Failed to create user session'
-            });
-          }
-
-          userSession = signInData;
-          logger.info(`Existing user signed in via Google: ${userId}`);
-        } catch (sessionError) {
-          logger.error('Error creating session for existing user:', sessionError);
+        if (signInError) {
+          logger.error('Error signing in existing user with ID token:', signInError);
           return res.status(500).json({
             error: 'Failed to create user session'
           });
         }
+
+        userSession = signInData;
+        logger.info(`Existing user signed in via Google ID token: ${userId}`);
+      } catch (sessionError) {
+        logger.error('Error creating session for existing user:', sessionError);
+        return res.status(500).json({
+          error: 'Failed to create user session'
+        });
+      }
     } else {
       // User doesn't exist - create new user
       logger.info(`Creating new user for email: ${email}`);
@@ -213,42 +201,29 @@ router.post('/mobile-signin', async (req, res) => {
       userId = newUser.user.id;
       logger.info(`New user created: ${userId}`);
 
-             // For new users, we need to create a proper Supabase session
-       // Let's try to sign in the user with a temporary password and then get a session
-       try {
-         // First, set a temporary password for the user
-         const { error: passwordError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
-           password: 'temp-google-password-123'
-         });
+      // For new users, we need to create a proper Supabase session
+      // Securely sign in with the Google ID token to get a proper session
+      try {
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithIdToken({
+          provider: 'google',
+          token: idToken,
+        });
 
-         if (passwordError) {
-           logger.error('Error setting temporary password:', passwordError);
-           return res.status(500).json({
-             error: 'Failed to create user session'
-           });
-         }
+        if (signInError) {
+          logger.error('Error signing in new user with ID token:', signInError);
+          return res.status(500).json({
+            error: 'Failed to create user session'
+          });
+        }
 
-         // Now sign in the user to get a proper session
-         const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-           email,
-           password: 'temp-google-password-123'
-         });
-
-         if (signInError) {
-           logger.error('Error signing in new user:', signInError);
-           return res.status(500).json({
-             error: 'Failed to create user session'
-           });
-         }
-
-         userSession = signInData;
-         logger.info('Proper Supabase session created for new Google user');
-       } catch (sessionError) {
-         logger.error('Error creating session:', sessionError);
-         return res.status(500).json({
-           error: 'Failed to create user session'
-         });
-       }
+        userSession = signInData;
+        logger.info('Proper Supabase session created for new Google user via ID token');
+      } catch (sessionError) {
+        logger.error('Error creating session for new user:', sessionError);
+        return res.status(500).json({
+          error: 'Failed to create user session'
+        });
+      }
     }
 
     // Store Google tokens for calendar integration
@@ -260,7 +235,7 @@ router.post('/mobile-signin', async (req, res) => {
         const mobileOauthClient = new google.auth.OAuth2(
           process.env.GOOGLE_CLIENT_ID,
           process.env.GOOGLE_CLIENT_SECRET,
-          process.env.GOOGLE_REDIRECT_URI 
+          process.env.GOOGLE_REDIRECT_URI || 'postmessage'
         );
         try {
           const backendId = process.env.GOOGLE_CLIENT_ID || '';

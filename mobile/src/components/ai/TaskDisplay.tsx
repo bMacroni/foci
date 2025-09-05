@@ -90,12 +90,34 @@ export default function TaskDisplay({ text }: TaskDisplayProps) {
   const formatDate = (dateString?: string) => {
     if (!dateString) {return '';}
     try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric',
-        year: 'numeric'
-      });
+      // Handle YYYY-MM-DD format to avoid timezone conversion issues
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+        const [year, month, day] = dateString.split('-');
+        const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        return date.toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric',
+          year: 'numeric'
+        });
+      } 
+      // Handle timestamp format (YYYY-MM-DDTHH:mm:ss) to avoid timezone conversion
+      else if (/^\d{4}-\d{2}-\d{2}T/.test(dateString)) {
+        const [datePart] = dateString.split('T');
+        const [year, month, day] = datePart.split('-');
+        const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        return date.toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric',
+          year: 'numeric'
+        });
+      } else {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric',
+          year: 'numeric'
+        });
+      }
     } catch {
       return dateString;
     }
