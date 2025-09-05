@@ -117,6 +117,10 @@ Also applies to: 231-235
 
 The callback treats state only as a mobile flag. For web, generate a state nonce at `/login` and verify it on `/callback`.
 
+~~**CRITICAL: Mobile OAuth callback allows cross-user token planting; require signed, time-bound mobile state.**~~ ✅ **FIXED**
+
+Skipping state validation for mobile: lets an attacker bind their Google tokens to another user by crafting state=mobile:<targetUserId> and completing the OAuth code flow. Sign and verify mobile state (HMAC with server secret + short TTL) before storing tokens.
+
 ```diff
   router.get('/login', (req, res) => {
 -  const scopes = [

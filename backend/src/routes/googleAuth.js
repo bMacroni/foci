@@ -9,6 +9,84 @@ import crypto from 'crypto';
 const router = express.Router();
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 
+// PKCE Helper Functions
+function generateCodeVerifier() {
+  // Generate a cryptographically secure random string (43-128 characters)
+  // Using 64 characters for good security
+  return crypto.randomBytes(32).toString('base64url');
+}
+
+function generateCodeChallenge(verifier) {
+  // Create SHA256 hash of verifier and base64url encode it
+  return crypto.createHash('sha256').update(verifier).digest('base64url');
+}
+
+// In-memory store for PKCE challenges (in production, use Redis or database)
+const pkceStore = new Map();
+
+// Helper function to generate secure mobile state with PKCE
+function generateMobileState(userId) {
+  const codeVerifier = generateCodeVerifier();
+  const codeChallenge = generateCodeChallenge(codeVerifier);
+  
+  // Store the verifier temporarily (10 minutes TTL)
+  const expiresAt = Date.now() + (10 * 60 * 1000);
+  pkceStore.set(codeChallenge, { userId, codeVerifier, expiresAt });
+  
+  // Clean up expired entries
+  for (const [challenge, data] of pkceStore.entries()) {
+    if (data.expiresAt < Date.now()) {
+      pkceStore.delete(challenge);
+    }
+  }
+  
+  return { state: `mobile:${codeChallenge}`, codeVerifier };
+}
+
+// Helper function to verify mobile state and retrieve PKCE data
+function verifyMobileState(state) {
+  if (!state?.startsWith('mobile:')) {
+    return null;
+  }
+  
+  try {
+    const codeChallenge = state.slice('mobile:'.length);
+    const pkceData = pkceStore.get(codeChallenge);
+    
+    if (!pkceData) {
+      throw new Error('PKCE challenge not found or expired');
+    }
+    
+    if (pkceData.expiresAt < Date.now()) {
+      pkceStore.delete(codeChallenge);
+      throw new Error('PKCE challenge expired');
+    }
+    
+    return { userId: pkceData.userId, codeVerifier: pkceData.codeVerifier };
+  } catch (error) {
+    logger.error('Mobile state verification failed:', error.message);
+    return null;
+  }
+}
+
+// Helper function to consume PKCE challenge (one-time use)
+function consumePkceChallenge(state) {
+  if (!state?.startsWith('mobile:')) {
+    return null;
+  }
+  
+  const codeChallenge = state.slice('mobile:'.length);
+  const pkceData = pkceStore.get(codeChallenge);
+  
+  if (pkceData) {
+    // Remove the challenge after use (one-time use)
+    pkceStore.delete(codeChallenge);
+    return pkceData;
+  }
+  
+  return null;
+}
+
 // 1. Start OAuth flow for login
 router.get('/login', (req, res) => {
   const scopes = [
@@ -39,10 +117,46 @@ router.get('/login', (req, res) => {
   res.redirect(url);
 });
 
-// 2. Handle OAuth callback for login (supports both web and mobile)
+// 1.5. Start OAuth flow for mobile (requires authenticated user)
+router.get('/mobile-login', async (req, res) => {
+  const userId = req.query.userId;
+  
+  if (!userId) {
+    return res.status(400).json({ error: 'userId parameter is required' });
+  }
+  
+  try {
+    // Generate secure mobile state with PKCE
+    const { state, codeVerifier } = generateMobileState(userId);
+    
+    const scopes = [
+      'https://www.googleapis.com/auth/calendar',
+      'https://www.googleapis.com/auth/calendar.events',
+      'https://www.googleapis.com/auth/userinfo.email',
+      'https://www.googleapis.com/auth/userinfo.profile'
+    ];
+    
+    const url = oauth2Client.generateAuthUrl({
+      access_type: 'offline',
+      scope: scopes,
+      state: state
+    });
+    
+    // Return both the auth URL and the code verifier for the client to store
+    res.json({ 
+      authUrl: url,
+      codeVerifier: codeVerifier  // Client must store this securely
+    });
+  } catch (error) {
+    logger.error('Error generating mobile OAuth URL:', error);
+    res.status(500).json({ error: 'Failed to generate OAuth URL' });
+  }
+});
+
+// 2. Handle OAuth callback for login (web flow only - mobile uses separate endpoint)
 router.get('/callback', async (req, res) => {
   const code = req.query.code;
-  const state = req.query.state; // For mobile flow, state contains user info
+  const state = req.query.state;
   const cookieState = req.cookies?.oauth_state;
 
   if (!code) return res.status(400).send('No code provided');
@@ -52,14 +166,17 @@ router.get('/callback', async (req, res) => {
     return res.status(400).send('Missing state parameter');
   }
   
-  // For web flow, verify state matches cookie
-  if (!state?.startsWith('mobile:')) {
-    if (state !== cookieState) {
-      return res.status(400).send('Invalid state parameter - possible CSRF attack');
-    }
-    // Clear the state cookie after successful verification
-    res.clearCookie('oauth_state');
+  // Reject mobile flows - they should use the mobile-token endpoint
+  if (state?.startsWith('mobile:')) {
+    return res.status(400).send('Mobile OAuth flows must use /mobile-token endpoint');
   }
+  
+  // For web flow, verify state matches cookie
+  if (state !== cookieState) {
+    return res.status(400).send('Invalid state parameter - possible CSRF attack');
+  }
+  // Clear the state cookie after successful verification
+  res.clearCookie('oauth_state');
 
   try {
     // 1. Exchange code for tokens
@@ -76,47 +193,74 @@ router.get('/callback', async (req, res) => {
     const googleEmail = userInfo.data.email;
     const googleName = userInfo.data.name;
 
-    // 3. Check if this is a mobile flow (state contains user info)
-    if (state && state.includes('mobile:')) {
-      // Mobile flow - store tokens and redirect back to mobile app
-      const userId = state.replace('mobile:', '');
-      
-      try {
-        await storeGoogleTokens(userId, {
-          access_token: tokens.access_token,
-          refresh_token: tokens.refresh_token,
-          token_type: tokens.token_type || 'Bearer',
-          scope: tokens.scope || 'https://www.googleapis.com/auth/calendar.events.readonly',
-          expiry_date: tokens.expiry_date || (Date.now() + 3600 * 1000),
-        });
-        logger.info(`Stored Google tokens for mobile user: ${userId}`);
-        
-        // Redirect to mobile app with success
-        const mobileRedirectUrl = process.env.MOBILE_REDIRECT_URL || 'mindgarden://oauth-callback';
-        res.redirect(`${mobileRedirectUrl}?success=true&email=${encodeURIComponent(googleEmail)}`);
-      } catch (tokenError) {
-        logger.error('Error storing tokens for mobile user:', tokenError);
-        const mobileRedirectUrl = process.env.MOBILE_REDIRECT_URL || 'mindgarden://oauth-callback';
-        res.redirect(`${mobileRedirectUrl}?error=token_storage_failed`);
-      }
-    } else {
-      // Web flow - redirect to frontend
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-      res.redirect(`${frontendUrl}?google=info&email=${encodeURIComponent(googleEmail)}&name=${encodeURIComponent(googleName)}`);
-    }
+    // Web flow - redirect to frontend
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    res.redirect(`${frontendUrl}?google=info&email=${encodeURIComponent(googleEmail)}&name=${encodeURIComponent(googleName)}`);
     
   } catch (err) {
     logger.error('Error in Google OAuth callback:', err);
-    
-    if (state && state.includes('mobile:')) {
-      // Mobile flow error
-      const mobileRedirectUrl = process.env.MOBILE_REDIRECT_URL || 'mindgarden://oauth-callback';
-      res.redirect(`${mobileRedirectUrl}?error=oauth_failed`);
-    } else {
-      // Web flow error
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-      res.redirect(`${frontendUrl}?google=error&message=${encodeURIComponent('OAuth callback failed')}`);
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    res.redirect(`${frontendUrl}?google=error&message=${encodeURIComponent('OAuth callback failed')}`);
+  }
+});
+
+// 2.5. Mobile token exchange endpoint (PKCE flow)
+router.post('/mobile-token', async (req, res) => {
+  const { code, state, codeVerifier } = req.body;
+  
+  if (!code || !state || !codeVerifier) {
+    return res.status(400).json({ error: 'Missing required parameters: code, state, codeVerifier' });
+  }
+  
+  try {
+    // Verify PKCE challenge and consume it (one-time use)
+    const pkceData = consumePkceChallenge(state);
+    if (!pkceData) {
+      return res.status(400).json({ error: 'Invalid or expired PKCE challenge' });
     }
+    
+    // Verify the code verifier matches what we stored
+    if (pkceData.codeVerifier !== codeVerifier) {
+      return res.status(400).json({ error: 'Invalid code verifier' });
+    }
+    
+    // Exchange authorization code for tokens using PKCE
+    const { tokens } = await oauth2Client.getToken({
+      code: code,
+      code_verifier: codeVerifier
+    });
+    
+    logger.info('Google tokens received successfully via PKCE');
+    
+    // Get user info from Google
+    oauth2Client.setCredentials(tokens);
+    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+    const userInfo = await oauth2.userinfo.get();
+    
+    const googleEmail = userInfo.data.email;
+    const googleName = userInfo.data.name;
+    
+    // Store tokens for the verified user
+    await storeGoogleTokens(pkceData.userId, {
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      token_type: tokens.token_type || 'Bearer',
+      scope: tokens.scope || 'https://www.googleapis.com/auth/calendar.events.readonly',
+      expiry_date: tokens.expiry_date || (Date.now() + 3600 * 1000),
+    });
+    
+    logger.info(`Stored Google tokens for mobile user: ${pkceData.userId}`);
+    
+    res.json({
+      success: true,
+      email: googleEmail,
+      name: googleName,
+      message: 'Google tokens stored successfully'
+    });
+    
+  } catch (error) {
+    logger.error('Error in mobile token exchange:', error);
+    res.status(500).json({ error: 'Token exchange failed' });
   }
 });
 
