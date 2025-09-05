@@ -117,33 +117,43 @@ router.get('/login', (req, res) => {
   res.redirect(url);
 });
 
-// 1.5. Start OAuth flow for mobile (requires authenticated user)
 router.get('/mobile-login', async (req, res) => {
-  const userId = req.query.userId;
-  
-  if (!userId) {
-    return res.status(400).json({ error: 'userId parameter is required' });
+  // Require authenticated user; derive userId from Supabase JWT
+  const jwt = req.headers.authorization?.replace('Bearer ', '');
+  if (!jwt) {
+    return res.status(401).json({ error: 'Missing Authorization bearer token' });
   }
-  
+  const authed = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: `Bearer ${jwt}` } }
+  });
+  const { data: userData, error: authError } = await authed.auth.getUser();
+  const user = userData?.user;
+  if (authError || !user?.id) {
+    return res.status(401).json({ error: 'Invalid session' });
+  }
+
   try {
     // Generate secure mobile state with PKCE
-    const { state, codeVerifier } = generateMobileState(userId);
-    
+    const { state, codeVerifier, codeChallenge } = generateMobileState(user.id);
+
     const scopes = [
       'https://www.googleapis.com/auth/calendar',
       'https://www.googleapis.com/auth/calendar.events',
       'https://www.googleapis.com/auth/userinfo.email',
       'https://www.googleapis.com/auth/userinfo.profile'
     ];
-    
+
     const url = oauth2Client.generateAuthUrl({
       access_type: 'offline',
       scope: scopes,
-      state: state
+      state,
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
+      prompt: 'consent'
     });
-    
+
     // Return both the auth URL and the code verifier for the client to store
-    res.json({ 
+    res.json({
       authUrl: url,
       codeVerifier: codeVerifier  // Client must store this securely
     });
@@ -152,7 +162,6 @@ router.get('/mobile-login', async (req, res) => {
     res.status(500).json({ error: 'Failed to generate OAuth URL' });
   }
 });
-
 // 2. Handle OAuth callback for login (web flow only - mobile uses separate endpoint)
 router.get('/callback', async (req, res) => {
   const code = req.query.code;
