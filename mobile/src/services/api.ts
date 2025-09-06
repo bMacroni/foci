@@ -1028,6 +1028,118 @@ export const usersAPI = {
   }
 };
 
+export const notificationsAPI = {
+  registerDeviceToken: async (token: string, deviceType: string): Promise<void> => {
+    const authToken = await getAuthToken();
+    const response = await fetch(`${configService.getBaseUrl()}/user/device-token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({ token, device_type: deviceType }),
+    });
+    if (!response.ok) {
+      throw new Error('Failed to register device token');
+    }
+  },
+
+  getNotifications: async (status: 'all' | 'read' | 'unread' = 'unread'): Promise<any[]> => {
+    const token = await getAuthToken();
+    const response = await fetch(`${configService.getBaseUrl()}/tasks/notifications?status=${status}`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!response.ok) {
+        throw new Error('Failed to get notifications');
+    }
+    return response.json();
+  },
+
+  markAsRead: async (notificationId: string): Promise<void> => {
+    const token = await getAuthToken();
+    const response = await fetch(`${configService.getBaseUrl()}/tasks/notifications/${notificationId}/read`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!response.ok) {
+        throw new Error('Failed to mark notification as read');
+    }
+  },
+
+  markAllAsRead: async (): Promise<void> => {
+    const token = await getAuthToken();
+    const response = await fetch(`${configService.getBaseUrl()}/tasks/notifications/read-all`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!response.ok) {
+        throw new Error('Failed to mark all notifications as read');
+    }
+  },
+
+  getUnreadCount: async (): Promise<number> => {
+    const token = await getAuthToken();
+    const response = await fetch(`${configService.getBaseUrl()}/tasks/notifications/unread-count`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!response.ok) {
+        throw new Error('Failed to get unread notification count');
+    }
+    const data = await response.json();
+    return data.count;
+  },
+};
+
+class WebSocketService {
+  private ws: WebSocket | null = null;
+  private onMessageCallback: ((message: any) => void) | null = null;
+
+  connect() {
+    // Prevent multiple connections
+    if (this.ws && this.ws.readyState !== WebSocket.CLOSED) {
+      return;
+    }
+
+    const wsUrl = configService.getBaseUrl().replace(/^http/, 'ws') + '/ws/notifications';
+    this.ws = new WebSocket(wsUrl);
+
+    this.ws.onopen = async () => {
+      console.log('WebSocket connected');
+      // Authenticate upon connection
+      const token = await getAuthToken();
+      this.ws?.send(JSON.stringify({ type: 'auth', token }));
+    };
+
+    this.ws.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      if (this.onMessageCallback) {
+        this.onMessageCallback(message);
+      }
+    };
+
+    this.ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+
+    this.ws.onclose = () => {
+      console.log('WebSocket disconnected');
+      // Optional: implement reconnection logic here
+    };
+  }
+
+  onMessage(callback: (message: any) => void) {
+    this.onMessageCallback = callback;
+  }
+
+  disconnect() {
+    this.ws?.close();
+  }
+}
+
+export const webSocketService = new WebSocketService();
+
 // App Preferences API
 export const appPreferencesAPI = {
   get: async (): Promise<{ momentum_mode_enabled: boolean; momentum_travel_preference: 'allow_travel'|'home_only' }> => {

@@ -1,112 +1,166 @@
 import nodemailer from 'nodemailer';
 import { createClient } from '@supabase/supabase-js';
+import { initializeFirebaseAdmin } from '../utils/firebaseAdmin.js';
+import webSocketManager from '../utils/webSocketManager.js';
+import logger from '../utils/logger.js';
+
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const firebaseAdmin = initializeFirebaseAdmin();
 
 /**
- * Send auto-scheduling notification email to user
+ * Generic function to send notifications based on user preferences.
+ * @param {string} userId - The ID of the user to notify.
+ * @param {object} notification - The notification object.
+ * @param {string} notification.notification_type - The type of notification.
+ * @param {string} notification.title - The title of the notification.
+ * @param {string} notification.message - The main message of the notification.
+ * @param {object} [notification.details] - Additional data for the notification.
  */
-export async function sendAutoSchedulingNotification(userId, notificationData) {
+export async function sendNotification(userId, notification) {
   try {
-    // Initialize Supabase client inside function with service role key for backend operations
-    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-    
-    // Configure email transporter inside function
-    const transporter = nodemailer.createTransport({
-      service: process.env.EMAIL_SERVICE || 'gmail',
-      auth: {
-        user: process.env.FEEDBACK_EMAIL_USER,
-        pass: process.env.FEEDBACK_EMAIL_PASS,
-      },
-    });
+    const { notification_type, title, message, details } = notification;
 
-    // Check if email configuration is available
-    if (!process.env.FEEDBACK_EMAIL_USER || !process.env.FEEDBACK_EMAIL_PASS) {
-      // Still store in-app notification even if email fails
-      await storeInAppNotification(userId, {
-        type,
-        title,
-        message,
-        details,
-        read: false,
-        created_at: new Date().toISOString()
-      });
-      return { success: true, email_skipped: true };
+    // 1. Fetch user preferences and device tokens in parallel
+    const [prefsResult, tokensResult, userResult] = await Promise.all([
+      supabase.from('user_notification_preferences').select('*').eq('user_id', userId).eq('notification_type', notification_type),
+      supabase.from('user_device_tokens').select('device_token').eq('user_id', userId),
+      supabase.from('users').select('email, full_name').eq('id', userId).single()
+    ]);
+
+    if (userResult.error) {
+      logger.error(`User not found for notification: ${userId}`, userResult.error);
+      return { success: false, error: 'User not found' };
     }
-    
-    // Get user information from public.users table
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('email, full_name')
-      .eq('id', userId)
-      .single();
+    const user = userResult.data;
+    const preferences = prefsResult.data || [];
+    const deviceTokens = tokensResult.data?.map(t => t.device_token) || [];
 
-    // If user not found, use fallback values but still send notification
-    let user;
-    if (userError || !userData) {
-      // Use fallback values instead of failing
-      user = {
-        email: process.env.FALLBACK_EMAIL || 'user@example.com',
-        full_name: 'User'
-      };
-    } else {
-      user = userData;
+    // 2. Anti-spam check: a simple check to avoid sending the exact same notification in a short period.
+    const { data: recentNotifications, error: recentCheckError } = await supabase
+      .from('user_notifications')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('notification_type', notification_type)
+      .eq('title', title)
+      .gt('created_at', new Date(Date.now() - 5 * 60 * 1000).toISOString()); // 5 minutes
+
+    if (recentNotifications && recentNotifications.length > 0) {
+      logger.info(`Spam protection: Similar notification recently sent to user ${userId}. Skipping.`);
+      return { success: true, message: 'Spam protection: notification skipped.' };
     }
 
-    const { type, title, message, details, scheduledTasks = [], failedTasks = [] } = notificationData;
-
-    // Create email content based on notification type
-    let emailSubject = '';
-    let emailBody = '';
-
-    switch (type) {
-      case 'auto_scheduling_completed':
-        emailSubject = '✅ Auto-Scheduling Completed';
-        emailBody = createAutoSchedulingCompletedEmail(user.full_name, scheduledTasks, failedTasks);
-        break;
-      case 'auto_scheduling_error':
-        emailSubject = '⚠️ Auto-Scheduling Issues Detected';
-        emailBody = createAutoSchedulingErrorEmail(user.full_name, details, failedTasks);
-        break;
-      case 'weather_conflict':
-        emailSubject = '🌦️ Weather Affected Task Scheduling';
-        emailBody = createWeatherConflictEmail(user.full_name, details);
-        break;
-      case 'calendar_conflict':
-        emailSubject = '📅 Calendar Conflicts Detected';
-        emailBody = createCalendarConflictEmail(user.full_name, details);
-        break;
-      default:
-        emailSubject = title || 'Auto-Scheduling Update';
-        emailBody = createGenericNotificationEmail(user.full_name, message, details);
-    }
-
-    // Send email
-    const mailOptions = {
-      from: process.env.FEEDBACK_EMAIL_USER,
-      to: user.email,
-      subject: emailSubject,
-      html: emailBody,
+    // 3. Determine which channels to send to based on preferences
+    // If no specific preference is set, we default to in-app only.
+    const shouldSend = (channel) => {
+      const pref = preferences.find(p => p.channel === channel);
+      return pref ? pref.enabled : channel === 'in_app'; // Default to true only for in_app
     };
 
-    try {
-      await transporter.sendMail(mailOptions);
-    } catch (emailError) {
-      // Continue with in-app notification even if email fails
+    const deliveryPromises = [];
+
+    // Send Push Notification
+    if (shouldSend('push') && deviceTokens.length > 0) {
+      deliveryPromises.push(sendPushNotification(deviceTokens, title, message, details));
     }
 
-    // Store notification in database for in-app notifications
-    await storeInAppNotification(userId, {
-      type,
-      title,
-      message,
-      details,
-      read: false,
-      created_at: new Date().toISOString()
-    });
+    // Send Email
+    if (shouldSend('email')) {
+      deliveryPromises.push(sendEmailNotification(user, notification));
+    }
+
+    // Always store In-App Notification if the channel is enabled or not configured
+    if (shouldSend('in_app')) {
+        deliveryPromises.push(storeInAppNotification(userId, {
+            notification_type,
+            title,
+            message,
+            details,
+            read: false,
+            created_at: new Date().toISOString()
+        }));
+    }
+
+    await Promise.all(deliveryPromises);
 
     return { success: true };
   } catch (error) {
+    logger.error(`Failed to send notification to user ${userId}:`, error);
     return { success: false, error: error.message };
   }
+}
+
+async function sendPushNotification(tokens, title, body, data = {}) {
+  if (!firebaseAdmin) {
+    logger.error('Firebase Admin not initialized, skipping push notification.');
+    return;
+  }
+  const message = {
+    notification: { title, body },
+    data: { ...data, title, body }, // Send all details in data payload
+    tokens: tokens,
+    android: {
+        priority: 'high',
+    },
+    apns: {
+        payload: {
+            aps: {
+                'content-available': 1,
+                badge: 1, // You might want to calculate the actual badge count
+            },
+        },
+    },
+  };
+
+  try {
+    const response = await firebaseAdmin.messaging().sendEachForMulticast(message);
+    logger.info(`Push notifications sent: ${response.successCount}, failed: ${response.failureCount}`);
+  } catch (error) {
+    logger.error('Error sending push notification:', error);
+  }
+}
+
+async function sendEmailNotification(user, notification) {
+  const { title, message, details } = notification;
+  if (!process.env.FEEDBACK_EMAIL_USER || !process.env.FEEDBACK_EMAIL_PASS) {
+    logger.warn('Email credentials not configured. Skipping email notification.');
+    return;
+  }
+
+  const transporter = nodemailer.createTransport({
+    service: process.env.EMAIL_SERVICE || 'gmail',
+    auth: {
+      user: process.env.FEEDBACK_EMAIL_USER,
+      pass: process.env.FEEDBACK_EMAIL_PASS,
+    },
+  });
+
+  const emailBody = createGenericNotificationEmail(user.full_name, message, details);
+
+  const mailOptions = {
+    from: process.env.FEEDBACK_EMAIL_USER,
+    to: user.email,
+    subject: title,
+    html: emailBody,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    logger.info(`Email notification sent to ${user.email}`);
+  } catch (emailError) {
+    logger.error(`Failed to send email to ${user.email}:`, emailError);
+  }
+}
+
+
+/**
+ * Send auto-scheduling notification email to user
+ * @deprecated Use sendNotification instead.
+ */
+export async function sendAutoSchedulingNotification(userId, notificationData) {
+    const { type, ...rest } = notificationData;
+    // This function is now a wrapper around the new generic service.
+    // It helps maintain backward compatibility where it's currently used.
+    return sendNotification(userId, { notification_type: type, ...rest });
 }
 
 /**
@@ -281,156 +335,205 @@ function createGenericNotificationEmail(userName, message, details) {
  * Store in-app notification in database
  */
 async function storeInAppNotification(userId, notification) {
-  try {
-    // Initialize Supabase client inside function with service role key for backend operations
-    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-    
-    // Check if notifications table exists, if not create it
-    const { error: tableError } = await supabase
-      .from('user_notifications')
-      .select('id')
-      .limit(1);
+    try {
+        const { data, error: insertError } = await supabase
+            .from('user_notifications')
+            .insert([{
+                user_id: userId,
+                notification_type: notification.notification_type,
+                title: notification.title,
+                message: notification.message,
+                details: notification.details,
+                read: notification.read,
+                created_at: notification.created_at
+            }])
+            .select()
+            .single();
 
-    if (tableError && tableError.code === '42P01') {
-      // Table doesn't exist, create it
-      await createNotificationsTable();
+        if (insertError) {
+            logger.error(`Failed to store in-app notification for user ${userId}:`, insertError);
+        } else if (data) {
+            // Send real-time update
+            webSocketManager.sendMessage(userId, {
+                type: 'new_notification',
+                payload: data
+            });
+        }
+    } catch (error) {
+        logger.error(`Exception in storeInAppNotification for user ${userId}:`, error);
     }
-
-    // Insert notification
-    const { error: insertError } = await supabase
-      .from('user_notifications')
-      .insert([{
-        user_id: userId,
-        type: notification.type,
-        title: notification.title,
-        message: notification.message,
-        details: notification.details,
-        read: notification.read,
-        created_at: notification.created_at
-      }]);
-
-    if (insertError) {
-      // Silent fail for notification storage
-    }
-  } catch (error) {
-    // Silent fail for notification storage
-  }
 }
 
 /**
- * Create notifications table if it doesn't exist
+ * Get user's notifications with status filter.
  */
-async function createNotificationsTable() {
-  try {
-    // Initialize Supabase client inside function with service role key for backend operations
-    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-    
-    const { error } = await supabase.rpc('exec_sql', {
-      sql: `
-        CREATE TABLE IF NOT EXISTS public.user_notifications (
-          id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-          user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
-          type TEXT NOT NULL,
-          title TEXT,
-          message TEXT,
-          details JSONB,
-          read BOOLEAN DEFAULT false,
-          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-        );
-        
-        CREATE INDEX IF NOT EXISTS idx_user_notifications_user_id ON public.user_notifications(user_id);
-        CREATE INDEX IF NOT EXISTS idx_user_notifications_read ON public.user_notifications(read);
-        CREATE INDEX IF NOT EXISTS idx_user_notifications_created_at ON public.user_notifications(created_at);
-        
-        ALTER TABLE public.user_notifications ENABLE ROW LEVEL SECURITY;
-        
-        CREATE POLICY "Users can view own notifications" ON public.user_notifications 
-          FOR SELECT USING (auth.uid() = user_id);
-        CREATE POLICY "Users can update own notifications" ON public.user_notifications 
-          FOR UPDATE USING (auth.uid() = user_id);
-        CREATE POLICY "Users can insert own notifications" ON public.user_notifications 
-          FOR INSERT WITH CHECK (auth.uid() = user_id);
-      `
-    });
+export async function getUserNotifications(userId, status = 'unread', limit = 20) {
+    try {
+        let query = supabase
+            .from('user_notifications')
+            .select('*')
+            .eq('user_id', userId);
 
-    if (error) {
-      // Silent fail for table creation
+        if (status === 'unread') {
+            query = query.eq('read', false);
+        } else if (status === 'read') {
+            query = query.eq('read', true);
+        }
+        // 'all' status doesn't need a read filter
+
+        const { data, error } = await query
+            .order('created_at', { ascending: false })
+            .limit(limit);
+
+        if (error) {
+            logger.error(`Failed to get notifications for user ${userId}:`, error);
+            return [];
+        }
+
+        return data || [];
+    } catch (error) {
+        logger.error(`Exception in getUserNotifications for user ${userId}:`, error);
+        return [];
     }
-  } catch (error) {
-    // Silent fail for table creation
-  }
-}
-
-/**
- * Get user's unread notifications
- */
-export async function getUserNotifications(userId, limit = 10) {
-  try {
-    // Initialize Supabase client inside function with service role key for backend operations
-    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-    
-    const { data, error } = await supabase
-      .from('user_notifications')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('read', false)
-      .order('created_at', { ascending: false })
-      .limit(limit);
-
-    if (error) {
-      return [];
-    }
-
-    return data || [];
-  } catch (error) {
-    return [];
-  }
 }
 
 /**
  * Mark notification as read
  */
 export async function markNotificationAsRead(notificationId, userId) {
-  try {
-    // Initialize Supabase client inside function with service role key for backend operations
-    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-    
-    const { error } = await supabase
-      .from('user_notifications')
-      .update({ read: true })
-      .eq('id', notificationId)
-      .eq('user_id', userId);
+    try {
+        const { data, error } = await supabase
+            .from('user_notifications')
+            .update({ read: true })
+            .eq('id', notificationId)
+            .eq('user_id', userId)
+            .select('id')
+            .single();
 
-    if (error) {
-      return { success: false, error: error.message };
+        if (error) {
+            logger.error(`Failed to mark notification as read for user ${userId}:`, error);
+            return { success: false, error: error.message };
+        }
+
+        if (data) {
+            webSocketManager.sendMessage(userId, {
+                type: 'notification_read',
+                payload: { id: notificationId }
+            });
+        }
+
+        return { success: true };
+    } catch (error) {
+        logger.error(`Exception in markNotificationAsRead for user ${userId}:`, error);
+        return { success: false, error: error.message };
     }
+}
 
-    return { success: true };
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
+export async function markAllNotificationsAsReadAndArchive(userId) {
+    try {
+        // First, mark all as read
+        await markAllNotificationsAsRead(userId);
+
+        // Get all read notifications
+        const { data: readNotifications, error: fetchError } = await supabase
+            .from('user_notifications')
+            .select('*')
+            .eq('user_id', userId)
+            .eq('read', true);
+
+        if (fetchError) {
+            logger.error(`Failed to fetch read notifications for archiving for user ${userId}:`, fetchError);
+            return { success: false, error: fetchError.message };
+        }
+
+        if (readNotifications && readNotifications.length > 0) {
+            const archiveData = readNotifications.map(n => ({
+                id: n.id,
+                user_id: n.user_id,
+                notification_type: n.notification_type,
+                title: n.title,
+                message: n.message,
+                details: n.details,
+                created_at: n.created_at,
+            }));
+
+            // Insert into archive table
+            const { error: archiveError } = await supabase
+                .from('archived_user_notifications')
+                .insert(archiveData);
+
+            if (archiveError) {
+                logger.error(`Failed to archive notifications for user ${userId}:`, archiveError);
+                return { success: false, error: archiveError.message };
+            }
+
+            // Delete from original table
+            const idsToDelete = readNotifications.map(n => n.id);
+            const { error: deleteError } = await supabase
+                .from('user_notifications')
+                .delete()
+                .in('id', idsToDelete);
+
+            if (deleteError) {
+                logger.error(`Failed to delete archived notifications for user ${userId}:`, deleteError);
+                // Don't fail the whole operation, as the main goal was to archive.
+            }
+        }
+
+        return { success: true };
+    } catch (error) {
+        logger.error(`Exception in markAllNotificationsAsReadAndArchive for user ${userId}:`, error);
+        return { success: false, error: error.message };
+    }
+}
+
+export async function getUnreadNotificationsCount(userId) {
+    try {
+        const { count, error } = await supabase
+            .from('user_notifications')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', userId)
+            .eq('read', false);
+
+        if (error) {
+            logger.error(`Failed to get unread notifications count for user ${userId}:`, error);
+            return 0;
+        }
+
+        return count;
+    } catch (error) {
+        logger.error(`Exception in getUnreadNotificationsCount for user ${userId}:`, error);
+        return 0;
+    }
 }
 
 /**
  * Mark all notifications as read for a user
  */
 export async function markAllNotificationsAsRead(userId) {
-  try {
-    // Initialize Supabase client inside function with service role key for backend operations
-    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-    
-    const { error } = await supabase
-      .from('user_notifications')
-      .update({ read: true })
-      .eq('user_id', userId)
-      .eq('read', false);
+    try {
+        const { data, error } = await supabase
+            .from('user_notifications')
+            .update({ read: true })
+            .eq('user_id', userId)
+            .eq('read', false)
+            .select('id');
 
-    if (error) {
-      return { success: false, error: error.message };
+        if (error) {
+            logger.error(`Failed to mark all notifications as read for user ${userId}:`, error);
+            return { success: false, error: error.message };
+        }
+
+        if (data && data.length > 0) {
+            webSocketManager.sendMessage(userId, {
+                type: 'all_notifications_read',
+                payload: { ids: data.map(n => n.id) }
+            });
+        }
+
+        return { success: true };
+    } catch (error) {
+        logger.error(`Exception in markAllNotificationsAsRead for user ${userId}:`, error);
+        return { success: false, error: error.message };
     }
-
-    return { success: true };
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
 } 

@@ -10,7 +10,7 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key';
 // Mock Firebase environment variables
 process.env.FIREBASE_PROJECT_ID = 'test-project-id';
 process.env.FIREBASE_PRIVATE_KEY_ID = 'test-private-key-id';
-process.env.FIREBASE_PRIVATE_KEY = '-----BEGIN PRIVATE KEY-----\nTest Private Key\n-----END PRIVATE KEY-----\n';
+process.env.FIREBASE_PRIVATE_KEY = '-----BEGIN PRIVATE KEY-----\\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQC3/w8d+w8Y+\\nZ9g\\n-----END PRIVATE KEY-----\\n';
 process.env.FIREBASE_CLIENT_EMAIL = 'test@test-project.iam.gserviceaccount.com';
 process.env.FIREBASE_CLIENT_ID = 'test-client-id';
 process.env.FIREBASE_AUTH_URI = 'https://accounts.google.com/o/oauth2/auth';

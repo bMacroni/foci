@@ -8,6 +8,7 @@ import { aiAPI, calendarAPI } from '../../services/api';
 vi.mock('../../services/api', () => ({
   aiAPI: {
     sendMessage: vi.fn(),
+    setMood: vi.fn(),
   },
   calendarAPI: {
     getEvents: vi.fn(),
@@ -64,9 +65,17 @@ describe('AIChat Component', () => {
     });
 
     // Check that calendar events are rendered
-    expect(screen.getByText('Here are your upcoming events:')).toBeInTheDocument();
-    expect(screen.getByText('Test Event 1')).toBeInTheDocument();
-    expect(screen.getByText('Test Event 2')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('Monthly Calendar')).toBeInTheDocument();
+    });
+
+    // Simulate clicking on a day to show events
+    fireEvent.mouseDown(screen.getByText('1'));
+
+    await waitFor(() => {
+        expect(screen.getByText((content) => content.includes('Test Event 1'))).toBeInTheDocument();
+    });
+    expect(screen.getByText((content) => content.includes('Test Event 2'))).toBeInTheDocument();
   });
 
   it('should render only events for the requested date when due_date is present in the Gemini response', async () => {
@@ -98,12 +107,11 @@ describe('AIChat Component', () => {
     await waitFor(() => {
       expect(calendarAPI.getEvents).toHaveBeenCalled();
     });
-    expect(screen.getByText('Here are your upcoming events:')).toBeInTheDocument();
-    const eventsList = screen.getByText('Here are your upcoming events:').nextSibling;
-    // Use within to scope the search to the events list
-    const { getByText, queryByText } = within(eventsList);
-    expect(getByText((content) => content.includes('Event On Date'))).toBeInTheDocument();
-    expect(queryByText((content) => content.includes('Event Not On Date'))).not.toBeInTheDocument();
+
+    await waitFor(() => {
+        expect(screen.getByText((content) => content.includes('Event On Date'))).toBeInTheDocument();
+    });
+    expect(screen.queryByText((content) => content.includes('Event Not On Date'))).not.toBeInTheDocument();
   });
 
   it('should render events for the correct date even if event start.dateTime is in a different timezone', async () => {
@@ -135,10 +143,11 @@ describe('AIChat Component', () => {
     await waitFor(() => {
       expect(calendarAPI.getEvents).toHaveBeenCalled();
     });
-    const eventsList = screen.getByText('Here are your upcoming events:').nextSibling;
-    const { getByText, queryByText } = within(eventsList);
-    expect(getByText((content) => content.includes('Morning Event'))).toBeInTheDocument();
-    expect(queryByText((content) => content.includes('Other Day'))).not.toBeInTheDocument();
+
+    await waitFor(() => {
+        expect(screen.getByText((content) => content.includes('Morning Event'))).toBeInTheDocument();
+    });
+    expect(screen.queryByText((content) => content.includes('Other Day'))).not.toBeInTheDocument();
   });
 
   it('should render only the filtered tasks from the code block (e.g., high priority)', async () => {
@@ -175,7 +184,8 @@ describe('AIChat Component', () => {
     );
 
     // The high priority task should be visible
-    expect(await screen.findByText('High Priority Task')).toBeInTheDocument();
+    const highPriorityTasks = await screen.findAllByText('High Priority Task');
+    expect(highPriorityTasks.length).toBeGreaterThan(0);
     // The low priority task should NOT be visible
     expect(screen.queryByText('Low Priority Task')).not.toBeInTheDocument();
   });

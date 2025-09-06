@@ -64,6 +64,7 @@ export const tasksAPI = {
   getNotifications: (limit) => api.get(`/tasks/notifications${limit ? `?limit=${limit}` : ''}`),
   markNotificationAsRead: (id) => api.put(`/tasks/notifications/${id}/read`),
   markAllNotificationsAsRead: () => api.put('/tasks/notifications/read-all'),
+  archiveAllNotifications: () => api.put('/tasks/notifications/archive-all'),
 };
 
 // Calendar API
@@ -211,5 +212,60 @@ export const stepsAPI = {
 
 // Health check
 export const healthCheck = () => api.get('/health');
+
+class WebSocketService {
+  constructor() {
+    this.ws = null;
+    this.onMessageCallback = null;
+  }
+
+  connect() {
+    if (this.ws && this.ws.readyState !== WebSocket.CLOSED) {
+      return;
+    }
+
+    const wsUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api')
+      .replace(/^http/, 'ws')
+      .replace('/api', '/api/ws/notifications');
+
+    this.ws = new WebSocket(wsUrl);
+
+    this.ws.onopen = () => {
+      console.log('WebSocket connected');
+      const token = localStorage.getItem('jwt_token');
+      if (token) {
+        this.ws.send(JSON.stringify({ type: 'auth', token }));
+      }
+    };
+
+    this.ws.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      if (this.onMessageCallback) {
+        this.onMessageCallback(message);
+      }
+    };
+
+    this.ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+
+    this.ws.onclose = () => {
+      console.log('WebSocket disconnected');
+    };
+  }
+
+  onMessage(callback) {
+    this.onMessageCallback = callback;
+  }
+
+  disconnect() {
+    if (this.ws) {
+      this.ws.close();
+    }
+  }
+}
+
+export const webSocketService = new WebSocketService();
+
 
 export default api; 

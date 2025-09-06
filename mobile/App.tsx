@@ -11,11 +11,25 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AppNavigator from './src/navigation/AppNavigator';
 import { configService } from './src/services/config';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { Alert } from 'react-native';
+import { notificationService } from './src/services/notificationService';
+import { webSocketService } from './src/services/api';
 import { HelpProvider } from './src/contexts/HelpContext';
 import HelpOverlay from './src/components/help/HelpOverlay';
 
 function App() {
   useEffect(() => {
+    notificationService.initialize();
+    webSocketService.connect();
+    webSocketService.onMessage((message) => {
+      if (message.type === 'new_notification') {
+        Alert.alert(
+          message.payload.title,
+          message.payload.message
+        );
+      }
+    });
+
     // Set Firebase-generated OAuth client IDs
     configService.setGoogleClientIds({
       web: '416233535798-dpehu9uiun1nlub5nu1rgi36qog1e57j.apps.googleusercontent.com', // Firebase-generated web client ID

@@ -6,6 +6,7 @@ dotenv.config({ path: `.env.local`, override: true });
 dotenv.config({ path: `.env.${env}`, override: true });
 dotenv.config({ path: `.env.${env}.local`, override: true });
 import express from 'express'
+import http from 'http'
 import cors from 'cors'
 import { createClient } from '@supabase/supabase-js'
 import { requireAuth } from './middleware/auth.js'
@@ -21,11 +22,14 @@ import userRouter from './routes/user.js'
 import cron from 'node-cron';
 import { syncGoogleCalendarEvents } from './utils/syncService.js';
 import { autoScheduleTasks } from './controllers/autoSchedulingController.js';
+import { sendNotification } from './services/notificationService.js';
 import { initializeFirebaseAdmin } from './utils/firebaseAdmin.js';
+import webSocketManager from './utils/webSocketManager.js';
 import logger from './utils/logger.js';
 
 
 const app = express()
+const server = http.createServer(app);
 const PORT = process.env.PORT || 5000
 
 // Middleware
@@ -241,6 +245,56 @@ cron.schedule('0 */6 * * *', async () => {
   timezone: 'America/Chicago'
 });
 
+// --- Task Reminder Cron Job ---
+const sendTaskReminders = async () => {
+  const now = new Date();
+  const reminderWindow = new Date(now.getTime() + 30 * 60 * 1000); // 30 minutes from now
+
+  logger.cron('[CRON] Checking for task reminders...');
+
+  try {
+    const { data: tasks, error } = await supabase
+      .from('tasks')
+      .select('id, user_id, title, due_date')
+      .lte('due_date', reminderWindow.toISOString())
+      .gte('due_date', now.toISOString())
+      .eq('status', 'not_started')
+      .is('reminder_sent_at', null);
+
+    if (error) {
+      logger.error('[CRON] Error fetching tasks for reminders:', error);
+      return;
+    }
+
+    if (tasks && tasks.length > 0) {
+      logger.cron(`[CRON] Found ${tasks.length} tasks needing reminders.`);
+      for (const task of tasks) {
+        const notification = {
+          notification_type: 'task_reminder',
+          title: `Reminder: ${task.title}`,
+          message: `This task is due at ${new Date(task.due_date).toLocaleTimeString()}.`,
+          details: { taskId: task.id }
+        };
+
+        await sendNotification(task.user_id, notification);
+
+        // Mark reminder as sent
+        await supabase
+          .from('tasks')
+          .update({ reminder_sent_at: new Date().toISOString() })
+          .eq('id', task.id);
+      }
+    } else {
+      logger.cron('[CRON] No tasks need reminders at this time.');
+    }
+  } catch (err) {
+    logger.error('[CRON] Exception in sendTaskReminders:', err);
+  }
+};
+
+// Schedule task reminder check to run every 5 minutes
+cron.schedule('*/5 * * * *', sendTaskReminders);
+
 // Initialize Firebase Admin SDK
 try {
   initializeFirebaseAdmin();
@@ -250,9 +304,12 @@ try {
   logger.warn('Google mobile authentication will not be available');
 }
 
+// Initialize WebSocket Server
+webSocketManager.init(server);
+
 // Start server only if run directly
 if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, '0.0.0.0', () => {
+  server.listen(PORT, '0.0.0.0', () => {
     logger.info(`🚀 Mind Clear API server running on port ${PORT}`);
     logger.info(`📊 Health check: http://localhost:${PORT}/api/health`);
     logger.info(`🌐 Network access: http://192.168.1.66:${PORT}/api/health`);

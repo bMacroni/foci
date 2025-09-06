@@ -236,3 +236,100 @@ export async function updateAppPreferences(req, res) {
     res.status(500).json({ error: 'Failed to update app preferences' });
   }
 }
+
+
+// === Notification Preferences ===
+
+export async function registerDeviceToken(req, res) {
+  const user_id = req.user.id;
+  const { token: device_token, device_type } = req.body;
+
+  if (!device_token) {
+    return res.status(400).json({ error: 'Device token is required' });
+  }
+
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+
+  try {
+    const { error } = await supabase
+      .from('user_device_tokens')
+      .upsert({
+        user_id,
+        device_token,
+        device_type
+      }, { onConflict: 'user_id, device_token' });
+
+    if (error) {
+      console.error('Error registering device token:', error);
+      return res.status(500).json({ error: 'Failed to register device token' });
+    }
+
+    res.status(200).json({ success: true, message: 'Device token registered or updated successfully' });
+  } catch (e) {
+    console.error('Exception in registerDeviceToken:', e);
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+}
+
+export async function getNotificationPreferences(req, res) {
+  const user_id = req.user.id;
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+
+  try {
+    const { data, error } = await supabase
+      .from('user_notification_preferences')
+      .select('*')
+      .eq('user_id', user_id);
+
+    if (error) {
+      console.error('Error fetching notification preferences:', error);
+      return res.status(500).json({ error: 'Failed to fetch notification preferences' });
+    }
+
+    res.json(data);
+  } catch (e) {
+    console.error('Exception in getNotificationPreferences:', e);
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+}
+
+export async function updateNotificationPreferences(req, res) {
+  const user_id = req.user.id;
+  const preferences = req.body;
+
+  if (!Array.isArray(preferences)) {
+    return res.status(400).json({ error: 'Request body must be an array of preference objects' });
+  }
+
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+
+  const validationError = preferences.some(p => !p.notification_type || !p.channel);
+  if (validationError) {
+    return res.status(400).json({ error: 'Each preference object must have a notification_type and channel' });
+  }
+
+  const upsertData = preferences.map(p => ({
+    user_id,
+    notification_type: p.notification_type,
+    channel: p.channel,
+    enabled: p.enabled,
+    snooze_duration_minutes: p.snooze_duration_minutes
+  }));
+
+  try {
+    const { data, error } = await supabase
+      .from('user_notification_preferences')
+      .upsert(upsertData, { onConflict: 'user_id, notification_type, channel' })
+      .select();
+
+    if (error) {
+      console.error('Error updating notification preferences:', error);
+      return res.status(500).json({ error: 'Failed to update notification preferences' });
+    }
+
+    res.json(data);
+  } catch (e) {
+    console.error('Exception in updateNotificationPreferences:', e);
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+}

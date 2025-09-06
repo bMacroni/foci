@@ -20,7 +20,9 @@ import {
 import {
   getUserNotifications,
   markNotificationAsRead,
-  markAllNotificationsAsRead
+  markAllNotificationsAsRead,
+  getUnreadNotificationsCount,
+  markAllNotificationsAsReadAndArchive
 } from '../services/notificationService.js';
 
 const router = express.Router();
@@ -79,6 +81,30 @@ router.put('/notifications/read-all', requireAuth, async (req, res) => {
   } catch (error) {
     logger.error('Error marking all notifications as read:', error);
     res.status(500).json({ error: 'Failed to mark all notifications as read' });
+  }
+});
+
+router.get('/notifications/unread-count', requireAuth, async (req, res) => {
+  try {
+    const count = await getUnreadNotificationsCount(req.user.id);
+    res.json({ count });
+  } catch (error) {
+    logger.error('Error fetching unread notification count:', error);
+    res.status(500).json({ error: 'Failed to fetch unread notification count' });
+  }
+});
+
+router.put('/notifications/archive-all', requireAuth, async (req, res) => {
+  try {
+    const result = await markAllNotificationsAsReadAndArchive(req.user.id);
+    if (result.success) {
+      res.json({ success: true });
+    } else {
+      res.status(400).json({ error: result.error });
+    }
+  } catch (error) {
+    logger.error('Error archiving all notifications:', error);
+    res.status(500).json({ error: 'Failed to archive all notifications' });
   }
 });
 
