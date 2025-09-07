@@ -1,6 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Icon from 'react-native-vector-icons/Octicons';
 import { notificationsAPI } from '../../services/api';
+import { colors } from '../../themes/colors';
+import { spacing } from '../../themes/spacing';
+import { typography } from '../../themes/typography';
 
 // Define the Notification type based on your data structure
 interface Notification {
@@ -11,20 +16,67 @@ interface Notification {
   read: boolean;
 }
 
-const NotificationScreen = () => {
+const NotificationScreen = ({ navigation }: any) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<string>('');
 
   useEffect(() => {
     const fetchNotifications = async () => {
       try {
+        console.log('🔔 Fetching notifications...');
+        
+        // Debug: Check if we have a token
+        const { authService } = await import('../../services/auth');
+        const token = await authService.getAuthToken();
+        const tokenInfo = {
+          hasToken: !!token,
+          tokenLength: token?.length || 0,
+          tokenStart: token?.substring(0, 20) + '...' || 'null'
+        };
+        console.log('🔔 Auth token check:', tokenInfo);
+        setDebugInfo(`Token: ${tokenInfo.hasToken ? 'YES' : 'NO'} (${tokenInfo.tokenLength} chars)`);
+        
+        // Debug: Test if other API calls work
+        try {
+          const { tasksAPI } = await import('../../services/api');
+          const tasks = await tasksAPI.getTasks();
+          console.log('🔔 Tasks API test successful, got', tasks.length, 'tasks');
+          setDebugInfo(prev => prev + ` | Tasks: ${tasks.length} found`);
+        } catch (taskError) {
+          console.error('🔔 Tasks API test failed:', taskError);
+          setDebugInfo(prev => prev + ` | Tasks: FAILED`);
+        }
+        
         // The backend now supports fetching all notifications
         const response = await notificationsAPI.getNotifications('all');
+        console.log('🔔 Notifications fetched successfully:', response);
         setNotifications(response);
       } catch (e) {
-        setError('Failed to load notifications.');
-        console.error(e);
+        console.error('🔔 Notification fetch error:', e);
+        // Show more detailed error information
+        const errorMessage = e instanceof Error ? e.message : 'Unknown error occurred';
+        console.error('🔔 Error details:', {
+          message: errorMessage,
+          stack: e instanceof Error ? e.stack : undefined,
+          type: typeof e
+        });
+        
+        // Handle specific error cases
+        if (errorMessage.includes('No authentication token available') || 
+            errorMessage.includes('user not logged in')) {
+          setError('Please log in to view notifications');
+        } else if (errorMessage.includes('No token provided')) {
+          setError('Authentication required. Please log in again.');
+        } else {
+          setError(`Failed to load notifications: ${errorMessage}`);
+        }
+        
+        setDebugInfo(prev => prev + ` | Error: ${errorMessage}`);
+        
+        // Set empty notifications array as fallback
+        setNotifications([]);
       } finally {
         setLoading(false);
       }
@@ -51,67 +103,196 @@ const NotificationScreen = () => {
 
   if (error) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.errorText}>{error}</Text>
-      </View>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.header}>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Icon name="chevron-left" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Notifications</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+        <View style={styles.center}>
+          <Icon name="alert" size={48} color={colors.error} style={{ marginBottom: spacing.md }} />
+          <Text style={styles.errorText}>{error}</Text>
+          {debugInfo ? (
+            <Text style={styles.debugText}>Debug: {debugInfo}</Text>
+          ) : null}
+reen           
+          {error.includes('log in') || error.includes('Authentication') ? (
+            <TouchableOpacity 
+              style={styles.retryButton}
+              onPress={() => {
+                // Navigate to login screen
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: 'Login' }],
+                });
+              }}
+            >
+              <Text style={styles.retryButtonText}>Go to Login</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity 
+              style={styles.retryButton}
+              onPress={() => {
+                setError(null);
+                setLoading(true);
+                // Retry the fetch
+                const fetchNotifications = async () => {
+                  try {
+                    const response = await notificationsAPI.getNotifications('all');
+                    setNotifications(response);
+                  } catch (e) {
+                    console.error('Notification fetch error:', e);
+                    const errorMessage = e instanceof Error ? e.message : 'Unknown error occurred';
+                    if (errorMessage.includes('No authentication token available') || 
+                        errorMessage.includes('user not logged in')) {
+                      setError('Please log in to view notifications');
+                    } else if (errorMessage.includes('No token provided')) {
+                      setError('Authentication required. Please log in again.');
+                    } else {
+                      setError(`Failed to load notifications: ${errorMessage}`);
+                    }
+                    setNotifications([]);
+                  } finally {
+                    setLoading(false);
+                  }
+                };
+                fetchNotifications();
+              }}
+            >
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <FlatList
-      data={notifications}
-      renderItem={renderItem}
-      keyExtractor={(item) => item.id}
-      contentContainerStyle={styles.container}
-      ListEmptyComponent={
-        <View style={styles.center}>
-          <Text>No notifications yet.</Text>
-        </View>
-      }
-    />
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Icon name="chevron-left" size={24} color={colors.text.primary} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Notifications</Text>
+        <View style={styles.headerSpacer} />
+      </View>
+      <FlatList
+        data={notifications}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.container}
+        ListEmptyComponent={
+          <View style={styles.center}>
+            <Text style={styles.emptyText}>No notifications yet.</Text>
+          </View>
+        }
+      />
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: colors.background.primary,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.light,
+    backgroundColor: colors.background.primary,
+  },
+  backButton: {
+    padding: spacing.xs,
+  },
+  headerTitle: {
+    fontSize: typography.fontSize['2xl'],
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+    flex: 1,
+    textAlign: 'center',
+  },
+  headerSpacer: {
+    width: 40, // Same width as back button to center the title
+  },
   container: {
-    padding: 10,
+    padding: spacing.md,
   },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: spacing.xl,
   },
   notificationItem: {
-    padding: 15,
+    padding: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#ccc',
-    marginBottom: 10,
-    borderRadius: 5,
+    borderBottomColor: colors.border.light,
+    marginBottom: spacing.sm,
+    borderRadius: spacing.sm,
   },
   read: {
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.background.secondary,
   },
   unread: {
-    backgroundColor: '#e6f7ff',
-    borderColor: '#91d5ff',
+    backgroundColor: colors.primary + '10', // 10% opacity
+    borderColor: colors.primary,
     borderWidth: 1,
   },
   title: {
-    fontWeight: 'bold',
-    fontSize: 16,
-    marginBottom: 5,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    marginBottom: spacing.xs,
+    color: colors.text.primary,
   },
   message: {
-    fontSize: 14,
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
+    marginBottom: spacing.xs,
   },
   date: {
-    fontSize: 12,
-    color: '#888',
-    marginTop: 10,
+    fontSize: typography.fontSize.sm,
+    color: colors.text.disabled,
     textAlign: 'right',
   },
+  emptyText: {
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
+  },
   errorText: {
-    color: 'red',
+    fontSize: typography.fontSize.base,
+    color: colors.error,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+  },
+  retryButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: spacing.sm,
+  },
+  retryButtonText: {
+    fontSize: typography.fontSize.base,
+    color: colors.secondary,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  debugText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.disabled,
+    textAlign: 'center',
+    marginBottom: spacing.md,
+    fontFamily: 'monospace',
   },
 });
 

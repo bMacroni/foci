@@ -211,6 +211,14 @@ export default function ProfileScreen({ navigation }: any) {
       </View>
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Profile</Text>
+        <TouchableOpacity 
+          style={styles.row} 
+          onPress={() => navigation.navigate('Notifications' as never)}
+        >
+          <Icon name="bell" size={18} color={colors.primary} />
+          <Text style={styles.rowLabel}>Notifications</Text>
+          <Icon name="chevron-right" size={16} color={colors.text.secondary} />
+        </TouchableOpacity>
         <Text style={styles.inputLabel}>Full Name</Text>
         <TextInput
           style={styles.input}

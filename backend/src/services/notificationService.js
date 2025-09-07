@@ -4,8 +4,31 @@ import { initializeFirebaseAdmin } from '../utils/firebaseAdmin.js';
 import webSocketManager from '../utils/webSocketManager.js';
 import logger from '../utils/logger.js';
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-const firebaseAdmin = initializeFirebaseAdmin();
+// Lazy initialization of Supabase client
+let supabase = null;
+function getSupabaseClient() {
+  if (!supabase) {
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error('Supabase credentials not configured. Please check your environment variables.');
+    }
+    supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  }
+  return supabase;
+}
+
+// Lazy initialization of Firebase Admin
+let firebaseAdmin = null;
+function getFirebaseAdmin() {
+  if (!firebaseAdmin) {
+    try {
+      firebaseAdmin = initializeFirebaseAdmin();
+    } catch (error) {
+      logger.warn('Firebase Admin not available:', error.message);
+      return null;
+    }
+  }
+  return firebaseAdmin;
+}
 
 /**
  * Generic function to send notifications based on user preferences.
@@ -21,10 +44,11 @@ export async function sendNotification(userId, notification) {
     const { notification_type, title, message, details } = notification;
 
     // 1. Fetch user preferences and device tokens in parallel
+    const supabaseClient = getSupabaseClient();
     const [prefsResult, tokensResult, userResult] = await Promise.all([
-      supabase.from('user_notification_preferences').select('*').eq('user_id', userId).eq('notification_type', notification_type),
-      supabase.from('user_device_tokens').select('device_token').eq('user_id', userId),
-      supabase.from('users').select('email, full_name').eq('id', userId).single()
+      supabaseClient.from('user_notification_preferences').select('*').eq('user_id', userId).eq('notification_type', notification_type),
+      supabaseClient.from('user_device_tokens').select('device_token').eq('user_id', userId),
+      supabaseClient.from('users').select('email, full_name').eq('id', userId).single()
     ]);
 
     if (userResult.error) {
@@ -36,7 +60,7 @@ export async function sendNotification(userId, notification) {
     const deviceTokens = tokensResult.data?.map(t => t.device_token) || [];
 
     // 2. Anti-spam check: a simple check to avoid sending the exact same notification in a short period.
-    const { data: recentNotifications, error: recentCheckError } = await supabase
+    const { data: recentNotifications, error: recentCheckError } = await supabaseClient
       .from('user_notifications')
       .select('id')
       .eq('user_id', userId)
@@ -90,7 +114,8 @@ export async function sendNotification(userId, notification) {
 }
 
 async function sendPushNotification(tokens, title, body, data = {}) {
-  if (!firebaseAdmin) {
+  const firebaseAdminInstance = getFirebaseAdmin();
+  if (!firebaseAdminInstance) {
     logger.error('Firebase Admin not initialized, skipping push notification.');
     return;
   }
@@ -112,7 +137,7 @@ async function sendPushNotification(tokens, title, body, data = {}) {
   };
 
   try {
-    const response = await firebaseAdmin.messaging().sendEachForMulticast(message);
+    const response = await firebaseAdminInstance.messaging().sendEachForMulticast(message);
     logger.info(`Push notifications sent: ${response.successCount}, failed: ${response.failureCount}`);
   } catch (error) {
     logger.error('Error sending push notification:', error);
@@ -336,7 +361,8 @@ function createGenericNotificationEmail(userName, message, details) {
  */
 async function storeInAppNotification(userId, notification) {
     try {
-        const { data, error: insertError } = await supabase
+        const supabaseClient = getSupabaseClient();
+        const { data, error: insertError } = await supabaseClient
             .from('user_notifications')
             .insert([{
                 user_id: userId,
@@ -369,7 +395,8 @@ async function storeInAppNotification(userId, notification) {
  */
 export async function getUserNotifications(userId, status = 'unread', limit = 20) {
     try {
-        let query = supabase
+        const supabaseClient = getSupabaseClient();
+        let query = supabaseClient
             .from('user_notifications')
             .select('*')
             .eq('user_id', userId);
@@ -402,7 +429,8 @@ export async function getUserNotifications(userId, status = 'unread', limit = 20
  */
 export async function markNotificationAsRead(notificationId, userId) {
     try {
-        const { data, error } = await supabase
+        const supabaseClient = getSupabaseClient();
+        const { data, error } = await supabaseClient
             .from('user_notifications')
             .update({ read: true })
             .eq('id', notificationId)
@@ -435,7 +463,8 @@ export async function markAllNotificationsAsReadAndArchive(userId) {
         await markAllNotificationsAsRead(userId);
 
         // Get all read notifications
-        const { data: readNotifications, error: fetchError } = await supabase
+        const supabaseClient = getSupabaseClient();
+        const { data: readNotifications, error: fetchError } = await supabaseClient
             .from('user_notifications')
             .select('*')
             .eq('user_id', userId)
@@ -458,7 +487,7 @@ export async function markAllNotificationsAsReadAndArchive(userId) {
             }));
 
             // Insert into archive table
-            const { error: archiveError } = await supabase
+            const { error: archiveError } = await supabaseClient
                 .from('archived_user_notifications')
                 .insert(archiveData);
 
@@ -469,7 +498,7 @@ export async function markAllNotificationsAsReadAndArchive(userId) {
 
             // Delete from original table
             const idsToDelete = readNotifications.map(n => n.id);
-            const { error: deleteError } = await supabase
+            const { error: deleteError } = await supabaseClient
                 .from('user_notifications')
                 .delete()
                 .in('id', idsToDelete);
@@ -489,7 +518,8 @@ export async function markAllNotificationsAsReadAndArchive(userId) {
 
 export async function getUnreadNotificationsCount(userId) {
     try {
-        const { count, error } = await supabase
+        const supabaseClient = getSupabaseClient();
+        const { count, error } = await supabaseClient
             .from('user_notifications')
             .select('*', { count: 'exact', head: true })
             .eq('user_id', userId)
@@ -512,7 +542,8 @@ export async function getUnreadNotificationsCount(userId) {
  */
 export async function markAllNotificationsAsRead(userId) {
     try {
-        const { data, error } = await supabase
+        const supabaseClient = getSupabaseClient();
+        const { data, error } = await supabaseClient
             .from('user_notifications')
             .update({ read: true })
             .eq('user_id', userId)

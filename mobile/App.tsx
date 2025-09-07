@@ -16,26 +16,49 @@ import { notificationService } from './src/services/notificationService';
 import { webSocketService } from './src/services/api';
 import { HelpProvider } from './src/contexts/HelpContext';
 import HelpOverlay from './src/components/help/HelpOverlay';
+import { authService } from './src/services/auth';
+
+// Set Google client IDs immediately when the module loads
+configService.setGoogleClientIds({
+  web: '416233535798-dpehu9uiun1nlub5nu1rgi36qog1e57j.apps.googleusercontent.com', // Firebase-generated web client ID
+  android: '416233535798-g0enucudvioslu32ditbja3q0pn4iom7.apps.googleusercontent.com', // Firebase-generated Android client ID
+  ios: '416233535798-...', // Firebase-generated iOS client ID (if you have one)
+});
 
 function App() {
   useEffect(() => {
-    notificationService.initialize();
-    webSocketService.connect();
-    webSocketService.onMessage((message) => {
-      if (message.type === 'new_notification') {
-        Alert.alert(
-          message.payload.title,
-          message.payload.message
-        );
+    // Set up auth state listener to initialize services after authentication
+    const checkAuthAndInitialize = () => {
+      if (authService.isAuthenticated()) {
+        console.log('User authenticated, initializing notification services...');
+        notificationService.initialize();
+        webSocketService.connect();
+        webSocketService.onMessage((message) => {
+          if (message.type === 'new_notification') {
+            Alert.alert(
+              message.payload.title,
+              message.payload.message
+            );
+          }
+        });
+      } else {
+        console.log('User not authenticated, skipping notification services initialization');
       }
-    });
+    };
 
-    // Set Firebase-generated OAuth client IDs
-    configService.setGoogleClientIds({
-      web: '416233535798-dpehu9uiun1nlub5nu1rgi36qog1e57j.apps.googleusercontent.com', // Firebase-generated web client ID
-      android: '416233535798-g0enucudvioslu32ditbja3q0pn4iom7.apps.googleusercontent.com', // Firebase-generated Android client ID
-      ios: '416233535798-...', // Firebase-generated iOS client ID (if you have one)
-    });
+    // Check immediately
+    checkAuthAndInitialize();
+    
+    // Set up listener for auth state changes
+    const unsubscribe = authService.subscribe(checkAuthAndInitialize);
+    
+    // Cleanup listener on unmount
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+
     // Setting up Google Sign-In...
     try {
       const baseConfig: any = {

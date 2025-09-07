@@ -10,6 +10,7 @@ import GoalFormScreen from '../screens/goals/GoalFormScreen';
 import GoalDetailScreen from '../screens/goals/GoalDetailScreen';
 import { TaskFormScreen } from '../screens/tasks/TaskFormScreen';
 import { TaskDetailScreen } from '../screens/tasks/TaskDetailScreen';
+import NotificationScreen from '../screens/notifications/NotificationScreen';
 import { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -52,6 +53,11 @@ export default function AppNavigator() {
         <Stack.Screen 
           name="TaskDetail" 
           component={TaskDetailScreen} 
+          options={{ headerShown: false }} 
+        />
+        <Stack.Screen 
+          name="Notifications" 
+          component={NotificationScreen} 
           options={{ headerShown: false }} 
         />
       </Stack.Navigator>

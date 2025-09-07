@@ -1000,7 +1000,7 @@ export const autoSchedulingAPI = {
 async function getAuthToken(): Promise<string> {
   const token = await authService.getAuthToken();
   if (!token) {
-    throw new Error('No authentication token available');
+    throw new Error('No authentication token available - user not logged in');
   }
   return token;
 }
@@ -1046,12 +1046,22 @@ export const notificationsAPI = {
 
   getNotifications: async (status: 'all' | 'read' | 'unread' = 'unread'): Promise<any[]> => {
     const token = await getAuthToken();
-    const response = await fetch(`${configService.getBaseUrl()}/tasks/notifications?status=${status}`, {
+    const url = `${configService.getBaseUrl()}/tasks/notifications?status=${status}`;
+    console.log('🔔 API: Making request to:', url);
+    console.log('🔔 API: Using token:', token ? `${token.substring(0, 20)}...` : 'null');
+    
+    const response = await fetch(url, {
         method: 'GET',
         headers: { 'Authorization': `Bearer ${token}` },
     });
+    
+    console.log('🔔 API: Response status:', response.status);
+    console.log('🔔 API: Response ok:', response.ok);
+    
     if (!response.ok) {
-        throw new Error('Failed to get notifications');
+        const errorText = await response.text();
+        console.error('🔔 API: Error response body:', errorText);
+        throw new Error(`Failed to get notifications: ${response.status} - ${errorText}`);
     }
     return response.json();
   },
