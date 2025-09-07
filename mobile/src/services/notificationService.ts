@@ -13,11 +13,20 @@ class NotificationService {
 
   private async updateBadgeCount() {
     try {
+      // Import auth service to check authentication status
+      const { authService } = await import('./auth');
+      
+      // Only try to update badge count if user is authenticated
+      if (!authService.isAuthenticated()) {
+        console.log('Skipping badge count update - user not authenticated');
+        return;
+      }
+
       const count = await notificationsAPI.getUnreadCount();
       this.setBadgeCount(count);
     } catch (error) {
       // Only log error if it's not an authentication issue
-      if (error instanceof Error && !error.message.includes('authentication')) {
+      if (error instanceof Error && !error.message.includes('authentication') && !error.message.includes('not logged in')) {
         console.error('Failed to update badge count', error);
       }
     }
@@ -61,14 +70,28 @@ class NotificationService {
 
   async registerTokenWithBackend(token: string) {
     try {
+      // Import auth service to check authentication status
+      const { authService } = await import('./auth');
+      
+      // Only try to register token if user is authenticated
+      if (!authService.isAuthenticated()) {
+        console.log('Skipping device token registration - user not authenticated');
+        return;
+      }
+
       await notificationsAPI.registerDeviceToken(token, Platform.OS);
       console.log('Device token registered with backend successfully');
     } catch (error) {
       // Only log error if it's not an authentication issue
-      if (error instanceof Error && !error.message.includes('authentication')) {
+      if (error instanceof Error && !error.message.includes('authentication') && !error.message.includes('not logged in')) {
         console.error('Error registering device token with backend', error);
       }
     }
+  }
+
+  // Public method to manually update badge count (can be called after authentication)
+  public async refreshBadgeCount() {
+    await this.updateBadgeCount();
   }
 
   initialize() {

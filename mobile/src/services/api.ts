@@ -1095,10 +1095,14 @@ export const notificationsAPI = {
         headers: { 'Authorization': `Bearer ${token}` },
     });
     if (!response.ok) {
-        throw new Error('Failed to get unread notification count');
+        if (response.status === 401) {
+          throw new Error('Authentication failed - user not logged in');
+        }
+        const errorText = await response.text();
+        throw new Error(`Failed to get unread notification count: ${response.status} - ${errorText}`);
     }
     const data = await response.json();
-    return data.count;
+    return data.count || 0;
   },
 };
 
