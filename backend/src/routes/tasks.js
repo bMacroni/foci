@@ -1,4 +1,5 @@
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import logger from '../utils/logger.js';
 import { requireAuth } from '../middleware/auth.js';
 import {
@@ -24,6 +25,19 @@ import {
   getUnreadNotificationsCount,
   markAllNotificationsAsReadAndArchive
 } from '../services/notificationService.js';
+
+// Rate limiter for archive-all endpoint to prevent abuse of expensive operation
+const archiveLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute window
+  max: 2, // Maximum 2 requests per window per user
+  keyGenerator: (req) => req.user?.id || req.ip, // Use user ID if authenticated, fallback to IP
+  message: {
+    error: 'Too many archive requests. Please wait a moment before trying again.',
+    retryAfter: '1 minute'
+  },
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+});
 
 const router = express.Router();
 
@@ -80,7 +94,7 @@ router.get('/notifications/unread-count', requireAuth, async (req, res) => {
   }
 });
 
-router.put('/notifications/archive-all', requireAuth, async (req, res) => {
+router.put('/notifications/archive-all', requireAuth, archiveLimiter, async (req, res) => {
   try {
     const result = await markAllNotificationsAsReadAndArchive(req.user.id);
     if (result.success) {

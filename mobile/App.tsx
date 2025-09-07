@@ -28,21 +28,29 @@ configService.setGoogleClientIds({
 function App() {
   useEffect(() => {
     // Set up auth state listener to initialize services after authentication
-    const checkAuthAndInitialize = () => {
+    const checkAuthAndInitialize = async () => {
       if (authService.isAuthenticated()) {
         console.log('User authenticated, initializing notification services...');
         notificationService.initialize();
-        webSocketService.connect();
-        webSocketService.onMessage((message) => {
-          if (message.type === 'new_notification') {
-            Alert.alert(
-              message.payload.title,
-              message.payload.message
-            );
-          }
-        });
+        
+        // Connect WebSocket with error handling
+        try {
+          await webSocketService.connect();
+          webSocketService.onMessage((message) => {
+            if (message.type === 'new_notification') {
+              Alert.alert(
+                message.payload.title,
+                message.payload.message
+              );
+            }
+          });
+        } catch (error) {
+          console.error('Failed to initialize WebSocket connection:', error);
+        }
       } else {
         console.log('User not authenticated, skipping notification services initialization');
+        // Disconnect WebSocket if user is not authenticated
+        webSocketService.disconnect();
       }
     };
 

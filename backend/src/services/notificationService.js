@@ -4,6 +4,45 @@ import { initializeFirebaseAdmin } from '../utils/firebaseAdmin.js';
 import webSocketManager from '../utils/webSocketManager.js';
 import logger from '../utils/logger.js';
 
+// Module-scoped memoized transporter
+let cachedTransporter = null;
+
+/**
+ * Get or create a memoized nodemailer transporter
+ */
+function getTransporter() {
+  if (!cachedTransporter) {
+    if (!process.env.FEEDBACK_EMAIL_USER || !process.env.FEEDBACK_EMAIL_PASS) {
+      throw new Error('Email credentials not configured');
+    }
+    
+    cachedTransporter = nodemailer.createTransport({
+      service: process.env.EMAIL_SERVICE || 'gmail',
+      auth: {
+        user: process.env.FEEDBACK_EMAIL_USER,
+        pass: process.env.FEEDBACK_EMAIL_PASS,
+      },
+    });
+  }
+  return cachedTransporter;
+}
+
+/**
+ * Escape HTML special characters to prevent XSS
+ */
+function escapeHtml(text) {
+  if (typeof text !== 'string') {
+    return String(text || '');
+  }
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/\//g, '&#x2F;');
+}
+
 // Lazy initialization of Supabase client
 let supabase = null;
 function getSupabaseClient() {
@@ -84,7 +123,7 @@ export async function sendNotification(userId, notification) {
 
     // Send Push Notification
     if (shouldSend('push') && deviceTokens.length > 0) {
-      deliveryPromises.push(sendPushNotification(deviceTokens, title, message, details));
+      deliveryPromises.push(sendPushNotification(deviceTokens, title, message, { ...details, userId }));
     }
 
     // Send Email
@@ -119,60 +158,136 @@ async function sendPushNotification(tokens, title, body, data = {}) {
     logger.error('Firebase Admin not initialized, skipping push notification.');
     return;
   }
+
+  // Ensure all data values are strings for FCM compatibility
+  const stringifiedData = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (value !== null && value !== undefined) {
+      if (typeof value === 'object') {
+        stringifiedData[key] = JSON.stringify(value);
+      } else {
+        stringifiedData[key] = String(value);
+      }
+    }
+  }
+
+  // Add title and body as strings to data payload
+  stringifiedData.title = String(title);
+  stringifiedData.body = String(body);
+
+  // Compute badge count from unread notifications if available
+  let badgeCount = 1; // Default fallback
+  if (data.unreadCount !== undefined) {
+    badgeCount = parseInt(String(data.unreadCount), 10) || 1;
+  } else if (data.userId) {
+    // Try to get actual unread count from database
+    try {
+      badgeCount = await getUnreadNotificationsCount(data.userId);
+    } catch (error) {
+      logger.warn('Could not fetch unread count for badge, using default:', error.message);
+    }
+  }
+
   const message = {
     notification: { title, body },
-    data: { ...data, title, body }, // Send all details in data payload
+    data: stringifiedData,
     tokens: tokens,
     android: {
-        priority: 'high',
+      priority: 'high',
     },
     apns: {
-        payload: {
-            aps: {
-                'content-available': 1,
-                badge: 1, // You might want to calculate the actual badge count
-            },
+      headers: {
+        'apns-push-type': 'alert',
+        'apns-priority': '10',
+      },
+      payload: {
+        aps: {
+          'content-available': 1,
+          badge: badgeCount,
         },
+      },
     },
   };
 
   try {
     const response = await firebaseAdminInstance.messaging().sendEachForMulticast(message);
     logger.info(`Push notifications sent: ${response.successCount}, failed: ${response.failureCount}`);
+    
+    // Handle failed tokens and clean up invalid ones
+    if (response.failureCount > 0) {
+      await handleFailedTokens(response.responses, tokens);
+    }
+    
+    return response;
   } catch (error) {
     logger.error('Error sending push notification:', error);
+    throw error;
+  }
+}
+
+/**
+ * Handle failed FCM tokens and clean up invalid ones from the database
+ */
+async function handleFailedTokens(responses, tokens) {
+  const invalidTokens = [];
+  
+  responses.forEach((response, index) => {
+    if (!response.success && response.error) {
+      const errorCode = response.error.code;
+      const token = tokens[index];
+      
+      // Check for token errors that indicate the token should be removed
+      if (errorCode === 'messaging/invalid-registration-token' ||
+          errorCode === 'messaging/registration-token-not-registered' ||
+          errorCode === 'messaging/invalid-argument') {
+        invalidTokens.push(token);
+        logger.warn(`Invalid FCM token detected: ${errorCode}`, { token: token.substring(0, 20) + '...' });
+      }
+    }
+  });
+  
+  // Remove invalid tokens from database
+  if (invalidTokens.length > 0) {
+    try {
+      const supabaseClient = getSupabaseClient();
+      const { error } = await supabaseClient
+        .from('user_device_tokens')
+        .delete()
+        .in('device_token', invalidTokens);
+      
+      if (error) {
+        logger.error('Failed to remove invalid device tokens:', error);
+      } else {
+        logger.info(`Removed ${invalidTokens.length} invalid device tokens from database`);
+      }
+    } catch (error) {
+      logger.error('Exception while removing invalid tokens:', error);
+    }
   }
 }
 
 async function sendEmailNotification(user, notification) {
   const { title, message, details } = notification;
-  if (!process.env.FEEDBACK_EMAIL_USER || !process.env.FEEDBACK_EMAIL_PASS) {
-    logger.warn('Email credentials not configured. Skipping email notification.');
-    return;
-  }
-
-  const transporter = nodemailer.createTransport({
-    service: process.env.EMAIL_SERVICE || 'gmail',
-    auth: {
-      user: process.env.FEEDBACK_EMAIL_USER,
-      pass: process.env.FEEDBACK_EMAIL_PASS,
-    },
-  });
-
-  const emailBody = createGenericNotificationEmail(user.full_name, message, details);
-
-  const mailOptions = {
-    from: process.env.FEEDBACK_EMAIL_USER,
-    to: user.email,
-    subject: title,
-    html: emailBody,
-  };
-
+  
   try {
+    const transporter = getTransporter();
+    const emailBody = createGenericNotificationEmail(user.full_name, message, details);
+
+    const mailOptions = {
+      from: process.env.FEEDBACK_EMAIL_USER,
+      to: user.email,
+      subject: title,
+      html: emailBody,
+    };
+
     await transporter.sendMail(mailOptions);
     logger.info(`Email notification sent to ${user.email}`);
-  } catch (emailError) {
-    logger.error(`Failed to send email to ${user.email}:`, emailError);
+  } catch (error) {
+    if (error.message === 'Email credentials not configured') {
+      logger.warn('Email credentials not configured. Skipping email notification.');
+      return;
+    }
+    logger.error(`Failed to send email to ${user.email}:`, error);
   }
 }
 
@@ -192,9 +307,11 @@ export async function sendAutoSchedulingNotification(userId, notificationData) {
  * Create email template for auto-scheduling completion
  */
 function createAutoSchedulingCompletedEmail(userName, scheduledTasks, failedTasks) {
+  const escapedUserName = escapeHtml(userName);
+  
   let html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #2563eb;">Hello ${userName},</h2>
+      <h2 style="color: #2563eb;">Hello ${escapedUserName},</h2>
       <p>Your auto-scheduling has been completed successfully!</p>
   `;
 
@@ -205,9 +322,10 @@ function createAutoSchedulingCompletedEmail(userName, scheduledTasks, failedTask
     `;
     scheduledTasks.forEach(task => {
       const scheduledTime = new Date(task.scheduled_time).toLocaleString();
+      const escapedTaskTitle = escapeHtml(task.task_title);
       html += `
         <li style="padding: 8px 0; border-bottom: 1px solid #e5e7eb;">
-          <strong>${task.task_title}</strong><br>
+          <strong>${escapedTaskTitle}</strong><br>
           <small style="color: #6b7280;">Scheduled for: ${scheduledTime}</small>
         </li>
       `;
@@ -221,10 +339,12 @@ function createAutoSchedulingCompletedEmail(userName, scheduledTasks, failedTask
       <ul style="list-style: none; padding: 0;">
     `;
     failedTasks.forEach(task => {
+      const escapedTaskTitle = escapeHtml(task.task_title);
+      const escapedReason = escapeHtml(task.reason);
       html += `
         <li style="padding: 8px 0; border-bottom: 1px solid #e5e7eb;">
-          <strong>${task.task_title}</strong><br>
-          <small style="color: #6b7280;">Reason: ${task.reason}</small>
+          <strong>${escapedTaskTitle}</strong><br>
+          <small style="color: #6b7280;">Reason: ${escapedReason}</small>
         </li>
       `;
     });
@@ -340,11 +460,15 @@ function createCalendarConflictEmail(userName, details) {
  * Create generic notification email template
  */
 function createGenericNotificationEmail(userName, message, details) {
+  const escapedUserName = escapeHtml(userName);
+  const escapedMessage = escapeHtml(message);
+  const escapedDetails = details ? escapeHtml(details) : '';
+  
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #2563eb;">Hello ${userName},</h2>
-      <p>${message}</p>
-      ${details ? `<p style="color: #6b7280;">${details}</p>` : ''}
+      <h2 style="color: #2563eb;">Hello ${escapedUserName},</h2>
+      <p>${escapedMessage}</p>
+      ${escapedDetails ? `<p style="color: #6b7280;">${escapedDetails}</p>` : ''}
       <p style="margin-top: 20px;">
         <a href="${process.env.FRONTEND_URL}/dashboard" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">
           View Dashboard

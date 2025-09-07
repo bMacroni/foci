@@ -241,6 +241,11 @@ export async function updateAppPreferences(req, res) {
 // === Notification Preferences ===
 
 export async function registerDeviceToken(req, res) {
+  // Check if user is authenticated
+  if (!req.user || !req.user.id) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  
   const user_id = req.user.id;
   const { token: device_token, device_type } = req.body;
 
@@ -248,15 +253,27 @@ export async function registerDeviceToken(req, res) {
     return res.status(400).json({ error: 'Device token is required' });
   }
 
+  // Validate device_type against allowed values
+  const allowedDeviceTypes = ['ios', 'android', 'web'];
+  if (!device_type || !allowedDeviceTypes.includes(device_type)) {
+    return res.status(400).json({ 
+      error: 'Invalid device_type. Must be one of: ios, android, web' 
+    });
+  }
+
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
   try {
+    const currentTimestamp = new Date().toISOString();
+    
     const { error } = await supabase
       .from('user_device_tokens')
       .upsert({
         user_id,
         device_token,
-        device_type
+        device_type,
+        last_seen: currentTimestamp,
+        updated_at: currentTimestamp
       }, { onConflict: 'user_id, device_token' });
 
     if (error) {
@@ -272,6 +289,11 @@ export async function registerDeviceToken(req, res) {
 }
 
 export async function getNotificationPreferences(req, res) {
+  // Check if user is authenticated
+  if (!req.user || !req.user.id) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  
   const user_id = req.user.id;
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -294,6 +316,11 @@ export async function getNotificationPreferences(req, res) {
 }
 
 export async function updateNotificationPreferences(req, res) {
+  // Check if user is authenticated
+  if (!req.user || !req.user.id) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  
   const user_id = req.user.id;
   const preferences = req.body;
 
@@ -303,18 +330,35 @@ export async function updateNotificationPreferences(req, res) {
 
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-  const validationError = preferences.some(p => !p.notification_type || !p.channel);
+  const allowedTypes = ['goal_completed','milestone_completed','task_reminder','new_message'];
+  const allowedChannels = ['in_app','push','email'];
+  const validationError = preferences.some(p =>
+    !p.notification_type ||
+    !allowedTypes.includes(p.notification_type) ||
+    !p.channel ||
+    !allowedChannels.includes(p.channel) ||
+    (p.enabled !== undefined && typeof p.enabled !== 'boolean') ||
+    (p.snooze_duration_minutes !== undefined && (!Number.isInteger(p.snooze_duration_minutes) || p.snooze_duration_minutes < 0 || p.snooze_duration_minutes > 10080))
+  );
   if (validationError) {
-    return res.status(400).json({ error: 'Each preference object must have a notification_type and channel' });
+    return res.status(400).json({ error: 'Invalid preference(s): check notification_type, channel, enabled:boolean, snooze_duration_minutes:0-10080' });
   }
 
-  const upsertData = preferences.map(p => ({
-    user_id,
-    notification_type: p.notification_type,
-    channel: p.channel,
-    enabled: p.enabled,
-    snooze_duration_minutes: p.snooze_duration_minutes
-  }));
+  const upsertData = preferences.map(p => {
+    const baseData = {
+      user_id,
+      notification_type: p.notification_type,
+      channel: p.channel,
+      enabled: p.enabled !== undefined ? p.enabled : true
+    };
+    
+    // Only include snooze_duration_minutes if it's defined
+    if (p.snooze_duration_minutes !== undefined) {
+      baseData.snooze_duration_minutes = p.snooze_duration_minutes;
+    }
+    
+    return baseData;
+  });
 
   try {
     const { data, error } = await supabase
