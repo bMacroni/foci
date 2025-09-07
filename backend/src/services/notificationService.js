@@ -370,12 +370,15 @@ function createAutoSchedulingCompletedEmail(userName, scheduledTasks, failedTask
  * Create email template for auto-scheduling errors
  */
 function createAutoSchedulingErrorEmail(userName, details, failedTasks) {
+  const escapedUserName = escapeHtml(userName);
+  const escapedDetails = escapeHtml(details);
+  
   let html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #dc2626;">Hello ${userName},</h2>
+      <h2 style="color: #dc2626;">Hello ${escapedUserName},</h2>
       <p>We encountered some issues while auto-scheduling your tasks:</p>
       <div style="background-color: #fef2f2; border: 1px solid #fecaca; padding: 16px; border-radius: 6px; margin: 16px 0;">
-        <p style="margin: 0; color: #dc2626;"><strong>${details}</strong></p>
+        <p style="margin: 0; color: #dc2626;"><strong>${escapedDetails}</strong></p>
       </div>
   `;
 
@@ -385,10 +388,12 @@ function createAutoSchedulingErrorEmail(userName, details, failedTasks) {
       <ul style="list-style: none; padding: 0;">
     `;
     failedTasks.forEach(task => {
+      const escapedTaskTitle = escapeHtml(task.task_title);
+      const escapedReason = escapeHtml(task.reason);
       html += `
         <li style="padding: 8px 0; border-bottom: 1px solid #e5e7eb;">
-          <strong>${task.task_title}</strong><br>
-          <small style="color: #6b7280;">Reason: ${task.reason}</small>
+          <strong>${escapedTaskTitle}</strong><br>
+          <small style="color: #6b7280;">Reason: ${escapedReason}</small>
         </li>
       `;
     });
@@ -414,12 +419,15 @@ function createAutoSchedulingErrorEmail(userName, details, failedTasks) {
  * Create email template for weather conflicts
  */
 function createWeatherConflictEmail(userName, details) {
+  const escapedUserName = escapeHtml(userName);
+  const escapedDetails = escapeHtml(details);
+  
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #f59e0b;">Hello ${userName},</h2>
+      <h2 style="color: #f59e0b;">Hello ${escapedUserName},</h2>
       <p>Weather conditions affected the scheduling of some of your outdoor tasks:</p>
       <div style="background-color: #fffbeb; border: 1px solid #fed7aa; padding: 16px; border-radius: 6px; margin: 16px 0;">
-        <p style="margin: 0; color: #92400e;"><strong>${details}</strong></p>
+        <p style="margin: 0; color: #92400e;"><strong>${escapedDetails}</strong></p>
       </div>
       <p>These tasks will be automatically rescheduled when weather conditions improve.</p>
       <p style="margin-top: 20px;">
@@ -437,12 +445,15 @@ function createWeatherConflictEmail(userName, details) {
  * Create email template for calendar conflicts
  */
 function createCalendarConflictEmail(userName, details) {
+  const escapedUserName = escapeHtml(userName);
+  const escapedDetails = escapeHtml(details);
+  
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #7c3aed;">Hello ${userName},</h2>
+      <h2 style="color: #7c3aed;">Hello ${escapedUserName},</h2>
       <p>Calendar conflicts were detected while scheduling your tasks:</p>
       <div style="background-color: #f3f4f6; border: 1px solid #d1d5db; padding: 16px; border-radius: 6px; margin: 16px 0;">
-        <p style="margin: 0; color: #374151;"><strong>${details}</strong></p>
+        <p style="margin: 0; color: #374151;"><strong>${escapedDetails}</strong></p>
       </div>
       <p>Some tasks were scheduled in alternative time slots to avoid conflicts.</p>
       <p style="margin-top: 20px;">
