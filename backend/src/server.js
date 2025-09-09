@@ -112,6 +112,12 @@ if (process.env.DEBUG_LOGS === 'true') logger.info('Conversations router registe
 app.use('/api/user', userRouter);
 
 async function getAllUserIds() {
+  // Check if Supabase is initialized
+  if (!supabase) {
+    logger.warn('Supabase client not initialized. Skipping getAllUserIds.');
+    return [];
+  }
+
   // Query all user_ids from google_tokens table
   const { data, error } = await supabase
     .from('google_tokens')
@@ -127,6 +133,12 @@ async function getAllUserIds() {
 }
 
 async function getUsersWithAutoSchedulingEnabled() {
+  // Check if Supabase is initialized
+  if (!supabase) {
+    logger.warn('Supabase client not initialized. Skipping getUsersWithAutoSchedulingEnabled.');
+    return [];
+  }
+
   // Query users who have auto-scheduling enabled
   const { data, error } = await supabase
     .from('user_scheduling_preferences')
@@ -144,6 +156,12 @@ async function getUsersWithAutoSchedulingEnabled() {
 
 // Schedule sync every day at 4:00 AM CST (America/Chicago)
 cron.schedule('0 4 * * *', async () => {
+  // Check if Supabase is initialized
+  if (!supabase) {
+    logger.warn('[CRON] Supabase client not initialized. Skipping Google Calendar sync.');
+    return;
+  }
+
   logger.cron('[CRON] Starting Google Calendar sync for all users at 4:00 AM CST');
   const userIds = await getAllUserIds();
   for (const userId of userIds) {
@@ -160,6 +178,12 @@ cron.schedule('0 4 * * *', async () => {
 
 // Schedule auto-scheduling every day at 5:00 AM CST (after calendar sync)
 cron.schedule('0 5 * * *', async () => {
+  // Check if Supabase is initialized
+  if (!supabase) {
+    logger.warn('[CRON] Supabase client not initialized. Skipping auto-scheduling.');
+    return;
+  }
+
   logger.cron('[CRON] Starting auto-scheduling for all enabled users at 5:00 AM CST');
   const userIds = await getUsersWithAutoSchedulingEnabled();
   
@@ -205,6 +229,12 @@ cron.schedule('0 5 * * *', async () => {
 
 // Schedule auto-scheduling every 6 hours for recurring tasks and new tasks
 cron.schedule('0 */6 * * *', async () => {
+  // Check if Supabase is initialized
+  if (!supabase) {
+    logger.warn('[CRON] Supabase client not initialized. Skipping periodic auto-scheduling.');
+    return;
+  }
+
   logger.cron('[CRON] Starting periodic auto-scheduling check (every 6 hours)');
   const userIds = await getUsersWithAutoSchedulingEnabled();
   
@@ -247,6 +277,12 @@ cron.schedule('0 */6 * * *', async () => {
 
 // --- Task Reminder Cron Job ---
 const sendTaskReminders = async () => {
+  // Check if Supabase is initialized
+  if (!supabase) {
+    logger.warn('Supabase client not initialized. Skipping sendTaskReminders.');
+    return;
+  }
+
   const now = new Date();
   const reminderWindow = new Date(now.getTime() + 30 * 60 * 1000); // 30 minutes from now
 

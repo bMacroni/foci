@@ -29,7 +29,20 @@ class WebSocketManager {
             jwt.verify(data.token, process.env.SUPABASE_JWT_SECRET, (err, decoded) => {
               if (err) {
                 logger.warn('WebSocket authentication failed:', err.message);
-                ws.terminate();
+                
+                // Send error message to client before terminating
+                try {
+                  ws.send(JSON.stringify({ 
+                    type: 'auth_error', 
+                    message: 'Authentication failed', 
+                    error: err.message 
+                  }));
+                } catch (sendError) {
+                  logger.error('Failed to send auth error message:', sendError);
+                }
+                
+                // Close with specific code to indicate auth failure
+                ws.close(1008, 'Authentication failed');
               } else {
                 const userId = decoded.sub;
                 this.clients.set(userId, ws);

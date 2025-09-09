@@ -29,7 +29,7 @@ import {
 // Rate limiter for archive-all endpoint to prevent abuse of expensive operation
 const archiveLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute window
-  max: 2, // Maximum 2 requests per window per user
+  limit: 2, // Maximum 2 requests per window per user
   keyGenerator: (req) => req.user?.id || req.ip, // Use user ID if authenticated, fallback to IP
   message: {
     error: 'Too many archive requests. Please wait a moment before trying again.',

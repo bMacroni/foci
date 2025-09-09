@@ -1000,7 +1000,9 @@ export const autoSchedulingAPI = {
 async function getAuthToken(): Promise<string> {
   const token = await authService.getAuthToken();
   if (!token) {
-    throw new Error('No authentication token available - user not logged in');
+    const err = new Error('No authentication token available - user not logged in');
+    (err as any).code = 'AUTH_REQUIRED';
+    throw err;
   }
   return token;
 }
@@ -1096,7 +1098,9 @@ export const notificationsAPI = {
     });
     if (!response.ok) {
         if (response.status === 401) {
-          throw new Error('Authentication failed - user not logged in');
+          const err = new Error('Authentication failed - user not logged in');
+          (err as any).code = 'AUTH_REQUIRED';
+          throw err;
         }
         const errorText = await response.text();
         throw new Error(`Failed to get unread notification count: ${response.status} - ${errorText}`);
@@ -1122,6 +1126,25 @@ class WebSocketService {
         return;
       }
 
+      // Validate token before attempting connection
+      try {
+        const token = await getAuthToken();
+        if (!token) {
+          console.log('WebSocket: Skipping connection - no valid token');
+          return;
+        }
+        
+        // Check if token is expired by attempting to refresh it
+        const isTokenValid = await authService.refreshToken();
+        if (!isTokenValid) {
+          console.log('WebSocket: Skipping connection - token is invalid/expired');
+          return;
+        }
+      } catch (error) {
+        console.log('WebSocket: Skipping connection - token validation failed:', error);
+        return;
+      }
+
       // Prevent multiple connections
       if (this.ws && this.ws.readyState !== WebSocket.CLOSED) {
         console.log('WebSocket: Connection already exists, skipping');
@@ -1138,7 +1161,7 @@ class WebSocketService {
         this.reconnectAttempts = 0; // Reset reconnect attempts on successful connection
         
         try {
-          // Authenticate upon connection
+          // Authenticate upon connection with fresh token
           const token = await getAuthToken();
           if (token && this.ws) {
             this.ws.send(JSON.stringify({ type: 'auth', token }));
@@ -1146,12 +1169,27 @@ class WebSocketService {
           }
         } catch (error) {
           console.error('WebSocket: Failed to authenticate:', error);
+          // If authentication fails, close the connection to prevent retry loop
+          if (this.ws) {
+            this.ws.close(1000, 'Authentication failed');
+          }
         }
       };
 
       this.ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
+          
+          // Handle authentication errors
+          if (message.type === 'auth_error') {
+            console.error('WebSocket: Authentication error:', message.error);
+            // Close connection to prevent retry loop
+            if (this.ws) {
+              this.ws.close(1000, 'Authentication failed');
+            }
+            return;
+          }
+          
           if (this.onMessageCallback) {
             this.onMessageCallback(message);
           }
@@ -1168,8 +1206,14 @@ class WebSocketService {
       this.ws.onclose = (event) => {
         console.log('WebSocket: Connection closed', event.code, event.reason);
         
+        // Don't retry if it was a manual disconnect or authentication failure
+        if (event.code === 1000 || event.reason === 'Authentication failed') {
+          console.log('WebSocket: Not retrying - manual disconnect or auth failure');
+          return;
+        }
+        
         // Attempt to reconnect if it wasn't a manual disconnect
-        if (event.code !== 1000 && this.reconnectAttempts < this.maxReconnectAttempts) {
+        if (this.reconnectAttempts < this.maxReconnectAttempts) {
           this.reconnectAttempts++;
           console.log(`WebSocket: Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
           
@@ -1201,6 +1245,14 @@ class WebSocketService {
   // Public method to check connection status
   isConnected(): boolean {
     return this.ws?.readyState === WebSocket.OPEN;
+  }
+
+  // Public method to force reconnection (useful after login)
+  async forceReconnect(): Promise<void> {
+    console.log('WebSocket: Force reconnection requested');
+    this.disconnect();
+    this.reconnectAttempts = 0; // Reset retry counter
+    await this.connect();
   }
 }
 

@@ -271,9 +271,7 @@ export async function registerDeviceToken(req, res) {
       .upsert({
         user_id,
         device_token,
-        device_type,
-        last_seen: currentTimestamp,
-        updated_at: currentTimestamp
+        device_type
       }, { onConflict: 'user_id, device_token' });
 
     if (error) {

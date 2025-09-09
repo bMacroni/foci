@@ -16,6 +16,11 @@ interface Notification {
   read: boolean;
 }
 
+// Define error type with code property for machine-checkable auth errors
+interface ErrorWithCode extends Error {
+  code?: string;
+}
+
 const NotificationScreen = ({ navigation }: any) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,11 +69,8 @@ const NotificationScreen = ({ navigation }: any) => {
         });
         
         // Handle specific error cases
-        if (errorMessage.includes('No authentication token available') || 
-            errorMessage.includes('user not logged in')) {
+        if (e instanceof Error && (e as ErrorWithCode).code === 'AUTH_REQUIRED') {
           setError('Please log in to view notifications');
-        } else if (errorMessage.includes('No token provided')) {
-          setError('Authentication required. Please log in again.');
         } else {
           setError(`Failed to load notifications: ${errorMessage}`);
         }
@@ -148,11 +150,8 @@ reen
                   } catch (e) {
                     console.error('Notification fetch error:', e);
                     const errorMessage = e instanceof Error ? e.message : 'Unknown error occurred';
-                    if (errorMessage.includes('No authentication token available') || 
-                        errorMessage.includes('user not logged in')) {
+                    if (e instanceof Error && (e as ErrorWithCode).code === 'AUTH_REQUIRED') {
                       setError('Please log in to view notifications');
-                    } else if (errorMessage.includes('No token provided')) {
-                      setError('Authentication required. Please log in again.');
                     } else {
                       setError(`Failed to load notifications: ${errorMessage}`);
                     }
