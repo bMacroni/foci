@@ -1000,7 +1000,9 @@ export const autoSchedulingAPI = {
 async function getAuthToken(): Promise<string> {
   const token = await authService.getAuthToken();
   if (!token) {
-    throw new Error('No authentication token available');
+    const err = new Error('No authentication token available - user not logged in');
+    (err as any).code = 'AUTH_REQUIRED';
+    throw err;
   }
   return token;
 }
@@ -1027,6 +1029,244 @@ export const usersAPI = {
     return response.json();
   }
 };
+
+export const notificationsAPI = {
+  registerDeviceToken: async (token: string, deviceType: string): Promise<void> => {
+    const authToken = await getAuthToken();
+    const response = await fetch(`${configService.getBaseUrl()}/user/device-token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({ token, device_type: deviceType }),
+    });
+    if (!response.ok) {
+      throw new Error('Failed to register device token');
+    }
+  },
+
+  getNotifications: async (status: 'all' | 'read' | 'unread' = 'unread'): Promise<any[]> => {
+    const token = await getAuthToken();
+    const url = `${configService.getBaseUrl()}/tasks/notifications?status=${status}`;
+    console.log('🔔 API: Making request to:', url);
+    console.log('🔔 API: Using token:', token ? `${token.substring(0, 20)}...` : 'null');
+    
+    const response = await fetch(url, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` },
+    });
+    
+    console.log('🔔 API: Response status:', response.status);
+    console.log('🔔 API: Response ok:', response.ok);
+    
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error('🔔 API: Error response body:', errorText);
+        throw new Error(`Failed to get notifications: ${response.status} - ${errorText}`);
+    }
+    return response.json();
+  },
+
+  markAsRead: async (notificationId: string): Promise<void> => {
+    const token = await getAuthToken();
+    const response = await fetch(`${configService.getBaseUrl()}/tasks/notifications/${notificationId}/read`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!response.ok) {
+        if (response.status === 401) {
+          const err = new Error('Authentication failed - user not logged in');
+          (err as any).code = 'AUTH_REQUIRED';
+          throw err;
+        }
+        throw new Error('Failed to mark notification as read');
+    }
+  },
+
+  markAllAsRead: async (): Promise<void> => {
+    const token = await getAuthToken();
+    const response = await fetch(`${configService.getBaseUrl()}/tasks/notifications/read-all`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!response.ok) {
+        if (response.status === 401) {
+          const err = new Error('Authentication failed - user not logged in');
+          (err as any).code = 'AUTH_REQUIRED';
+          throw err;
+        }
+        throw new Error('Failed to mark all notifications as read');
+    }
+  },
+
+  getUnreadCount: async (): Promise<number> => {
+    const token = await getAuthToken();
+    const response = await fetch(`${configService.getBaseUrl()}/tasks/notifications/unread-count`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!response.ok) {
+        if (response.status === 401) {
+          const err = new Error('Authentication failed - user not logged in');
+          (err as any).code = 'AUTH_REQUIRED';
+          throw err;
+        }
+        const errorText = await response.text();
+        throw new Error(`Failed to get unread notification count: ${response.status} - ${errorText}`);
+    }
+    const data = await response.json();
+    return data.count || 0;
+  },
+};
+
+class WebSocketService {
+  private ws: WebSocket | null = null;
+  private onMessageCallback: ((message: any) => void) | null = null;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 3;
+  private reconnectDelay = 1000; // 1 second
+
+  async connect() {
+    try {
+      // Check if user is authenticated before attempting connection
+      const { authService } = await import('./auth');
+      if (!authService.isAuthenticated()) {
+        console.log('WebSocket: Skipping connection - user not authenticated');
+        return;
+      }
+
+      // Validate token before attempting connection
+      try {
+        const token = await getAuthToken();
+        if (!token) {
+          console.log('WebSocket: Skipping connection - no valid token');
+          return;
+        }
+        
+        // Check if token is expired by attempting to refresh it
+        const isTokenValid = await authService.refreshToken();
+        if (!isTokenValid) {
+          console.log('WebSocket: Skipping connection - token is invalid/expired');
+          return;
+        }
+      } catch (error) {
+        console.log('WebSocket: Skipping connection - token validation failed:', error);
+        return;
+      }
+
+      // Prevent multiple connections
+      if (this.ws && this.ws.readyState !== WebSocket.CLOSED) {
+        console.log('WebSocket: Connection already exists, skipping');
+        return;
+      }
+
+      const wsUrl = configService.getBaseUrl().replace(/^http/, 'ws') + '/ws/notifications';
+      console.log('WebSocket: Attempting to connect to:', wsUrl);
+      
+      this.ws = new WebSocket(wsUrl);
+
+      this.ws.onopen = async () => {
+        console.log('WebSocket: Connected successfully');
+        this.reconnectAttempts = 0; // Reset reconnect attempts on successful connection
+        
+        try {
+          // Authenticate upon connection with fresh token
+          const token = await getAuthToken();
+          if (token && this.ws) {
+            this.ws.send(JSON.stringify({ type: 'auth', token }));
+            console.log('WebSocket: Authentication sent');
+          }
+        } catch (error) {
+          console.error('WebSocket: Failed to authenticate:', error);
+          // If authentication fails, close the connection to prevent retry loop
+          if (this.ws) {
+            this.ws.close(1000, 'Authentication failed');
+          }
+        }
+      };
+
+      this.ws.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          
+          // Handle authentication errors
+          if (message.type === 'auth_error') {
+            console.error('WebSocket: Authentication error:', message.error);
+            // Close connection to prevent retry loop
+            if (this.ws) {
+              this.ws.close(1000, 'Authentication failed');
+            }
+            return;
+          }
+          
+          if (this.onMessageCallback) {
+            this.onMessageCallback(message);
+          }
+        } catch (error) {
+          console.error('WebSocket: Error parsing message:', error);
+        }
+      };
+
+      this.ws.onerror = (error) => {
+        console.error('WebSocket: Connection error:', error);
+        // Don't log the full error object to avoid console spam
+      };
+
+      this.ws.onclose = (event) => {
+        console.log('WebSocket: Connection closed', event.code, event.reason);
+        
+        // Don't retry if it was a manual disconnect or authentication failure
+        if (event.code === 1000 || event.reason === 'Authentication failed') {
+          console.log('WebSocket: Not retrying - manual disconnect or auth failure');
+          return;
+        }
+        
+        // Attempt to reconnect if it wasn't a manual disconnect
+        if (this.reconnectAttempts < this.maxReconnectAttempts) {
+          this.reconnectAttempts++;
+          console.log(`WebSocket: Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+          
+          setTimeout(() => {
+            this.connect();
+          }, this.reconnectDelay * this.reconnectAttempts);
+        } else if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+          console.log('WebSocket: Max reconnection attempts reached, giving up');
+        }
+      };
+
+    } catch (error) {
+      console.error('WebSocket: Failed to initialize connection:', error);
+    }
+  }
+
+  onMessage(callback: (message: any) => void) {
+    this.onMessageCallback = callback;
+  }
+
+  disconnect() {
+    if (this.ws) {
+      console.log('WebSocket: Manually disconnecting');
+      this.ws.close(1000, 'Manual disconnect');
+      this.ws = null;
+    }
+  }
+
+  // Public method to check connection status
+  isConnected(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN;
+  }
+
+  // Public method to force reconnection (useful after login)
+  async forceReconnect(): Promise<void> {
+    console.log('WebSocket: Force reconnection requested');
+    this.disconnect();
+    this.reconnectAttempts = 0; // Reset retry counter
+    await this.connect();
+  }
+}
+
+export const webSocketService = new WebSocketService();
 
 // App Preferences API
 export const appPreferencesAPI = {

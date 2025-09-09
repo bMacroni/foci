@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { tasksAPI } from '../services/api';
+import React, { useState, useEffect, useCallback } from 'react';
+import { tasksAPI, webSocketService } from '../services/api';
 
 const NotificationCenter = ({ showSuccess }) => {
   const [notifications, setNotifications] = useState([]);
@@ -7,13 +7,42 @@ const NotificationCenter = ({ showSuccess }) => {
   const [error, setError] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
 
-  useEffect(() => {
-    fetchNotifications();
+  const handleNewNotification = useCallback((newNotification) => {
+    setNotifications(prev => [newNotification, ...prev]);
   }, []);
+
+  const handleNotificationRead = useCallback(({ id }) => {
+    setNotifications(prev =>
+      prev.map(n => (n.id === id ? { ...n, read: true } : n))
+    );
+  }, []);
+
+  const handleAllNotificationsRead = useCallback(() => {
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  }, []);
+
+  useEffect(() => {
+    webSocketService.connect();
+    webSocketService.onMessage((message) => {
+      if (message.type === 'new_notification') {
+        handleNewNotification(message.payload);
+      } else if (message.type === 'notification_read') {
+        handleNotificationRead(message.payload);
+      } else if (message.type === 'all_notifications_read') {
+        handleAllNotificationsRead();
+      }
+    });
+
+    return () => {
+      webSocketService.disconnect();
+    };
+  }, [handleNewNotification, handleNotificationRead, handleAllNotificationsRead]);
 
   const fetchNotifications = async () => {
     try {
-      const response = await tasksAPI.getNotifications(20);
+      // The backend endpoint for notifications is on the tasks route
+      // This is inconsistent, but I'm following the existing pattern.
+      const response = await tasksAPI.getNotifications();
       setNotifications(response.data);
     } catch (err) {
       setError('Failed to load notifications');
@@ -21,6 +50,10 @@ const NotificationCenter = ({ showSuccess }) => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
 
   const handleMarkAsRead = async (notificationId) => {
     try {
@@ -49,6 +82,16 @@ const NotificationCenter = ({ showSuccess }) => {
     }
   };
 
+  const handleArchiveAll = async () => {
+    try {
+      await tasksAPI.archiveAllNotifications();
+      setNotifications([]);
+      showSuccess('All notifications cleared and archived');
+    } catch (err) {
+      setError('Failed to archive notifications');
+    }
+  };
+
   const getNotificationIcon = (type) => {
     switch (type) {
       case 'auto_scheduling_completed':
@@ -59,6 +102,14 @@ const NotificationCenter = ({ showSuccess }) => {
         return '🌦️';
       case 'calendar_conflict':
         return '📅';
+      case 'task_reminder':
+        return '⏰';
+      case 'goal_completed':
+        return '🏆';
+      case 'milestone_completed':
+        return '🏅';
+      case 'new_message':
+        return '💬';
       default:
         return '📢';
     }
@@ -67,13 +118,17 @@ const NotificationCenter = ({ showSuccess }) => {
   const getNotificationColor = (type) => {
     switch (type) {
       case 'auto_scheduling_completed':
+      case 'goal_completed':
+      case 'milestone_completed':
         return 'text-green-600 bg-green-50 border-green-200';
       case 'auto_scheduling_error':
         return 'text-red-600 bg-red-50 border-red-200';
       case 'weather_conflict':
+      case 'task_reminder':
         return 'text-yellow-600 bg-yellow-50 border-yellow-200';
       case 'calendar_conflict':
         return 'text-purple-600 bg-purple-50 border-purple-200';
+      case 'new_message':
       default:
         return 'text-blue-600 bg-blue-50 border-blue-200';
     }
@@ -143,23 +198,23 @@ const NotificationCenter = ({ showSuccess }) => {
               notifications.map((notification) => (
                 <div
                   key={notification.id}
-                  className={`p-3 mb-2 rounded-lg border ${getNotificationColor(notification.type)} ${
+                  className={`p-3 mb-2 rounded-lg border ${getNotificationColor(notification.notification_type)} ${
                     !notification.read ? 'ring-2 ring-blue-200' : ''
                   }`}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex items-start space-x-3 flex-1">
-                      <span className="text-lg">{getNotificationIcon(notification.type)}</span>
+                      <span className="text-lg">{getNotificationIcon(notification.notification_type)}</span>
                       <div className="flex-1 min-w-0">
                         <h4 className="text-sm font-medium mb-1">
-                          {notification.title || 'Auto-Scheduling Update'}
+                          {notification.title || 'Notification'}
                         </h4>
                         <p className="text-sm opacity-90 mb-2">
                           {notification.message}
                         </p>
-                        {notification.details && (
+                        {notification.details && typeof notification.details === 'object' && (
                           <p className="text-xs opacity-75">
-                            {notification.details}
+                            {JSON.stringify(notification.details)}
                           </p>
                         )}
                         <p className="text-xs opacity-60 mt-2">
@@ -182,10 +237,16 @@ const NotificationCenter = ({ showSuccess }) => {
           </div>
 
           {notifications.length > 0 && (
-            <div className="p-3 border-t border-gray-200 bg-gray-50">
+            <div className="p-3 border-t border-gray-200 bg-gray-50 flex justify-between items-center">
+              <button
+                onClick={handleArchiveAll}
+                className="text-sm text-gray-600 hover:text-red-700"
+              >
+                Clear & Archive All
+              </button>
               <button
                 onClick={() => setShowNotifications(false)}
-                className="w-full text-sm text-gray-600 hover:text-gray-800"
+                className="text-sm text-gray-600 hover:text-gray-800"
               >
                 Close
               </button>

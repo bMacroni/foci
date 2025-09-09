@@ -1,6 +1,16 @@
 import express from 'express';
 import { requireAuth } from '../middleware/auth.js';
-import { getUserSettings, updateUserSettings, updateUserProfile, getUserProfile, getAppPreferences, updateAppPreferences } from '../controllers/userController.js';
+import {
+  getUserSettings,
+  updateUserSettings,
+  updateUserProfile,
+  getUserProfile,
+  getAppPreferences,
+  updateAppPreferences,
+  registerDeviceToken,
+  getNotificationPreferences,
+  updateNotificationPreferences
+} from '../controllers/userController.js';
 
 const router = express.Router();
 
@@ -19,5 +29,10 @@ router.put('/me', requireAuth, updateUserProfile);
 // App preferences (Momentum Mode, etc.)
 router.get('/app-preferences', requireAuth, getAppPreferences);
 router.put('/app-preferences', requireAuth, updateAppPreferences);
+
+// Notification settings
+router.post('/device-token', requireAuth, registerDeviceToken);
+router.get('/notifications/preferences', requireAuth, getNotificationPreferences);
+router.put('/notifications/preferences', requireAuth, updateNotificationPreferences);
 
 export default router; 

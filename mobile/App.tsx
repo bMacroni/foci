@@ -11,17 +11,62 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AppNavigator from './src/navigation/AppNavigator';
 import { configService } from './src/services/config';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { Alert } from 'react-native';
+import { notificationService } from './src/services/notificationService';
+import { webSocketService } from './src/services/api';
 import { HelpProvider } from './src/contexts/HelpContext';
 import HelpOverlay from './src/components/help/HelpOverlay';
+import { authService } from './src/services/auth';
+
+// Set Google client IDs immediately when the module loads
+configService.setGoogleClientIds({
+  web: '416233535798-dpehu9uiun1nlub5nu1rgi36qog1e57j.apps.googleusercontent.com', // Firebase-generated web client ID
+  android: '416233535798-g0enucudvioslu32ditbja3q0pn4iom7.apps.googleusercontent.com', // Firebase-generated Android client ID
+  ios: '416233535798-...', // Firebase-generated iOS client ID (if you have one)
+});
 
 function App() {
   useEffect(() => {
-    // Set Firebase-generated OAuth client IDs
-    configService.setGoogleClientIds({
-      web: '416233535798-dpehu9uiun1nlub5nu1rgi36qog1e57j.apps.googleusercontent.com', // Firebase-generated web client ID
-      android: '416233535798-g0enucudvioslu32ditbja3q0pn4iom7.apps.googleusercontent.com', // Firebase-generated Android client ID
-      ios: '416233535798-...', // Firebase-generated iOS client ID (if you have one)
-    });
+    // Set up auth state listener to initialize services after authentication
+    const checkAuthAndInitialize = async () => {
+      if (authService.isAuthenticated()) {
+        console.log('User authenticated, initializing notification services...');
+        notificationService.initialize();
+        
+        // Connect WebSocket with error handling
+        try {
+          await webSocketService.connect();
+          webSocketService.onMessage((message) => {
+            if (message.type === 'new_notification') {
+              Alert.alert(
+                message.payload.title,
+                message.payload.message
+              );
+            }
+          });
+        } catch (error) {
+          console.error('Failed to initialize WebSocket connection:', error);
+        }
+      } else {
+        console.log('User not authenticated, skipping notification services initialization');
+        // Disconnect WebSocket if user is not authenticated
+        webSocketService.disconnect();
+      }
+    };
+
+    // Check immediately
+    checkAuthAndInitialize();
+    
+    // Set up listener for auth state changes
+    const unsubscribe = authService.subscribe(checkAuthAndInitialize);
+    
+    // Cleanup listener on unmount
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+
     // Setting up Google Sign-In...
     try {
       const baseConfig: any = {

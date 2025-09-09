@@ -6,10 +6,10 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import { toZonedTime } from 'date-fns-tz';
 import timezones from '../utils/timezones'; // We'll create this file for the timezone list
 
-const CalendarEvents = () => {
-  const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+const CalendarEvents = ({ events: propEvents, error: propError }) => {
+  const [events, setEvents] = useState(propEvents || []);
+  const [loading, setLoading] = useState(!propEvents);
+  const [error, setError] = useState(propError || null);
   const [toast, setToast] = useState({ isVisible: false, message: '', type: 'success' });
   const [selectedRange, setSelectedRange] = useState({ start: null, end: null });
   const [dragging, setDragging] = useState(false);
@@ -96,8 +96,10 @@ const CalendarEvents = () => {
   };
 
   useEffect(() => {
-    loadEvents();
-  }, []);
+    if (!propEvents) {
+      loadEvents();
+    }
+  }, [propEvents]);
 
   // Close event overlay when clicking outside
   useEffect(() => {

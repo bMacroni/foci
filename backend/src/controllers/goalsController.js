@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import logger from '../utils/logger.js';
+import { sendNotification } from '../services/notificationService.js';
 const DEBUG = process.env.DEBUG_LOGS === 'true';
 
 export async function createGoal(req, res) {
@@ -283,6 +284,17 @@ export async function updateGoal(req, res) {
 
     if (fetchError) {
       return res.status(400).json({ error: fetchError.message });
+    }
+
+    // If goal is marked as completed, send a notification
+    if (completed === true) {
+      const notification = {
+        notification_type: 'goal_completed',
+        title: 'Goal Completed!',
+        message: `You've successfully completed your goal: ${updatedGoal.title}`,
+        details: { goalId: updatedGoal.id }
+      };
+      await sendNotification(user_id, notification);
     }
 
     res.json(updatedGoal);
@@ -977,11 +989,44 @@ export async function updateStep(req, res) {
     .from('steps')
     .update(updateFields)
     .eq('id', stepId)
-    .select()
+    .select('*, milestone:milestones(id, goal_id, completed)')
     .single();
 
   if (error) {
     return res.status(400).json({ error: error.message });
+  }
+
+  // Check for milestone completion if a step was marked as complete
+  if (completed === true && data.milestone && !data.milestone.completed) {
+    const { data: steps, error: stepsError } = await supabase
+      .from('steps')
+      .select('completed')
+      .eq('milestone_id', data.milestone_id);
+
+    if (!stepsError && steps.every(s => s.completed)) {
+      // All steps are complete, mark milestone as complete and send notification
+      const { data: updatedMilestone, error: milestoneUpdateError } = await supabase
+        .from('milestones')
+        .update({ completed: true })
+        .eq('id', data.milestone_id)
+        .select()
+        .single();
+
+      if (!milestoneUpdateError && updatedMilestone) {
+        const notification = {
+          notification_type: 'milestone_completed',
+          title: 'Milestone Reached!',
+          message: `You've completed the milestone: ${updatedMilestone.title}`,
+          details: { milestoneId: updatedMilestone.id, goalId: updatedMilestone.goal_id }
+        };
+        // We need the user_id for the notification.
+        // The current context doesn't have it directly. We can get it from the goal.
+        const { data: goalData } = await supabase.from('goals').select('user_id').eq('id', updatedMilestone.goal_id).single();
+        if (goalData) {
+          await sendNotification(goalData.user_id, notification);
+        }
+      }
+    }
   }
   
   res.json(data);

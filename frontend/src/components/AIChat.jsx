@@ -458,22 +458,28 @@ You’re making great strides!
         }
       ]);
 
-      // For each action, show a toast notification only
-      actions.forEach(action => {
-        // Only handle create/update/delete actions
-        if (["create", "update", "delete"].includes(action.action_type)) {
+      // Process actions
+      actions.forEach(async (action) => {
+        if (action.type === 'calendar_event' && action.operation === 'read') {
+          try {
+            const eventsResponse = await calendarAPI.getEvents();
+            processAIResponse(eventsResponse.data);
+          } catch (error) {
+            console.error('Error fetching calendar events:', error);
+            processAIResponse({ error: 'Failed to fetch calendar events.' });
+          }
+        } else if (["create", "update", "delete"].includes(action.action_type)) {
           let actionVerb = '';
           if (action.action_type === 'create') actionVerb = 'created';
           if (action.action_type === 'update') actionVerb = 'updated';
           if (action.action_type === 'delete') actionVerb = 'deleted';
           const entity = action.entity_type.replace('_', ' ');
           const title = action.details?.title || action.details?.name || '';
-          // Toast notification only
           showToast(`${entity.charAt(0).toUpperCase() + entity.slice(1)}${title ? ` "${title}"` : ''} ${actionVerb}.`, 'success');
         }
-        // If error
+
         if (action.details && action.details.error) {
-          showToast(`Failed to ${action.action_type} ${action.entity_type}: ${action.details.error}`, 'error');
+          showToast(`Failed to ${action.action_type || action.operation} ${action.entity_type || action.type}: ${action.details.error}`, 'error');
         }
       });
     } catch (error) {

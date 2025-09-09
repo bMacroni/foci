@@ -6,6 +6,7 @@ export type RootStackParamList = {
   GoalDetail: { goalId: string };
   TaskForm: { taskId?: string } | undefined;
   TaskDetail: { taskId: string };
+  Notifications: undefined;
 };
 
 export type MainTabParamList = {

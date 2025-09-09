@@ -6,6 +6,7 @@ import { conversationController } from '../controllers/conversationController.js
 import logger from '../utils/logger.js';
 import { sendFeedback } from '../controllers/feedbackController.js';
 import { autoSchedulingController } from '../controllers/autoSchedulingController.js';
+import { sendNotification } from '../services/notificationService.js';
 
 const router = express.Router();
 const geminiService = new GeminiService();
@@ -46,6 +47,18 @@ router.post('/chat', requireAuth, async (req, res) => {
       message: response.message,
       actions: response.actions || []
     };
+
+    // Send a notification to the user
+    const notification = {
+      notification_type: 'new_message',
+      title: 'New message from your AI assistant',
+      message: response.message.substring(0, 100) + (response.message.length > 100 ? '...' : ''),
+      details: { threadId }
+    };
+    // Don't await this, let it run in the background
+    sendNotification(userId, notification).catch(err => 
+      logger.error('sendNotification failed', err)
+    );
     
     res.json(finalResponse);
 

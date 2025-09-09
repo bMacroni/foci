@@ -44,6 +44,12 @@ class GoogleAuthService {
       console.log(`[GoogleAuth] Android Client ID: ${androidClientId ? `${androidClientId.slice(0, 17)}...${androidClientId.slice(-6)}` : 'NOT SET'}`);
       console.log(`[GoogleAuth] Platform: ${Platform.OS}`);
 
+      // Check if we have the required web client ID
+      if (!webClientId) {
+        console.warn('[GoogleAuth] Web client ID not available, skipping configuration');
+        return;
+      }
+
       const baseConfig: any = {
         // These will be set from environment variables or config
         webClientId: webClientId, // Required for getting the ID token
@@ -86,8 +92,14 @@ class GoogleAuthService {
    */
   async signInWithGoogle(): Promise<GoogleAuthResult> {
     try {
+      // Always try to configure if not configured or if client IDs weren't available before
       if (!this.isConfigured) {
         this.configureGoogleSignIn();
+      }
+      
+      // If still not configured, the client IDs weren't available
+      if (!this.isConfigured) {
+        throw new Error('Google Sign-In not configured. Client IDs not available.');
       }
 
       console.log('[GoogleAuth] Starting sign-in flow...');

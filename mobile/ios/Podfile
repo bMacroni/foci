@@ -15,6 +15,10 @@ if linkage != nil
 end
 
 target 'mobile' do
+  # Pods for Firebase
+  pod 'FirebaseCore', :modular_headers => true
+  pod 'Firebase/Messaging', :modular_headers => true
+
   config = use_native_modules!
 
   use_react_native!(
