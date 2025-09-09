@@ -1075,6 +1075,11 @@ export const notificationsAPI = {
         headers: { 'Authorization': `Bearer ${token}` },
     });
     if (!response.ok) {
+        if (response.status === 401) {
+          const err = new Error('Authentication failed - user not logged in');
+          (err as any).code = 'AUTH_REQUIRED';
+          throw err;
+        }
         throw new Error('Failed to mark notification as read');
     }
   },
@@ -1086,6 +1091,11 @@ export const notificationsAPI = {
         headers: { 'Authorization': `Bearer ${token}` },
     });
     if (!response.ok) {
+        if (response.status === 401) {
+          const err = new Error('Authentication failed - user not logged in');
+          (err as any).code = 'AUTH_REQUIRED';
+          throw err;
+        }
         throw new Error('Failed to mark all notifications as read');
     }
   },

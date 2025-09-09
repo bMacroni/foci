@@ -665,7 +665,7 @@ export async function getUnreadNotificationsCount(userId) {
             return 0;
         }
 
-        return count;
+        return Number(count) || 0;
     } catch (error) {
         logger.error(`Exception in getUnreadNotificationsCount for user ${userId}:`, error);
         return 0;

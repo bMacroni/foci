@@ -48,7 +48,15 @@ router.get('/', requireAuth, getTasks);
 // Notification routes (must come before /:id routes)
 router.get('/notifications', requireAuth, async (req, res) => {
   try {
-    const notifications = await getUserNotifications(req.user.id, req.query.limit ? parseInt(req.query.limit) : 10);
+    // Validate and normalize status parameter
+    const validStatuses = ['all', 'read', 'unread'];
+    const status = req.query.status || 'unread';
+    const normalizedStatus = validStatuses.includes(status) ? status : 'unread';
+    
+    // Parse limit parameter if provided
+    const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined;
+    
+    const notifications = await getUserNotifications(req.user.id, normalizedStatus, limit);
     res.json(notifications);
   } catch (error) {
     logger.error('Error fetching notifications:', error);

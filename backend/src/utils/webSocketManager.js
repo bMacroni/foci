@@ -16,6 +16,7 @@ class WebSocketManager {
       // The client must send an auth token as its first message.
       logger.info('WebSocket client connected');
 
+      let isAuthenticated = false;
       const authTimeout = setTimeout(() => {
         ws.terminate();
         logger.warn('WebSocket client terminated due to auth timeout');
@@ -24,6 +25,22 @@ class WebSocketManager {
       ws.on('message', (message) => {
         try {
           const data = JSON.parse(message);
+          
+          // Enforce that first message must be auth message
+          if (!isAuthenticated && data.type !== 'auth') {
+            logger.warn('WebSocket client sent non-auth message before authentication');
+            try {
+              ws.send(JSON.stringify({ 
+                type: 'auth_error', 
+                message: 'First message must be authentication' 
+              }));
+            } catch (sendError) {
+              logger.error('Failed to send auth error message:', sendError);
+            }
+            ws.close(1008, 'Authentication required');
+            return;
+          }
+          
           if (data.type === 'auth' && data.token) {
             clearTimeout(authTimeout);
             jwt.verify(data.token, process.env.SUPABASE_JWT_SECRET, (err, decoded) => {
@@ -46,6 +63,7 @@ class WebSocketManager {
               } else {
                 const userId = decoded.sub;
                 this.clients.set(userId, ws);
+                isAuthenticated = true;
                 logger.info(`WebSocket client authenticated for user: ${userId}`);
 
                 ws.on('close', () => {
@@ -59,6 +77,18 @@ class WebSocketManager {
           }
         } catch (e) {
           logger.error('Error processing WebSocket message:', e);
+          // For non-JSON or other pre-auth errors, close with 1008
+          if (!isAuthenticated) {
+            try {
+              ws.send(JSON.stringify({ 
+                type: 'auth_error', 
+                message: 'Invalid message format' 
+              }));
+            } catch (sendError) {
+              logger.error('Failed to send auth error message:', sendError);
+            }
+            ws.close(1008, 'Invalid message format');
+          }
         }
       });
 
