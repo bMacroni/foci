@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, ScrollView, TextInput, Switch, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Switch, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Octicons';
 import { colors } from '../../themes/colors';
@@ -46,7 +46,7 @@ export default function ProfileScreen({ navigation }: any) {
 
   // Inline edit fields
   const [fullName, setFullName] = useState('');
-  const [avatarUrl, setAvatarUrl] = useState('');
+  const [_avatarUrl, setAvatarUrl] = useState('');
   const [location, setLocation] = useState('');
   const [prefs, setPrefs] = useState<Prefs>(defaultPrefs);
 
@@ -258,10 +258,7 @@ export default function ProfileScreen({ navigation }: any) {
               await authService.logout();
               setToastMessage('Signed out');
               setToastVisible(true);
-              // Allow toast to render before resetting navigation to Login
-              setTimeout(() => {
-                navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
-              }, 900);
+              // No need to manually navigate - AppNavigator will handle this automatically
             } catch {}
           }}
         >

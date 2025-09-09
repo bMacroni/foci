@@ -1,13 +1,10 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../../themes/colors';
 import { typography } from '../../themes/typography';
 import { spacing, borderRadius } from '../../themes/spacing';
 import { Input, PasswordInput, Button, ApiToggle, GoogleSignInButton } from '../../components/common';
-import { configService } from '../../services/config';
 import { authService } from '../../services/auth';
 import { googleAuthService } from '../../services/googleAuth';
 
@@ -23,43 +20,23 @@ export default function SignupScreen({ navigation }: any) {
     setError('');
     setLoading(true);
     try {
-      const baseUrl = configService.getBaseUrl();
-      const response = await axios.post(`${baseUrl}/auth/signup`, {
-        email,
-        password,
-        full_name: fullName,
-      });
-      // If auto-login is successful, token will be present
-      if (response.data.token) {
-        // Clear any stale session before storing the new one
-        await AsyncStorage.multiRemove(['auth_token', 'authToken', 'auth_user', 'authUser']);
-        await AsyncStorage.multiSet([
-          ['auth_token', response.data.token],
-          ['authToken', response.data.token],
-          ['auth_user', JSON.stringify(response.data.user || {})],
-          ['authUser', JSON.stringify(response.data.user || {})],
-        ]);
-        try { await authService.debugReinitialize(); } catch {}
-        setLoading(false);
-        navigation.replace('Main');
-      } else {
-        setLoading(false);
-        // If user needs to confirm email, show message
-        if (response.data.error) {
-          setError(response.data.error);
-        } else if (response.data.message) {
-          setError(response.data.message);
+      const result = await authService.signup({ email, password });
+      
+      if (result.success) {
+        if (result.user) {
+          // User was created and automatically logged in
+          // Auth service will automatically update the navigation state
         } else {
-          setError('Signup successful. Please check your email to confirm your account.');
+          // User was created but needs email confirmation
+          setError(result.message || 'Please check your email to confirm your account.');
         }
-      }
-    } catch (err: any) {
-      setLoading(false);
-      if (err.response && err.response.data && err.response.data.error) {
-        setError(err.response.data.error);
       } else {
-        setError('Signup failed. Please try again.');
+        setError(result.message);
       }
+    } catch {
+      setError('Signup failed. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -71,10 +48,9 @@ export default function SignupScreen({ navigation }: any) {
       const result = await googleAuthService.signInWithGoogle();
       
       if (result.success) {
-        // Successful sign-in
-        navigation.replace('Main');
+        // Auth service will automatically update the navigation state
+        // No need to manually navigate - AppNavigator will handle this
       } else {
-        // Error
         setError(result.error || 'Google Sign-In failed');
       }
     } catch (err: any) {

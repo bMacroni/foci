@@ -1,18 +1,29 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { jwtDecode } from 'jwt-decode';
 import { configService } from './config';
 
 // Helper function to decode JWT token
 function decodeJWT(token: string): any {
   try {
-    const base64Url = token.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-    }).join(''));
-    return JSON.parse(jsonPayload);
+    return jwtDecode(token);
   } catch (error) {
     console.error('🔐 AuthService: Error decoding JWT:', error);
     return null;
+  }
+}
+
+// Helper function to check if JWT token is expired
+function isTokenExpired(token: string): boolean {
+  try {
+    const decoded = jwtDecode(token) as any;
+    if (!decoded.exp) {
+      return false; // No expiration time, assume valid
+    }
+    const currentTime = Date.now() / 1000;
+    return decoded.exp < currentTime;
+  } catch (error) {
+    console.error('🔐 AuthService: Error checking token expiration:', error);
+    return true; // If we can't decode it, assume it's expired
   }
 }
 
@@ -49,11 +60,10 @@ class AuthService {
     isLoading: true,
     isAuthenticated: false,
   };
-  private listeners: ((state: AuthState) => void)[] = [];
+  private listeners: ((_state: AuthState) => void)[] = [];
   private initialized = false;
 
   private constructor() {
-    console.warn('🔐 AuthService: Constructor called');
     this.initializeAuth();
   }
 
@@ -66,12 +76,7 @@ class AuthService {
 
   // Initialize auth state from storage
   private async initializeAuth() {
-    console.warn('🔐 AuthService: Starting initialization...');
     try {
-      // Check all possible storage keys
-      const allKeys = await AsyncStorage.getAllKeys();
-      console.warn('🔐 AuthService: All AsyncStorage keys:', allKeys);
-      
       // Try both key formats
       let token = await AsyncStorage.getItem('auth_token');
       let userData = await AsyncStorage.getItem('auth_user');
@@ -79,106 +84,96 @@ class AuthService {
       // If not found, try alternative keys
       if (!token) {
         token = await AsyncStorage.getItem('authToken');
-        console.warn('🔐 AuthService: Trying authToken key - found:', !!token);
       }
       if (!userData) {
         userData = await AsyncStorage.getItem('authUser');
-        console.warn('🔐 AuthService: Trying authUser key - found:', !!userData);
       }
       
-      // Also try to get the actual value of authToken to see what's stored
-      const authTokenValue = await AsyncStorage.getItem('authToken');
-      console.warn('🔐 AuthService: authToken value:', authTokenValue);
-      
-      console.warn('🔐 AuthService: Retrieved from storage - token:', !!token, 'userData:', !!userData);
-      console.warn('🔐 AuthService: Token value:', token);
-      console.warn('🔐 AuthService: UserData value:', userData);
-      
       if (token) {
-        // Try to get user data from storage first
-        let user: User | null = null;
-        
-        if (userData) {
-          try {
-            user = JSON.parse(userData);
-            console.warn('🔐 AuthService: User data found in storage');
-          } catch (error) {
-            console.error('🔐 AuthService: Error parsing user data:', error);
-          }
-        }
-        
-        // If no user data in storage, try to extract from JWT token
-        if (!user) {
-          const decodedToken = decodeJWT(token);
-          if (decodedToken && decodedToken.email) {
-            user = {
-              id: decodedToken.sub || decodedToken.user_id,
-              email: decodedToken.email,
-              email_confirmed_at: decodedToken.email_verified_at,
-              created_at: decodedToken.iat ? new Date(decodedToken.iat * 1000).toISOString() : undefined,
-              updated_at: decodedToken.iat ? new Date(decodedToken.iat * 1000).toISOString() : undefined,
-            };
-            console.warn('🔐 AuthService: User data extracted from JWT token');
-          }
-        }
-        
-        if (user) {
-          this.authState = {
-            user,
-            token,
-            isLoading: false,
-            isAuthenticated: true,
-          };
-          console.warn('🔐 AuthService: User authenticated - user:', user.email);
+        // Check if token is expired
+        if (isTokenExpired(token)) {
+          await this.clearAuthData();
+          this.setUnauthenticatedState();
         } else {
-          this.authState = {
-            user: null,
-            token: null,
-            isLoading: false,
-            isAuthenticated: false,
-          };
-          console.warn('🔐 AuthService: Token found but could not extract user data');
+          // Try to get user data from storage first
+          let user: User | null = null;
+          
+          if (userData) {
+            try {
+              user = JSON.parse(userData);
+            } catch (error) {
+              console.error('Error parsing user data:', error);
+            }
+          }
+          
+          // If no user data in storage, try to extract from JWT token
+          if (!user) {
+            const decodedToken = decodeJWT(token);
+            if (decodedToken && decodedToken.email) {
+              user = {
+                id: decodedToken.sub || decodedToken.user_id,
+                email: decodedToken.email,
+                email_confirmed_at: decodedToken.email_verified_at,
+                created_at: decodedToken.iat ? new Date(decodedToken.iat * 1000).toISOString() : undefined,
+                updated_at: decodedToken.iat ? new Date(decodedToken.iat * 1000).toISOString() : undefined,
+              };
+            }
+          }
+          
+          if (user) {
+            this.authState = {
+              user,
+              token,
+              isLoading: false,
+              isAuthenticated: true,
+            };
+          } else {
+            await this.clearAuthData();
+            this.setUnauthenticatedState();
+          }
         }
       } else {
-        this.authState = {
-          user: null,
-          token: null,
-          isLoading: false,
-          isAuthenticated: false,
-        };
-        console.warn('🔐 AuthService: No stored auth data - user not authenticated');
+        this.setUnauthenticatedState();
       }
       
       this.initialized = true;
-      console.warn('🔐 AuthService: Initialization complete, notifying listeners');
       this.notifyListeners();
     } catch (error) {
-      console.error('🔐 AuthService: Error initializing auth:', error);
-      this.authState = {
-        user: null,
-        token: null,
-        isLoading: false,
-        isAuthenticated: false,
-      };
+      console.error('Error initializing auth:', error);
+      this.setUnauthenticatedState();
       this.initialized = true;
       this.notifyListeners();
     }
   }
 
+  private setUnauthenticatedState() {
+    this.authState = {
+      user: null,
+      token: null,
+      isLoading: false,
+      isAuthenticated: false,
+    };
+  }
+
+  private async clearAuthData() {
+    try {
+      await AsyncStorage.multiRemove(['auth_token', 'authToken', 'auth_user', 'authUser']);
+    } catch (error) {
+      console.error('Error clearing auth data:', error);
+    }
+  }
+
   // Get current auth state
   public getAuthState(): AuthState {
-    console.warn('🔐 AuthService: getAuthState called - state:', this.authState);
     return { ...this.authState };
   }
 
   // Subscribe to auth state changes
-  public subscribe(listener: (state: AuthState) => void): () => void {
-    console.warn('🔐 AuthService: New subscriber added');
+  public subscribe(listener: (_state: AuthState) => void): () => void {
     this.listeners.push(listener);
     
     // Immediately notify the new listener with current state
     if (this.initialized) {
-      console.warn('🔐 AuthService: Immediately notifying new subscriber');
       listener(this.getAuthState());
     }
     
@@ -187,14 +182,12 @@ class AuthService {
       const index = this.listeners.indexOf(listener);
       if (index > -1) {
         this.listeners.splice(index, 1);
-        console.warn('🔐 AuthService: Subscriber removed');
       }
     };
   }
 
   // Notify all listeners of state changes
   private notifyListeners() {
-    console.warn('🔐 AuthService: Notifying', this.listeners.length, 'listeners');
     const currentState = this.getAuthState();
     this.listeners.forEach(listener => listener(currentState));
   }
@@ -269,8 +262,7 @@ class AuthService {
   // Logout user
   public async logout(): Promise<void> {
     try {
-      // Clear all possible keys to avoid stale sessions
-      await AsyncStorage.multiRemove(['auth_token', 'authToken', 'auth_user', 'authUser']);
+      await this.clearAuthData();
       
       this.authState = {
         user: null,
@@ -325,6 +317,13 @@ class AuthService {
         token = await AsyncStorage.getItem('authToken');
       }
       if (token) {
+        // Check if token is expired
+        if (isTokenExpired(token)) {
+          await this.clearAuthData();
+          this.setUnauthenticatedState();
+          this.notifyListeners();
+          return null;
+        }
         this.authState.token = token;
         this.notifyListeners();
       }
@@ -342,6 +341,12 @@ class AuthService {
       if (!token || token === 'undefined' || token === 'null') {
         console.error('Invalid token provided to setAuthData:', token);
         throw new Error('Invalid authentication token');
+      }
+
+      // Check if token is expired before storing
+      if (isTokenExpired(token)) {
+        console.error('Token is expired, cannot store auth data');
+        throw new Error('Authentication token is expired');
       }
 
       await AsyncStorage.setItem('auth_token', token);
@@ -362,7 +367,6 @@ class AuthService {
 
   // Set session (public method for external use)
   public async setSession(token: string, user: User): Promise<void> {
-    console.warn('🔐 AuthService: setSession called with token:', !!token, 'user:', user?.email);
     await this.setAuthData(token, user);
   }
 
@@ -378,7 +382,6 @@ class AuthService {
 
   // Debug method to re-initialize auth
   public async debugReinitialize(): Promise<void> {
-    console.warn('🔐 AuthService: Debug re-initialization triggered');
     this.initialized = false;
     await this.initializeAuth();
   }

@@ -24,6 +24,7 @@
     "axios": "^1.10.0",
     "date-fns": "^3.6.0",
     "formik": "^2.4.6",
+    "jwt-decode": "^4.0.0",
     "react": "19.1.0",
     "react-native": "0.80.1",
     "react-native-calendars": "^1.1300.0",
