@@ -50,11 +50,12 @@ router.get('/notifications', requireAuth, async (req, res) => {
   try {
     // Validate and normalize status parameter
     const validStatuses = ['all', 'read', 'unread'];
-    const status = req.query.status || 'unread';
-    const normalizedStatus = validStatuses.includes(status) ? status : 'unread';
+    const statusRaw = (req.query.status || 'unread').toString().toLowerCase();
+    const normalizedStatus = validStatuses.includes(statusRaw) ? statusRaw : 'unread';
     
     // Parse limit parameter if provided
-    const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined;
+    const requested = req.query.limit ? parseInt(req.query.limit, 10) : undefined;
+    const limit = Number.isFinite(requested) && requested > 0 ? Math.min(requested, 100) : undefined;
     
     const notifications = await getUserNotifications(req.user.id, normalizedStatus, limit);
     res.json(notifications);

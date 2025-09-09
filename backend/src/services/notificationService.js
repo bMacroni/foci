@@ -123,7 +123,7 @@ export async function sendNotification(userId, notification) {
 
     // Send Push Notification
     if (shouldSend('push') && deviceTokens.length > 0) {
-      deliveryPromises.push(sendPushNotification(deviceTokens, title, message, { ...details, userId }));
+      deliveryPromises.push(sendPushNotification(deviceTokens, title, message, { ...(details || {}), userId }));
     }
 
     // Send Email
@@ -530,6 +530,11 @@ async function storeInAppNotification(userId, notification) {
  */
 export async function getUserNotifications(userId, status = 'unread', limit = 20) {
     try {
+        // Validate and sanitize the limit parameter
+        const sanitizedLimit = Math.max(1, Math.min(100, 
+            Number.isNaN(parseInt(limit)) || parseInt(limit) <= 0 ? 20 : parseInt(limit)
+        ));
+
         const supabaseClient = getSupabaseClient();
         let query = supabaseClient
             .from('user_notifications')
@@ -545,7 +550,7 @@ export async function getUserNotifications(userId, status = 'unread', limit = 20
 
         const { data, error } = await query
             .order('created_at', { ascending: false })
-            .limit(limit);
+            .limit(sanitizedLimit);
 
         if (error) {
             logger.error(`Failed to get notifications for user ${userId}:`, error);
