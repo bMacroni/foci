@@ -30,7 +30,7 @@ import {
 const archiveLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute window
   limit: 2, // Maximum 2 requests per window per user
-  keyGenerator: (req) => req.user?.id || ipKeyGenerator(req), // Use user ID if authenticated, fallback to IP with IPv6 support
+  keyGenerator: (req) => req.user?.id || ipKeyGenerator(req.ip), // Use user ID if authenticated, fallback to IP with IPv6 support
   message: {
     error: 'Too many archive requests. Please wait a moment before trying again.',
     retryAfter: '1 minute'

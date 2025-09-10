@@ -18,14 +18,14 @@ function decodeJWT(token: string): any {
 function isTokenExpired(token: string): boolean {
   try {
     const decoded = jwtDecode(token) as any;
-    if (!decoded.exp) {
-      return false; // No expiration time, assume valid
-    }
-    const currentTime = Date.now() / 1000;
-    return decoded.exp < currentTime;
+    const exp = Number(decoded?.exp);
+    if (!Number.isFinite(exp)) return true; // no/invalid exp ⇒ treat as expired
+    const leeway = 30; // seconds
+    const now = Math.floor(Date.now() / 1000);
+    return exp < (now - leeway);
   } catch (error) {
     console.error('🔐 AuthService: Error checking token expiration:', error);
-    return true; // If we can't decode it, assume it's expired
+    return true;
   }
 }
 

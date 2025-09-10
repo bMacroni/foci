@@ -11,6 +11,7 @@ import { tasksAPI } from '../../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useBrainDump } from '../../contexts/BrainDumpContext';
 import { authService } from '../../services/auth';
+import { configService } from '../../services/config';
 import { SuccessToast } from '../../components/common/SuccessToast';
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -173,10 +174,17 @@ export default function BrainDumpRefinementScreen({ navigation, route }: any) {
 
   const startGoalBreakdown = async (item: Item) => {
     try {
+      // Skip if threadId is missing
+      if (!threadId) {
+        console.warn('Cannot update thread title: threadId is missing');
+        return;
+      }
+
       // Update conversation thread title to the goal text
       const token = await authService.getAuthToken();
       if (token) {
-        await fetch('http://192.168.1.66:5000/api/ai/threads/' + threadId, {
+        const baseUrl = configService.getBaseUrl();
+        await fetch(`${baseUrl}/ai/threads/${threadId}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
