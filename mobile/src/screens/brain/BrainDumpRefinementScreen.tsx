@@ -10,6 +10,7 @@ import { typography } from '../../themes/typography';
 import { tasksAPI } from '../../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useBrainDump } from '../../contexts/BrainDumpContext';
+import { authService } from '../../services/auth';
 import { SuccessToast } from '../../components/common/SuccessToast';
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -173,16 +174,20 @@ export default function BrainDumpRefinementScreen({ navigation, route }: any) {
   const startGoalBreakdown = async (item: Item) => {
     try {
       // Update conversation thread title to the goal text
-      const token = await AsyncStorage.getItem('authToken');
-      await fetch('http://192.168.1.66:5000/api/ai/threads/' + threadId, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ title: item.text }),
-      });
-    } catch {}
+      const token = await authService.getAuthToken();
+      if (token) {
+        await fetch('http://192.168.1.66:5000/api/ai/threads/' + threadId, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({ title: item.text }),
+        });
+      }
+    } catch (error) {
+      console.error('Error updating thread title:', error);
+    }
     // Remove the goal from the refinement list
     setEditedItems(prev => prev.filter(i => !(i.type === 'goal' && i.text === item.text)));
     // Navigate to chat with the prefilled message so title can be inferred

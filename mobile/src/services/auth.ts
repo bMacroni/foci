@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { jwtDecode } from 'jwt-decode';
 import { configService } from './config';
+import { secureStorage } from './secureStorage';
+import { AndroidStorageMigrationService } from './storageMigration';
 
 // Helper function to decode JWT token
 function decodeJWT(token: string): any {
@@ -77,16 +79,26 @@ class AuthService {
   // Initialize auth state from storage
   private async initializeAuth() {
     try {
-      // Try both key formats
-      let token = await AsyncStorage.getItem('auth_token');
-      let userData = await AsyncStorage.getItem('auth_user');
+      // Check if migration is needed and perform it
+      const needsMigration = await AndroidStorageMigrationService.checkMigrationNeeded();
+      if (needsMigration) {
+        console.log('🔐 Migrating auth data to secure storage...');
+        const migrationResult = await AndroidStorageMigrationService.migrateAuthData();
+        if (!migrationResult.success) {
+          console.warn('⚠️ Some auth data migration failed:', migrationResult.errors);
+        }
+      }
+
+      // Try both key formats with secure storage
+      let token = await secureStorage.get('auth_token');
+      let userData = await secureStorage.get('auth_user');
       
       // If not found, try alternative keys
       if (!token) {
-        token = await AsyncStorage.getItem('authToken');
+        token = await secureStorage.get('authToken');
       }
       if (!userData) {
-        userData = await AsyncStorage.getItem('authUser');
+        userData = await secureStorage.get('authUser');
       }
       
       if (token) {
@@ -157,7 +169,7 @@ class AuthService {
 
   private async clearAuthData() {
     try {
-      await AsyncStorage.multiRemove(['auth_token', 'authToken', 'auth_user', 'authUser']);
+      await secureStorage.multiRemove(['auth_token', 'authToken', 'auth_user', 'authUser']);
     } catch (error) {
       console.error('Error clearing auth data:', error);
     }
@@ -312,9 +324,9 @@ class AuthService {
     }
     
     try {
-      let token = await AsyncStorage.getItem('auth_token');
+      let token = await secureStorage.get('auth_token');
       if (!token) {
-        token = await AsyncStorage.getItem('authToken');
+        token = await secureStorage.get('authToken');
       }
       if (token) {
         // Check if token is expired
@@ -349,8 +361,8 @@ class AuthService {
         throw new Error('Authentication token is expired');
       }
 
-      await AsyncStorage.setItem('auth_token', token);
-      await AsyncStorage.setItem('auth_user', JSON.stringify(user));
+      await secureStorage.set('auth_token', token);
+      await secureStorage.set('auth_user', JSON.stringify(user));
       
       this.authState = {
         user,
@@ -382,7 +394,7 @@ class AuthService {
 
   // Debug method to re-initialize auth
   public async debugReinitialize(): Promise<void> {
-    this.initialized = false;
+   this.initialized = false;
     await this.initializeAuth();
   }
 
