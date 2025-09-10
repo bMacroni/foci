@@ -33,6 +33,12 @@ export const colors = {
   error: '#EF4444',
   info: '#3B82F6',
   
+  // Feedback colors for UI states
+  feedback: {
+    errorBg: '#FEF2F2',
+    errorBorder: '#FECACA',
+  },
+  
   // AI specific colors
   aiMessage: '#F1F1F1',
   

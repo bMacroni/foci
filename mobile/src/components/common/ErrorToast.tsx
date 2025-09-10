@@ -8,6 +8,7 @@ import {
   Platform,
   StatusBar,
 } from 'react-native';
+import type { TextStyle } from 'react-native';
 import { colors } from '../../themes/colors';
 import { spacing, borderRadius } from '../../themes/spacing';
 import { typography } from '../../themes/typography';
@@ -81,6 +82,9 @@ export const ErrorToast: React.FC<ErrorToastProps> = ({
 
   return (
     <Animated.View
+      accessibilityLiveRegion="polite"
+      accessible
+      accessibilityLabel={`Error: ${message}`}
       style={[
         styles.container,
         {
@@ -103,13 +107,27 @@ export const ErrorToast: React.FC<ErrorToastProps> = ({
           <Text style={styles.message}>{message}</Text>
           
           {actionLabel && onActionPress && (
-            <TouchableOpacity style={styles.actionBtn} onPress={() => { onActionPress(); hideToast(); }}>
+            <TouchableOpacity 
+              style={styles.actionBtn} 
+              onPress={() => { onActionPress(); hideToast(); }}
+              accessibilityRole="button"
+              accessibilityLabel={`${actionLabel} button`}
+              accessible={true}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
               <Text style={styles.actionText}>{actionLabel}</Text>
             </TouchableOpacity>
           )}
         </View>
         
-        <TouchableOpacity style={styles.closeButton} onPress={hideToast}>
+        <TouchableOpacity 
+          style={styles.closeButton} 
+          onPress={hideToast}
+          accessibilityRole="button"
+          accessibilityLabel="Close error message"
+          accessible={true}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
           <Icon name="x" size={16} color={colors.text.secondary} />
         </TouchableOpacity>
       </View>
@@ -125,11 +143,11 @@ const styles = StyleSheet.create({
     zIndex: 1000,
   },
   toast: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: colors.feedback.errorBg,
     borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: '#FECACA',
-    shadowColor: '#000',
+    borderColor: colors.feedback.errorBorder,
+    shadowColor: colors.shadow,
     shadowOffset: {
       width: 0,
       height: 2,
@@ -150,7 +168,7 @@ const styles = StyleSheet.create({
   },
   message: {
     fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.medium as any,
+    fontWeight: typography.fontWeight.medium as TextStyle['fontWeight'],
     color: colors.text.primary,
     marginBottom: spacing.xs,
   },
@@ -168,6 +186,6 @@ const styles = StyleSheet.create({
   actionText: {
     color: colors.secondary,
     fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.bold as any,
+    fontWeight: typography.fontWeight.bold as TextStyle['fontWeight'],
   },
 });

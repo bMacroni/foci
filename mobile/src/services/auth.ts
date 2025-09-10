@@ -1,8 +1,18 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { jwtDecode } from 'jwt-decode';
 import { configService } from './config';
 import { secureStorage } from './secureStorage';
 import { AndroidStorageMigrationService } from './storageMigration';
+
+// Helper function for fetch with timeout
+const fetchWithTimeout = async (input: RequestInfo, init: RequestInit = {}, ms = 10000) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+};
 
 // Helper function to decode JWT token
 function decodeJWT(token: string): any {
@@ -16,17 +26,13 @@ function decodeJWT(token: string): any {
 
 // Helper function to check if JWT token is expired
 function isTokenExpired(token: string): boolean {
-  try {
-    const decoded = jwtDecode(token) as any;
-    const exp = Number(decoded?.exp);
-    if (!Number.isFinite(exp)) return true; // no/invalid exp ⇒ treat as expired
-    const leeway = 30; // seconds
-    const now = Math.floor(Date.now() / 1000);
-    return exp < (now - leeway);
-  } catch (error) {
-    console.error('🔐 AuthService: Error checking token expiration:', error);
-    return true;
-  }
+  const decoded = decodeJWT(token) as any;
+  if (!decoded) return true;
+  const exp = Number(decoded?.exp);
+  if (!Number.isFinite(exp)) return true; // no/invalid exp ⇒ treat as expired
+  const leeway = 30; // seconds - configurable via environment if needed
+  const now = Math.floor(Date.now() / 1000);
+  return exp < (now - leeway);
 }
 
 export interface User {
@@ -90,8 +96,24 @@ class AuthService {
       }
 
       // Get authentication data from secure storage
-      const token = await secureStorage.get('auth_token');
-      const userData = await secureStorage.get('auth_user');
+      let token = await secureStorage.get('auth_token');
+      let userData = await secureStorage.get('auth_user');
+      
+      // Fallback: migrate legacy keys
+      if (!token) {
+        const legacyToken = await secureStorage.get('authToken');
+        if (legacyToken) {
+          token = legacyToken;
+          await secureStorage.set('auth_token', legacyToken);
+        }
+      }
+      if (!userData) {
+        const legacyUser = await secureStorage.get('authUser');
+        if (legacyUser) {
+          userData = legacyUser;
+          await secureStorage.set('auth_user', legacyUser);
+        }
+      }
       
       if (token) {
         // Check if token is expired
@@ -150,8 +172,27 @@ class AuthService {
               isAuthenticated: true,
             };
           } else {
-            await this.clearAuthData();
-            this.setUnauthenticatedState();
+            // If user reconstruction failed but we have a valid token, 
+            // attempt to fetch user profile from server
+            console.log('User reconstruction failed, attempting to fetch profile from server...');
+            const profileResult = await this.getProfile();
+            
+            if (profileResult.success && profileResult.user) {
+              // Profile fetch successful, use the user data
+              this.authState = {
+                user: profileResult.user,
+                token,
+                isLoading: false,
+                isAuthenticated: true,
+              };
+              // Save the user data to storage for future use
+              await secureStorage.set('auth_user', JSON.stringify(profileResult.user));
+            } else {
+              // Profile fetch failed or token is invalid, clear auth data
+              console.log('Profile fetch failed, clearing auth data:', profileResult.message);
+              await this.clearAuthData();
+              this.setUnauthenticatedState();
+            }
           }
         }
       } else {
@@ -179,7 +220,7 @@ class AuthService {
 
   private async clearAuthData() {
     try {
-      await secureStorage.multiRemove(['auth_token', 'auth_user']);
+      await secureStorage.multiRemove(['auth_token', 'auth_user', 'authToken', 'authUser']);
     } catch (error) {
       console.error('Error clearing auth data:', error);
     }
@@ -194,10 +235,8 @@ class AuthService {
   public subscribe(listener: (_state: AuthState) => void): () => void {
     this.listeners.push(listener);
     
-    // Immediately notify the new listener with current state
-    if (this.initialized) {
-      listener(this.getAuthState());
-    }
+    // Immediately notify with current state (may be loading)
+    listener(this.getAuthState());
     
     // Return unsubscribe function
     return () => {
@@ -220,7 +259,7 @@ class AuthService {
       this.authState.isLoading = true;
       this.notifyListeners();
 
-      const response = await fetch(`${configService.getBaseUrl()}/auth/signup`, {
+      const response = await fetchWithTimeout(`${configService.getBaseUrl()}/auth/signup`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -256,7 +295,7 @@ class AuthService {
       this.authState.isLoading = true;
       this.notifyListeners();
 
-      const response = await fetch(`${configService.getBaseUrl()}/auth/login`, {
+      const response = await fetchWithTimeout(`${configService.getBaseUrl()}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -307,7 +346,7 @@ class AuthService {
         return { success: false, message: 'No authentication token' };
       }
 
-      const response = await fetch(`${configService.getBaseUrl()}/auth/profile`, {
+      const response = await fetchWithTimeout(`${configService.getBaseUrl()}/auth/profile`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -344,7 +383,6 @@ class AuthService {
           return null;
         }
         this.authState.token = token;
-        this.notifyListeners();
       }
       return token;
     } catch (_error) {
@@ -413,7 +451,7 @@ class AuthService {
         return false;
       }
 
-      const response = await fetch(`${configService.getBaseUrl()}/auth/profile`, {
+      const response = await fetchWithTimeout(`${configService.getBaseUrl()}/auth/profile`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,

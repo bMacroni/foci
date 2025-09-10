@@ -24,7 +24,8 @@ interface MigrationResult {
 class AndroidStorageMigrationService {
   private static readonly AUTH_KEYS = [
     'auth_token',
-    'auth_user'
+    'auth_user',
+    'authToken'
   ];
 
   /**
@@ -45,8 +46,13 @@ class AndroidStorageMigrationService {
       try {
         const value = await AsyncStorage.getItem(key);
         if (value) {
-          // Store in secure storage
-          await secureStorage.set(key, value);
+          // If already present in secure storage, skip overwriting
+          if (await secureStorage.has(key)) {
+            console.log(`ℹ️ Secure storage already has ${key}; skipping overwrite`);
+          } else {
+            // Store in secure storage
+            await secureStorage.set(key, value);
+          }
           
           // Remove from insecure storage after successful migration
           await AsyncStorage.removeItem(key);
@@ -75,6 +81,16 @@ class AndroidStorageMigrationService {
       console.warn('⚠️ Errors:', result.errors);
     }
 
+    // Best-effort verify
+    try {
+      if (result.migratedKeys.length > 0) {
+        const verified = await this.verifyMigration(result.migratedKeys);
+        if (!verified) {
+          result.success = false;
+        }
+      }
+    } catch {}
+
     return result;
   }
 
@@ -84,8 +100,8 @@ class AndroidStorageMigrationService {
    */
   static async checkMigrationNeeded(): Promise<boolean> {
     for (const key of this.AUTH_KEYS) {
-      const hasInSecure = await AsyncStorage.getItem(key);
-      if (hasInSecure) {
+      const value = await AsyncStorage.getItem(key);
+      if (value) {
         console.log(`🔐 Migration needed: Found ${key} in AsyncStorage`);
         return true;
       }
@@ -101,8 +117,8 @@ class AndroidStorageMigrationService {
     const keysNeedingMigration: string[] = [];
     
     for (const key of this.AUTH_KEYS) {
-      const hasInSecure = await AsyncStorage.getItem(key);
-      if (hasInSecure) {
+      const value = await AsyncStorage.getItem(key);
+      if (value) {
         keysNeedingMigration.push(key);
       }
     }
