@@ -1,19 +1,38 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { jwtDecode } from 'jwt-decode';
 import { configService } from './config';
+import { secureStorage } from './secureStorage';
+import { AndroidStorageMigrationService } from './storageMigration';
+
+// Helper function for fetch with timeout
+const fetchWithTimeout = async (input: RequestInfo, init: RequestInit = {}, ms = 10000) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+};
 
 // Helper function to decode JWT token
 function decodeJWT(token: string): any {
   try {
-    const base64Url = token.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-    }).join(''));
-    return JSON.parse(jsonPayload);
+    return jwtDecode(token);
   } catch (error) {
     console.error('🔐 AuthService: Error decoding JWT:', error);
     return null;
   }
+}
+
+// Helper function to check if JWT token is expired
+function isTokenExpired(token: string): boolean {
+  const decoded = decodeJWT(token) as any;
+  if (!decoded) return true;
+  const exp = Number(decoded?.exp);
+  if (!Number.isFinite(exp)) return true; // no/invalid exp ⇒ treat as expired
+  const leeway = 30; // seconds - configurable via environment if needed
+  const now = Math.floor(Date.now() / 1000);
+  return exp < (now - leeway);
 }
 
 export interface User {
@@ -49,11 +68,10 @@ class AuthService {
     isLoading: true,
     isAuthenticated: false,
   };
-  private listeners: ((state: AuthState) => void)[] = [];
+  private listeners: ((_state: AuthState) => void)[] = [];
   private initialized = false;
 
   private constructor() {
-    console.warn('🔐 AuthService: Constructor called');
     this.initializeAuth();
   }
 
@@ -66,135 +84,171 @@ class AuthService {
 
   // Initialize auth state from storage
   private async initializeAuth() {
-    console.warn('🔐 AuthService: Starting initialization...');
     try {
-      // Check all possible storage keys
-      const allKeys = await AsyncStorage.getAllKeys();
-      console.warn('🔐 AuthService: All AsyncStorage keys:', allKeys);
+      // Check if migration is needed and perform it
+      const needsMigration = await AndroidStorageMigrationService.checkMigrationNeeded();
+      if (needsMigration) {
+        console.log('🔐 Migrating auth data to secure storage...');
+        const migrationResult = await AndroidStorageMigrationService.migrateAuthData();
+        if (!migrationResult.success) {
+          console.warn('⚠️ Some auth data migration failed:', migrationResult.errors);
+        }
+      }
+
+      // Get authentication data from secure storage
+      let token = await secureStorage.get('auth_token');
+      let userData = await secureStorage.get('auth_user');
       
-      // Try both key formats
-      let token = await AsyncStorage.getItem('auth_token');
-      let userData = await AsyncStorage.getItem('auth_user');
-      
-      // If not found, try alternative keys
+      // Fallback: migrate legacy keys
       if (!token) {
-        token = await AsyncStorage.getItem('authToken');
-        console.warn('🔐 AuthService: Trying authToken key - found:', !!token);
+        const legacyToken = await secureStorage.get('authToken');
+        if (legacyToken) {
+          token = legacyToken;
+          await secureStorage.set('auth_token', legacyToken);
+        }
       }
       if (!userData) {
-        userData = await AsyncStorage.getItem('authUser');
-        console.warn('🔐 AuthService: Trying authUser key - found:', !!userData);
+        const legacyUser = await secureStorage.get('authUser');
+        if (legacyUser) {
+          userData = legacyUser;
+          await secureStorage.set('auth_user', legacyUser);
+        }
       }
-      
-      // Also try to get the actual value of authToken to see what's stored
-      const authTokenValue = await AsyncStorage.getItem('authToken');
-      console.warn('🔐 AuthService: authToken value:', authTokenValue);
-      
-      console.warn('🔐 AuthService: Retrieved from storage - token:', !!token, 'userData:', !!userData);
-      console.warn('🔐 AuthService: Token value:', token);
-      console.warn('🔐 AuthService: UserData value:', userData);
       
       if (token) {
-        // Try to get user data from storage first
-        let user: User | null = null;
-        
-        if (userData) {
-          try {
-            user = JSON.parse(userData);
-            console.warn('🔐 AuthService: User data found in storage');
-          } catch (error) {
-            console.error('🔐 AuthService: Error parsing user data:', error);
-          }
-        }
-        
-        // If no user data in storage, try to extract from JWT token
-        if (!user) {
-          const decodedToken = decodeJWT(token);
-          if (decodedToken && decodedToken.email) {
-            user = {
-              id: decodedToken.sub || decodedToken.user_id,
-              email: decodedToken.email,
-              email_confirmed_at: decodedToken.email_verified_at,
-              created_at: decodedToken.iat ? new Date(decodedToken.iat * 1000).toISOString() : undefined,
-              updated_at: decodedToken.iat ? new Date(decodedToken.iat * 1000).toISOString() : undefined,
-            };
-            console.warn('🔐 AuthService: User data extracted from JWT token');
-          }
-        }
-        
-        if (user) {
-          this.authState = {
-            user,
-            token,
-            isLoading: false,
-            isAuthenticated: true,
-          };
-          console.warn('🔐 AuthService: User authenticated - user:', user.email);
+        // Check if token is expired
+        if (isTokenExpired(token)) {
+          await this.clearAuthData();
+          this.setUnauthenticatedState();
         } else {
-          this.authState = {
-            user: null,
-            token: null,
-            isLoading: false,
-            isAuthenticated: false,
-          };
-          console.warn('🔐 AuthService: Token found but could not extract user data');
+          // Try to get user data from storage first
+          let user: User | null = null;
+          
+          if (userData) {
+            try {
+              user = JSON.parse(userData);
+            } catch (error) {
+              console.error('Error parsing user data:', error);
+            }
+          }
+          
+          // If no user data in storage, try to extract from JWT token
+          if (!user) {
+            const decodedToken = decodeJWT(token);
+            if (decodedToken) {
+              // Require a stable ID before creating the user object
+              const stableId = decodedToken.sub || decodedToken.user_id;
+              const idString = stableId ? String(stableId).trim() : '';
+              
+              // Only proceed if we have a valid, non-empty ID
+              if (idString && decodedToken.email && typeof decodedToken.email === 'string') {
+                // Guard against non-numeric iat values
+                const iatValue = decodedToken.iat;
+                const isValidIat = typeof iatValue === 'number' && !isNaN(iatValue) && isFinite(iatValue);
+                
+                user = {
+                  id: idString,
+                  email: decodedToken.email,
+                  email_confirmed_at: decodedToken.email_verified_at,
+                  created_at: isValidIat ? new Date(iatValue * 1000).toISOString() : undefined,
+                  updated_at: isValidIat ? new Date(iatValue * 1000).toISOString() : undefined,
+                };
+              } else {
+                // Log invalid token case when ID is missing or email is invalid
+                console.warn('Invalid JWT token: missing stable ID or invalid email', {
+                  hasId: !!idString,
+                  hasEmail: !!decodedToken.email,
+                  emailType: typeof decodedToken.email
+                });
+              }
+            }
+          }
+          
+          if (user) {
+            this.authState = {
+              user,
+              token,
+              isLoading: false,
+              isAuthenticated: true,
+            };
+          } else {
+            // If user reconstruction failed but we have a valid token, 
+            // attempt to fetch user profile from server
+            console.log('User reconstruction failed, attempting to fetch profile from server...');
+            const profileResult = await this.getProfile();
+            
+            if (profileResult.success && profileResult.user) {
+              // Profile fetch successful, use the user data
+              this.authState = {
+                user: profileResult.user,
+                token,
+                isLoading: false,
+                isAuthenticated: true,
+              };
+              // Save the user data to storage for future use
+              await secureStorage.set('auth_user', JSON.stringify(profileResult.user));
+            } else {
+              // Profile fetch failed or token is invalid, clear auth data
+              console.log('Profile fetch failed, clearing auth data:', profileResult.message);
+              await this.clearAuthData();
+              this.setUnauthenticatedState();
+            }
+          }
         }
       } else {
-        this.authState = {
-          user: null,
-          token: null,
-          isLoading: false,
-          isAuthenticated: false,
-        };
-        console.warn('🔐 AuthService: No stored auth data - user not authenticated');
+        this.setUnauthenticatedState();
       }
       
       this.initialized = true;
-      console.warn('🔐 AuthService: Initialization complete, notifying listeners');
       this.notifyListeners();
     } catch (error) {
-      console.error('🔐 AuthService: Error initializing auth:', error);
-      this.authState = {
-        user: null,
-        token: null,
-        isLoading: false,
-        isAuthenticated: false,
-      };
+      console.error('Error initializing auth:', error);
+      this.setUnauthenticatedState();
       this.initialized = true;
       this.notifyListeners();
+    }
+  }
+
+  private setUnauthenticatedState() {
+    this.authState = {
+      user: null,
+      token: null,
+      isLoading: false,
+      isAuthenticated: false,
+    };
+  }
+
+  private async clearAuthData() {
+    try {
+      await secureStorage.multiRemove(['auth_token', 'auth_user', 'authToken', 'authUser']);
+    } catch (error) {
+      console.error('Error clearing auth data:', error);
     }
   }
 
   // Get current auth state
   public getAuthState(): AuthState {
-    console.warn('🔐 AuthService: getAuthState called - state:', this.authState);
     return { ...this.authState };
   }
 
   // Subscribe to auth state changes
-  public subscribe(listener: (state: AuthState) => void): () => void {
-    console.warn('🔐 AuthService: New subscriber added');
+  public subscribe(listener: (_state: AuthState) => void): () => void {
     this.listeners.push(listener);
     
-    // Immediately notify the new listener with current state
-    if (this.initialized) {
-      console.warn('🔐 AuthService: Immediately notifying new subscriber');
-      listener(this.getAuthState());
-    }
+    // Immediately notify with current state (may be loading)
+    listener(this.getAuthState());
     
     // Return unsubscribe function
     return () => {
       const index = this.listeners.indexOf(listener);
       if (index > -1) {
         this.listeners.splice(index, 1);
-        console.warn('🔐 AuthService: Subscriber removed');
       }
     };
   }
 
   // Notify all listeners of state changes
   private notifyListeners() {
-    console.warn('🔐 AuthService: Notifying', this.listeners.length, 'listeners');
     const currentState = this.getAuthState();
     this.listeners.forEach(listener => listener(currentState));
   }
@@ -205,7 +259,7 @@ class AuthService {
       this.authState.isLoading = true;
       this.notifyListeners();
 
-      const response = await fetch(`${configService.getBaseUrl()}/auth/signup`, {
+      const response = await fetchWithTimeout(`${configService.getBaseUrl()}/auth/signup`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -241,7 +295,7 @@ class AuthService {
       this.authState.isLoading = true;
       this.notifyListeners();
 
-      const response = await fetch(`${configService.getBaseUrl()}/auth/login`, {
+      const response = await fetchWithTimeout(`${configService.getBaseUrl()}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -269,8 +323,7 @@ class AuthService {
   // Logout user
   public async logout(): Promise<void> {
     try {
-      // Clear all possible keys to avoid stale sessions
-      await AsyncStorage.multiRemove(['auth_token', 'authToken', 'auth_user', 'authUser']);
+      await this.clearAuthData();
       
       this.authState = {
         user: null,
@@ -293,7 +346,7 @@ class AuthService {
         return { success: false, message: 'No authentication token' };
       }
 
-      const response = await fetch(`${configService.getBaseUrl()}/auth/profile`, {
+      const response = await fetchWithTimeout(`${configService.getBaseUrl()}/auth/profile`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -320,13 +373,16 @@ class AuthService {
     }
     
     try {
-      let token = await AsyncStorage.getItem('auth_token');
-      if (!token) {
-        token = await AsyncStorage.getItem('authToken');
-      }
+      const token = await secureStorage.get('auth_token');
       if (token) {
+        // Check if token is expired
+        if (isTokenExpired(token)) {
+          await this.clearAuthData();
+          this.setUnauthenticatedState();
+          this.notifyListeners();
+          return null;
+        }
         this.authState.token = token;
-        this.notifyListeners();
       }
       return token;
     } catch (_error) {
@@ -344,8 +400,14 @@ class AuthService {
         throw new Error('Invalid authentication token');
       }
 
-      await AsyncStorage.setItem('auth_token', token);
-      await AsyncStorage.setItem('auth_user', JSON.stringify(user));
+      // Check if token is expired before storing
+      if (isTokenExpired(token)) {
+        console.error('Token is expired, cannot store auth data');
+        throw new Error('Authentication token is expired');
+      }
+
+      await secureStorage.set('auth_token', token);
+      await secureStorage.set('auth_user', JSON.stringify(user));
       
       this.authState = {
         user,
@@ -362,7 +424,6 @@ class AuthService {
 
   // Set session (public method for external use)
   public async setSession(token: string, user: User): Promise<void> {
-    console.warn('🔐 AuthService: setSession called with token:', !!token, 'user:', user?.email);
     await this.setAuthData(token, user);
   }
 
@@ -378,8 +439,7 @@ class AuthService {
 
   // Debug method to re-initialize auth
   public async debugReinitialize(): Promise<void> {
-    console.warn('🔐 AuthService: Debug re-initialization triggered');
-    this.initialized = false;
+   this.initialized = false;
     await this.initializeAuth();
   }
 
@@ -391,7 +451,7 @@ class AuthService {
         return false;
       }
 
-      const response = await fetch(`${configService.getBaseUrl()}/auth/profile`, {
+      const response = await fetchWithTimeout(`${configService.getBaseUrl()}/auth/profile`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,

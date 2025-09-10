@@ -1,13 +1,10 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../../themes/colors';
 import { typography } from '../../themes/typography';
 import { spacing, borderRadius } from '../../themes/spacing';
 import { Input, PasswordInput, Button, ApiToggle, GoogleSignInButton } from '../../components/common';
-import { configService, ApiConfig } from '../../services/config';
 import { authService } from '../../services/auth';
 import { googleAuthService } from '../../services/googleAuth';
 import OwlLogo from '../../assets/icon.svg';
@@ -23,30 +20,18 @@ export default function LoginScreen({ navigation }: any) {
     setError('');
     setLoading(true);
     try {
-      const baseUrl = configService.getBaseUrl();
-      const response = await axios.post(`${baseUrl}/auth/login`, {
-        email,
-        password,
-      });
-      const { token, user } = response.data;
-      // Clear any stale session before storing the new one
-      await AsyncStorage.multiRemove(['auth_token', 'authToken', 'auth_user', 'authUser']);
-      await AsyncStorage.multiSet([
-        ['auth_token', token],
-        ['authToken', token],
-        ['auth_user', JSON.stringify(user || {})],
-        ['authUser', JSON.stringify(user || {})],
-      ]);
-      try { await authService.debugReinitialize(); } catch {}
-      setLoading(false);
-      navigation.replace('Main');
-    } catch (err: any) {
-      setLoading(false);
-      if (err.response && err.response.data && err.response.data.error) {
-        setError(err.response.data.error);
+      const result = await authService.login({ email, password });
+      
+      if (result.success) {
+        // Auth service will automatically update the navigation state
+        // No need to manually navigate - AppNavigator will handle this
       } else {
-        setError('Login failed. Please try again.');
+        setError(result.message);
       }
+    } catch {
+      setError('Login failed. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -58,10 +43,9 @@ export default function LoginScreen({ navigation }: any) {
       const result = await googleAuthService.signInWithGoogle();
       
       if (result.success) {
-        // Successful sign-in
-        navigation.replace('Main');
+        // Auth service will automatically update the navigation state
+        // No need to manually navigate - AppNavigator will handle this
       } else {
-        // Error
         setError(result.error || 'Google Sign-In failed');
       }
     } catch (err: any) {

@@ -24,10 +24,12 @@
     "axios": "^1.10.0",
     "date-fns": "^3.6.0",
     "formik": "^2.4.6",
+    "jwt-decode": "^4.0.0",
     "react": "19.1.0",
     "react-native": "0.80.1",
     "react-native-calendars": "^1.1300.0",
     "react-native-draggable-flatlist": "^4.0.1",
+    "react-native-encrypted-storage": "^4.0.3",
     "react-native-gesture-handler": "^2.27.2",
     "react-native-haptic-feedback": "^2.3.3",
     "react-native-modal-datetime-picker": "^18.0.0",
@@ -80,6 +82,7 @@
     "2025-08-18 CST: added dependency 'react-native-draggable-flatlist' for Brain Dump Prioritization draggable tasks list",
     "2025-08-24 CST: added devDependency '@testing-library/react-native' for mobile UI tests",
     "2025-01-27 CST: added dependency '@react-native-google-signin/google-signin' for Google Sign-On authentication",
-    "2025-09-02 CST: added dependency 'react-native-popable' for contextual tooltips in Mobile Help system"
+    "2025-09-02 CST: added dependency 'react-native-popable' for contextual tooltips in Mobile Help system",
+    "2025-01-27 CST: added dependency 'react-native-encrypted-storage' for secure JWT token storage using Android EncryptedSharedPreferences"
   ]
 }
