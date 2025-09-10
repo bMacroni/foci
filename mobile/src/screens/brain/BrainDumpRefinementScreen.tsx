@@ -13,6 +13,7 @@ import { useBrainDump } from '../../contexts/BrainDumpContext';
 import { authService } from '../../services/auth';
 import { configService } from '../../services/config';
 import { SuccessToast } from '../../components/common/SuccessToast';
+import { ErrorToast } from '../../components/common/ErrorToast';
 import { useFocusEffect } from '@react-navigation/native';
 
 type Item = { text: string; type: 'task'|'goal'; confidence?: number; category?: string | null; stress_level: 'low'|'medium'|'high'; priority: 'low'|'medium'|'high' };
@@ -38,6 +39,8 @@ export default function BrainDumpRefinementScreen({ navigation, route }: any) {
   );
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+  const [errorToastVisible, setErrorToastVisible] = useState(false);
+  const [errorToastMessage, setErrorToastMessage] = useState('');
   const [initialToastShown, setInitialToastShown] = useState(false);
   const [inFlightKeys, setInFlightKeys] = useState<Set<string>>(new Set());
 
@@ -184,17 +187,55 @@ export default function BrainDumpRefinementScreen({ navigation, route }: any) {
       const token = await authService.getAuthToken();
       if (token) {
         const baseUrl = configService.getBaseUrl();
-        await fetch(`${baseUrl}/ai/threads/${threadId}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({ title: item.text }),
-        });
+        
+        // Create AbortController with 4 second timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        
+        try {
+          const response = await fetch(`${baseUrl}/ai/threads/${threadId}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({ title: item.text }),
+            signal: controller.signal,
+          });
+          
+          // Clear timeout on success
+          clearTimeout(timeoutId);
+          
+          // Check if response is successful
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+        } catch (fetchError) {
+          // Clear timeout on error
+          clearTimeout(timeoutId);
+          
+          // Handle different error types
+          if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+            console.error('Thread title update timed out');
+            setErrorToastMessage('Could not update conversation title - request timed out');
+          } else if (fetchError instanceof Error) {
+            console.error('Error updating thread title:', fetchError.message);
+            setErrorToastMessage('Could not update conversation title');
+          } else {
+            console.error('Unknown error updating thread title:', fetchError);
+            setErrorToastMessage('Could not update conversation title');
+          }
+          
+          // Show error toast
+          setErrorToastVisible(true);
+          
+          // Re-throw to maintain existing error handling flow
+          throw fetchError;
+        }
       }
     } catch (error) {
       console.error('Error updating thread title:', error);
+      // Error toast is already shown above, so we don't need to show it again here
     }
     // Remove the goal from the refinement list
     setEditedItems(prev => prev.filter(i => !(i.type === 'goal' && i.text === item.text)));
@@ -351,6 +392,12 @@ export default function BrainDumpRefinementScreen({ navigation, route }: any) {
         actionLabel="Open Tasks"
         onActionPress={() => navigation.navigate('Tasks')}
         onClose={() => setToastVisible(false)}
+      />
+
+      <ErrorToast
+        visible={errorToastVisible}
+        message={errorToastMessage}
+        onClose={() => setErrorToastVisible(false)}
       />
     </SafeAreaView>
   );

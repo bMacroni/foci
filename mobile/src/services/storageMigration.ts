@@ -24,9 +24,7 @@ interface MigrationResult {
 class AndroidStorageMigrationService {
   private static readonly AUTH_KEYS = [
     'auth_token',
-    'authToken', 
-    'auth_user',
-    'authUser'
+    'auth_user'
   ];
 
   /**

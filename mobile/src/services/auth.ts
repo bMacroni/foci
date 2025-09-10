@@ -89,17 +89,9 @@ class AuthService {
         }
       }
 
-      // Try both key formats with secure storage
-      let token = await secureStorage.get('auth_token');
-      let userData = await secureStorage.get('auth_user');
-      
-      // If not found, try alternative keys
-      if (!token) {
-        token = await secureStorage.get('authToken');
-      }
-      if (!userData) {
-        userData = await secureStorage.get('authUser');
-      }
+      // Get authentication data from secure storage
+      const token = await secureStorage.get('auth_token');
+      const userData = await secureStorage.get('auth_user');
       
       if (token) {
         // Check if token is expired
@@ -121,14 +113,32 @@ class AuthService {
           // If no user data in storage, try to extract from JWT token
           if (!user) {
             const decodedToken = decodeJWT(token);
-            if (decodedToken && decodedToken.email) {
-              user = {
-                id: decodedToken.sub || decodedToken.user_id,
-                email: decodedToken.email,
-                email_confirmed_at: decodedToken.email_verified_at,
-                created_at: decodedToken.iat ? new Date(decodedToken.iat * 1000).toISOString() : undefined,
-                updated_at: decodedToken.iat ? new Date(decodedToken.iat * 1000).toISOString() : undefined,
-              };
+            if (decodedToken) {
+              // Require a stable ID before creating the user object
+              const stableId = decodedToken.sub || decodedToken.user_id;
+              const idString = stableId ? String(stableId).trim() : '';
+              
+              // Only proceed if we have a valid, non-empty ID
+              if (idString && decodedToken.email && typeof decodedToken.email === 'string') {
+                // Guard against non-numeric iat values
+                const iatValue = decodedToken.iat;
+                const isValidIat = typeof iatValue === 'number' && !isNaN(iatValue) && isFinite(iatValue);
+                
+                user = {
+                  id: idString,
+                  email: decodedToken.email,
+                  email_confirmed_at: decodedToken.email_verified_at,
+                  created_at: isValidIat ? new Date(iatValue * 1000).toISOString() : undefined,
+                  updated_at: isValidIat ? new Date(iatValue * 1000).toISOString() : undefined,
+                };
+              } else {
+                // Log invalid token case when ID is missing or email is invalid
+                console.warn('Invalid JWT token: missing stable ID or invalid email', {
+                  hasId: !!idString,
+                  hasEmail: !!decodedToken.email,
+                  emailType: typeof decodedToken.email
+                });
+              }
             }
           }
           
@@ -169,7 +179,7 @@ class AuthService {
 
   private async clearAuthData() {
     try {
-      await secureStorage.multiRemove(['auth_token', 'authToken', 'auth_user', 'authUser']);
+      await secureStorage.multiRemove(['auth_token', 'auth_user']);
     } catch (error) {
       console.error('Error clearing auth data:', error);
     }
@@ -324,10 +334,7 @@ class AuthService {
     }
     
     try {
-      let token = await secureStorage.get('auth_token');
-      if (!token) {
-        token = await secureStorage.get('authToken');
-      }
+      const token = await secureStorage.get('auth_token');
       if (token) {
         // Check if token is expired
         if (isTokenExpired(token)) {
