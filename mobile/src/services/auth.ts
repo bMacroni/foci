@@ -1,15 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { configService } from './config';
+import { jwtDecode } from 'jwt-decode';
+import { apiFetch } from './apiService';
 
 // Helper function to decode JWT token
 function decodeJWT(token: string): any {
   try {
-    const base64Url = token.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-    }).join(''));
-    return JSON.parse(jsonPayload);
+    return jwtDecode(token);
   } catch (error) {
     console.error('🔐 AuthService: Error decoding JWT:', error);
     return null;
@@ -86,13 +82,12 @@ class AuthService {
         console.warn('🔐 AuthService: Trying authUser key - found:', !!userData);
       }
       
-      // Also try to get the actual value of authToken to see what's stored
+      // Check if authToken is present without logging the actual value
       const authTokenValue = await AsyncStorage.getItem('authToken');
-      console.warn('🔐 AuthService: authToken value:', authTokenValue);
+      console.warn('🔐 AuthService: authToken present:', !!authTokenValue);
       
-      console.warn('🔐 AuthService: Retrieved from storage - token:', !!token, 'userData:', !!userData);
-      console.warn('🔐 AuthService: Token value:', token);
-      console.warn('🔐 AuthService: UserData value:', userData);
+      console.warn('🔐 AuthService: Retrieved from storage - token present:', !!token, 'userData present:', !!userData);
+      // Sensitive values redacted; avoid printing token/user contents
       
       if (token) {
         // Try to get user data from storage first
@@ -205,21 +200,16 @@ class AuthService {
       this.authState.isLoading = true;
       this.notifyListeners();
 
-      const response = await fetch(`${configService.getBaseUrl()}/auth/signup`, {
+      const { ok, status, data } = await apiFetch('/auth/signup', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(credentials),
       });
 
-      const data = await response.json();
-
-      if (response.ok && data.token) {
+      if (ok && data.token) {
         // Successfully created user and got token
         await this.setAuthData(data.token, data.user);
         return { success: true, message: data.message, user: data.user };
-      } else if (response.ok && data.userCreated) {
+      } else if (ok && data.userCreated) {
         // User created but needs email confirmation
         return { success: true, message: data.message };
       } else {
@@ -241,17 +231,12 @@ class AuthService {
       this.authState.isLoading = true;
       this.notifyListeners();
 
-      const response = await fetch(`${configService.getBaseUrl()}/auth/login`, {
+      const { ok, status, data } = await apiFetch('/auth/login', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(credentials),
       });
 
-      const data = await response.json();
-
-      if (response.ok && data.token) {
+      if (ok && data.token) {
         await this.setAuthData(data.token, data.user);
         return { success: true, message: data.message, user: data.user };
       } else {
@@ -293,16 +278,14 @@ class AuthService {
         return { success: false, message: 'No authentication token' };
       }
 
-      const response = await fetch(`${configService.getBaseUrl()}/auth/profile`, {
+      const { ok, status, data } = await apiFetch('/auth/profile', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
         },
       });
 
-      const data = await response.json();
-
-      if (response.ok) {
+      if (ok) {
         return { success: true, user: data };
       } else {
         return { success: false, message: data.error || 'Failed to get profile' };
@@ -396,14 +379,14 @@ class AuthService {
         return false;
       }
 
-      const response = await fetch(`${configService.getBaseUrl()}/auth/profile`, {
+      const { ok, status, data } = await apiFetch('/auth/profile', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
         },
       });
 
-      if (response.ok) {
+      if (ok) {
         return true;
       } else {
         // Token is invalid, logout user

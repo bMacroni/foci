@@ -22,6 +22,7 @@
     "axios": "^1.10.0",
     "date-fns": "^3.6.0",
     "formik": "^2.4.6",
+    "jwt-decode": "^4.0.0",
     "react": "19.1.0",
     "react-native": "0.80.1",
     "react-native-calendars": "^1.1300.0",
@@ -78,6 +79,7 @@
     "2025-08-18 CST: added dependency 'react-native-draggable-flatlist' for Brain Dump Prioritization draggable tasks list",
     "2025-08-24 CST: added devDependency '@testing-library/react-native' for mobile UI tests",
     "2025-01-27 CST: added dependency '@react-native-google-signin/google-signin' for Google Sign-On authentication",
-    "2025-09-02 CST: added dependency 'react-native-popable' for contextual tooltips in Mobile Help system"
+    "2025-09-02 CST: added dependency 'react-native-popable' for contextual tooltips in Mobile Help system",
+    "2025-01-27 CST: added dependency 'jwt-decode' for secure JWT token decoding in auth service"
   ]
 }
