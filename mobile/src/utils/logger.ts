@@ -10,15 +10,27 @@ class Logger {
   }
 
   error(message: string, ...args: any[]): void {
-    console.error(this.formatMessage('error', message), ...args);
+    if (this.isDebugEnabled()) {
+      console.error(this.formatMessage('error', message), ...args);
+    } else {
+      console.error(this.formatMessage('error', message));
+    }
   }
 
   warn(message: string, ...args: any[]): void {
-    console.warn(this.formatMessage('warn', message), ...args);
+    if (this.isDebugEnabled()) {
+      console.warn(this.formatMessage('warn', message), ...args);
+    } else {
+      console.warn(this.formatMessage('warn', message));
+    }
   }
 
   info(message: string, ...args: any[]): void {
-    console.log(this.formatMessage('info', message), ...args);
+    if (this.isDebugEnabled()) {
+      console.log(this.formatMessage('info', message), ...args);
+    } else {
+      console.log(this.formatMessage('info', message));
+    }
   }
 
   debug(message: string, ...args: any[]): void {
@@ -33,15 +45,22 @@ class Logger {
       // Only log non-sensitive boolean flags, numbers, and redacted placeholders
       const safeData = Object.entries(data)
         .map(([key, value]) => {
-          if (typeof value === 'boolean') {
+          if (value == null) {
+            return `${key}: [NULL]`;
+          } else if (typeof value === 'string') {
+            if (value === '') {
+              return `${key}: [EMPTY]`;
+            } else {
+              return `${key}: [REDACTED]`;
+            }
+          } else if (typeof value === 'boolean') {
             return `${key}: ${value}`;
           } else if (typeof value === 'number') {
             return `${key}: ${value}`;
-          } else if (typeof value === 'string') {
-            // Redact any potentially sensitive strings
-            return `${key}: ${value ? '[REDACTED]' : 'null'}`;
+          } else {
+            // Any other/unknown type
+            return `${key}: [REDACTED]`;
           }
-          return `${key}: ${value}`;
         })
         .join(', ');
       
