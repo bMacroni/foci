@@ -81,6 +81,7 @@
     "2025-08-24 CST: added devDependency '@testing-library/react-native' for mobile UI tests",
     "2025-01-27 CST: added dependency '@react-native-google-signin/google-signin' for Google Sign-On authentication",
     "2025-09-02 CST: added dependency 'react-native-popable' for contextual tooltips in Mobile Help system",
-    "2025-01-27 CST: added dependency 'react-native-encrypted-storage' for secure JWT token storage using Android EncryptedSharedPreferences"
+    "2025-01-27 CST: added dependency 'react-native-encrypted-storage' for secure JWT token storage using Android EncryptedSharedPreferences",
+    "2025-01-27 CST: added dependency 'jwt-decode' for secure JWT token decoding in auth service"
   ]
 }
