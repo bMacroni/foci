@@ -432,6 +432,11 @@ class AuthService {
     return this.authState.isAuthenticated && !!this.authState.token;
   }
 
+  // Check if auth service is initialized
+  public isInitialized(): boolean {
+    return this.initialized;
+  }
+
   // Get current user
   public getCurrentUser(): User | null {
     return this.authState.user;
