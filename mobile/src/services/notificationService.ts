@@ -79,15 +79,13 @@ class NotificationService {
     await this.updateBadgeCount();
   }
 
-  initialize() {
+  async initialize(): Promise<void> {
     try {
-      this.requestUserPermission();
-      this.updateBadgeCount(); // Initial count
-
+      await this.requestUserPermission();
+      await this.updateBadgeCount(); // Initial count
       // Firebase messaging removed - using backend-only approach
       console.log('Notification service initialized with backend-only approach');
       console.log('Push notifications will be handled by the backend FCM service');
-      
     } catch (error) {
       console.error('Notification service initialization failed:', error);
       console.log('Continuing without push notifications...');
