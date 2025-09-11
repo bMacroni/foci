@@ -27,30 +27,8 @@
         </intent-filter>
       </activity>
       
-      <!-- Firebase Cloud Messaging Service -->
-      <service
-        android:name="com.foci.mobile.MyFirebaseMessagingService"
-        android:exported="false">
-        <intent-filter>
-          <action android:name="com.google.firebase.MESSAGING_EVENT" />
-        </intent-filter>
-      </service>
+      <!-- Firebase Cloud Messaging Service removed - using backend-only approach -->
       
-      <!-- Default notification channel -->
-      <meta-data
-        android:name="com.google.firebase.messaging.default_notification_channel_id"
-        android:value="@string/default_notification_channel_id"
-        tools:replace="android:value" />
-        
-      <!-- Default notification icon -->
-      <meta-data
-        android:name="com.google.firebase.messaging.default_notification_icon"
-        android:resource="@mipmap/ic_mindclear" />
-        
-      <!-- Default notification color -->
-      <meta-data
-        android:name="com.google.firebase.messaging.default_notification_color"
-        android:resource="@color/colorAccent"
-        tools:replace="android:resource" />
+      <!-- Firebase notification metadata removed - using backend-only approach -->
     </application>
 </manifest>

@@ -79,3 +79,7 @@ yarn-error.log
 .env.local
 .env.development
 .env.production
+
+# Firebase configuration files (security)
+android/app/google-services.json
+ios/mobile/GoogleService-Info.plist
