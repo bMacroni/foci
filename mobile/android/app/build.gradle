@@ -155,14 +155,7 @@ dependencies {
     // Google Play Services for Google Sign-In
     implementation 'com.google.android.gms:play-services-auth:20.7.0'
 
-    // Firebase BOM - manages all Firebase library versions
-    implementation platform('com.google.firebase:firebase-bom:33.7.0')
-    
-    // Firebase Analytics (required for other Firebase services)
-    implementation 'com.google.firebase:firebase-analytics'
-    
-    // Firebase Cloud Messaging
-    implementation 'com.google.firebase:firebase-messaging'
+    // Firebase dependencies removed for security - using backend-only approach
 
     // Exclude react-native-worklets in release to avoid prefab CMake issues on Windows
     configurations.releaseImplementation {
