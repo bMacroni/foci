@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { jwtDecode } from 'jwt-decode';
 import { apiFetch } from './apiService';
+import logger from '../utils/logger';
 
 // Helper function to decode JWT token
 function decodeJWT(token: string): any {
@@ -49,7 +50,7 @@ class AuthService {
   private initialized = false;
 
   private constructor() {
-    console.warn('🔐 AuthService: Constructor called');
+    logger.authDebug('Constructor called');
     this.initializeAuth();
   }
 
@@ -62,11 +63,11 @@ class AuthService {
 
   // Initialize auth state from storage
   private async initializeAuth() {
-    console.warn('🔐 AuthService: Starting initialization...');
+    logger.authDebug('Starting initialization...');
     try {
       // Check all possible storage keys
       const allKeys = await AsyncStorage.getAllKeys();
-      console.warn('🔐 AuthService: All AsyncStorage keys:', allKeys);
+      logger.authDebug('All AsyncStorage keys found', { keyCount: allKeys.length });
       
       // Try both key formats
       let token = await AsyncStorage.getItem('auth_token');
@@ -75,18 +76,21 @@ class AuthService {
       // If not found, try alternative keys
       if (!token) {
         token = await AsyncStorage.getItem('authToken');
-        console.warn('🔐 AuthService: Trying authToken key - found:', !!token);
+        logger.authDebug('Trying authToken key', { found: !!token });
       }
       if (!userData) {
         userData = await AsyncStorage.getItem('authUser');
-        console.warn('🔐 AuthService: Trying authUser key - found:', !!userData);
+        logger.authDebug('Trying authUser key', { found: !!userData });
       }
       
       // Check if authToken is present without logging the actual value
       const authTokenValue = await AsyncStorage.getItem('authToken');
-      console.warn('🔐 AuthService: authToken present:', !!authTokenValue);
+      logger.authDebug('Auth token check', { present: !!authTokenValue });
       
-      console.warn('🔐 AuthService: Retrieved from storage - token present:', !!token, 'userData present:', !!userData);
+      logger.authDebug('Retrieved from storage', { 
+        tokenPresent: !!token, 
+        userDataPresent: !!userData 
+      });
       // Sensitive values redacted; avoid printing token/user contents
       
       if (token) {
@@ -96,7 +100,7 @@ class AuthService {
         if (userData) {
           try {
             user = JSON.parse(userData);
-            console.warn('🔐 AuthService: User data found in storage');
+            logger.authDebug('User data found in storage', { hasUserData: !!userData });
           } catch (error) {
             console.error('🔐 AuthService: Error parsing user data:', error);
           }
@@ -113,7 +117,7 @@ class AuthService {
               created_at: decodedToken.iat ? new Date(decodedToken.iat * 1000).toISOString() : undefined,
               updated_at: decodedToken.iat ? new Date(decodedToken.iat * 1000).toISOString() : undefined,
             };
-            console.warn('🔐 AuthService: User data extracted from JWT token');
+            logger.authDebug('User data extracted from JWT token', { hasUser: !!user });
           }
         }
         
@@ -124,7 +128,7 @@ class AuthService {
             isLoading: false,
             isAuthenticated: true,
           };
-          console.warn('🔐 AuthService: User authenticated - user:', user.email);
+          logger.authDebug('User authenticated', { hasUser: !!user, hasEmail: !!user?.email });
         } else {
           this.authState = {
             user: null,
@@ -132,7 +136,7 @@ class AuthService {
             isLoading: false,
             isAuthenticated: false,
           };
-          console.warn('🔐 AuthService: Token found but could not extract user data');
+          logger.authDebug('Token found but could not extract user data', { hasToken: !!token });
         }
       } else {
         this.authState = {
@@ -141,11 +145,11 @@ class AuthService {
           isLoading: false,
           isAuthenticated: false,
         };
-        console.warn('🔐 AuthService: No stored auth data - user not authenticated');
+        logger.authDebug('No stored auth data - user not authenticated');
       }
       
       this.initialized = true;
-      console.warn('🔐 AuthService: Initialization complete, notifying listeners');
+      logger.authDebug('Initialization complete, notifying listeners');
       this.notifyListeners();
     } catch (error) {
       console.error('🔐 AuthService: Error initializing auth:', error);
@@ -162,18 +166,23 @@ class AuthService {
 
   // Get current auth state
   public getAuthState(): AuthState {
-    console.warn('🔐 AuthService: getAuthState called - state:', this.authState);
+    logger.authDebug('getAuthState called', { 
+      isAuthenticated: this.authState.isAuthenticated, 
+      isLoading: this.authState.isLoading,
+      hasUser: !!this.authState.user,
+      hasToken: !!this.authState.token
+    });
     return { ...this.authState };
   }
 
   // Subscribe to auth state changes
   public subscribe(listener: (state: AuthState) => void): () => void {
-    console.warn('🔐 AuthService: New subscriber added');
+    logger.authDebug('New subscriber added', { totalListeners: this.listeners.length });
     this.listeners.push(listener);
     
     // Immediately notify the new listener with current state
     if (this.initialized) {
-      console.warn('🔐 AuthService: Immediately notifying new subscriber');
+      logger.authDebug('Immediately notifying new subscriber');
       listener(this.getAuthState());
     }
     
@@ -182,14 +191,14 @@ class AuthService {
       const index = this.listeners.indexOf(listener);
       if (index > -1) {
         this.listeners.splice(index, 1);
-        console.warn('🔐 AuthService: Subscriber removed');
+        logger.authDebug('Subscriber removed', { remainingListeners: this.listeners.length });
       }
     };
   }
 
   // Notify all listeners of state changes
   private notifyListeners() {
-    console.warn('🔐 AuthService: Notifying', this.listeners.length, 'listeners');
+    logger.authDebug('Notifying listeners', { count: this.listeners.length });
     const currentState = this.getAuthState();
     this.listeners.forEach(listener => listener(currentState));
   }
@@ -345,7 +354,7 @@ class AuthService {
 
   // Set session (public method for external use)
   public async setSession(token: string, user: User): Promise<void> {
-    console.warn('🔐 AuthService: setSession called with token:', !!token, 'user:', user?.email);
+    logger.authDebug('setSession called', { hasToken: !!token, hasUser: !!user, hasEmail: !!user?.email });
     await this.setAuthData(token, user);
   }
 
@@ -366,7 +375,7 @@ class AuthService {
 
   // Debug method to re-initialize auth
   public async debugReinitialize(): Promise<void> {
-    console.warn('🔐 AuthService: Debug re-initialization triggered');
+    logger.authDebug('Debug re-initialization triggered');
     this.initialized = false;
     await this.initializeAuth();
   }
@@ -379,23 +388,22 @@ class AuthService {
         return false;
       }
 
-      const { ok, status, data } = await apiFetch('/auth/profile', {
+      const { ok, status } = await apiFetch('/auth/profile', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
         },
       });
 
-      if (ok) {
-        return true;
-      } else {
-        // Token is invalid, logout user
+      if (ok) return true;
+      if (status === 401 || status === 403) {
+        // Token invalid/expired
         await this.logout();
-        return false;
       }
+      return false;
     } catch (_error) {
       console.error('Token refresh error:', _error);
-      await this.logout();
+      // Network/other error — keep session; try again later
       return false;
     }
   }

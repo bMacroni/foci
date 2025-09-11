@@ -1,9 +1,16 @@
 import { configService } from './config';
+import { authService } from './auth';
+
+export interface ApiError {
+  error: string;
+  code?: string;
+  details?: any;
+}
 
 export interface ApiResponse<T = any> {
   ok: boolean;
   status: number;
-  data: T | { error: string };
+  data: T | ApiError | null;
 }
 
 export async function apiFetch<T = any>(
@@ -15,20 +22,76 @@ export async function apiFetch<T = any>(
   const id = setTimeout(() => controller.abort(), timeoutMs);
   
   try {
+    // Get auth token if available
+    const token = await authService.getAuthToken();
+    
+    // Build headers: start with init.headers, then add our headers
+    const headers: Record<string, string> = {
+      'Accept': 'application/json',
+    };
+    
+    // Merge existing headers from init.headers
+    if (init.headers) {
+      if (init.headers instanceof Headers) {
+        // Convert Headers object to plain object
+        init.headers.forEach((value, key) => {
+          headers[key] = value;
+        });
+      } else {
+        // Merge plain object headers
+        Object.assign(headers, init.headers);
+      }
+    }
+    
+    // Add Authorization header if token is available
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    // Add Content-Type only for non-GET requests or when body is present
+    const method = init.method?.toUpperCase() || 'GET';
+    const hasBody = init.body !== undefined && init.body !== null;
+    if (method !== 'GET' || hasBody) {
+      headers['Content-Type'] = 'application/json';
+    }
+    
     const res = await fetch(`${configService.getBaseUrl()}${path}`, {
       ...init,
       signal: controller.signal,
-      headers: { 
-        'Content-Type': 'application/json', 
-        ...(init.headers || {}) 
-      },
+      headers,
     });
     
     const text = await res.text();
-    const data = text ? JSON.parse(text) : null;
+    let data: any = null;
+    
+    // Parse JSON only if there's content and it's not a 204 No Content response
+    if (text && res.status !== 204) {
+      try {
+        data = JSON.parse(text);
+      } catch (parseError) {
+        // If JSON parsing fails, treat as error
+        return { 
+          ok: false, 
+          status: res.status, 
+          data: { 
+            error: 'Invalid JSON response', 
+            code: 'PARSE_ERROR',
+            details: parseError 
+          } 
+        };
+      }
+    }
     
     if (!res.ok) {
-      return { ok: false, status: res.status, data };
+      // Ensure error responses use the standardized ApiError format
+      const errorData: ApiError = data && typeof data === 'object' && 'error' in data 
+        ? data 
+        : { 
+            error: data?.message || data?.error || 'Request failed', 
+            code: data?.code,
+            details: data 
+          };
+      return { ok: false, status: res.status, data: errorData };
     }
     
     return { ok: true, status: res.status, data };
@@ -38,7 +101,11 @@ export async function apiFetch<T = any>(
       return { 
         ok: false, 
         status: 408, 
-        data: { error: 'Request timeout' } 
+        data: { 
+          error: 'Request timeout', 
+          code: 'TIMEOUT',
+          details: { path, timeoutMs }
+        } 
       };
     }
     
@@ -46,7 +113,11 @@ export async function apiFetch<T = any>(
     return { 
       ok: false, 
       status: 0, 
-      data: { error: 'Network error' } 
+      data: { 
+        error: 'Network error', 
+        code: 'NETWORK_ERROR',
+        details: error instanceof Error ? error.message : error
+      } 
     };
   } finally {
     clearTimeout(id);
