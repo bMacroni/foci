@@ -17,6 +17,7 @@ import { webSocketService } from './src/services/api';
 import { HelpProvider } from './src/contexts/HelpContext';
 import HelpOverlay from './src/components/help/HelpOverlay';
 import { authService } from './src/services/auth';
+import { getCurrentRouteName } from './src/navigation/navigationRef';
 
 // Set Google client IDs immediately when the module loads
 configService.setGoogleClientIds({
@@ -30,7 +31,7 @@ function App() {
     // Set up auth state listener to initialize services after authentication
     const checkAuthAndInitialize = async () => {
       if (authService.isAuthenticated()) {
-        console.log('User authenticated, initializing notification services...');
+        // Initialize notification services when authenticated
         notificationService.initialize();
         
         // Connect WebSocket with error handling
@@ -38,6 +39,9 @@ function App() {
           await webSocketService.connect();
           webSocketService.onMessage((message) => {
             if (message.type === 'new_notification') {
+              const currentRoute = getCurrentRouteName();
+              // Suppress in-app popup when user is on AIChat screen to avoid redundancy
+              if (currentRoute === 'AIChat') { return; }
               Alert.alert(
                 message.payload.title,
                 message.payload.message
@@ -48,7 +52,7 @@ function App() {
           console.error('Failed to initialize WebSocket connection:', error);
         }
       } else {
-        console.log('User not authenticated, skipping notification services initialization');
+        // Skip initialization when not authenticated
         // Disconnect WebSocket if user is not authenticated
         webSocketService.disconnect();
       }
