@@ -33,7 +33,8 @@ function isTokenExpired(token: string): boolean {
   if (!Number.isFinite(exp)) return true; // no/invalid exp ⇒ treat as expired
   const leeway = 30; // seconds - configurable via environment if needed
   const now = Math.floor(Date.now() / 1000);
-  return exp < (now - leeway);
+  // Expire if exp is at or before now + leeway
+  return exp <= (now + leeway);
 }
 
 export interface User {
@@ -379,33 +380,27 @@ class AuthService {
 
   // Set authentication data
   private async setAuthData(token: string, user: User): Promise<void> {
-    try {
-      // Validate token before storing
-      if (!token || token === 'undefined' || token === 'null') {
-        console.error('Invalid token provided to setAuthData:', token);
-        throw new Error('Invalid authentication token');
-      }
-
-      // Check if token is expired before storing
-      if (isTokenExpired(token)) {
-        console.error('Token is expired, cannot store auth data');
-        throw new Error('Authentication token is expired');
-      }
-
-      await secureStorage.set('auth_token', token);
-      await secureStorage.set('auth_user', JSON.stringify(user));
-      
-      this.authState = {
-        user,
-        token,
-        isLoading: false,
-        isAuthenticated: true,
-      };
-      
-      this.notifyListeners();
-    } catch (_error) {
-      console.error('Error setting auth data:', _error);
+    // Validate token before storing
+    if (!token || token === 'undefined' || token === 'null') {
+      throw new Error('Invalid authentication token');
     }
+
+    // Check if token is expired before storing
+    if (isTokenExpired(token)) {
+      throw new Error('Authentication token is expired');
+    }
+
+    await secureStorage.set('auth_token', token);
+    await secureStorage.set('auth_user', JSON.stringify(user));
+    
+    this.authState = {
+      user,
+      token,
+      isLoading: false,
+      isAuthenticated: true,
+    };
+    
+    this.notifyListeners();
   }
 
   // Set session (public method for external use)
