@@ -339,10 +339,7 @@ class AuthService {
 
       const { ok, status, data } = await apiFetch('/auth/profile', {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      }, 15000);
 
       if (ok) {
         return { success: true, user: data };
@@ -447,10 +444,7 @@ class AuthService {
 
       const { ok, status, data } = await apiFetch('/auth/profile', {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      }, 15000);
 
       if (ok) {
         return true;

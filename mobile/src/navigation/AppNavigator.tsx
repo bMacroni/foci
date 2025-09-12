@@ -59,17 +59,9 @@ export default function AppNavigator() {
       // Handle navigation when auth state changes
       if (navigationRef.current && !authState.isLoading) {
         if (authState.isAuthenticated && !wasAuthenticated) {
-          // User just logged in, navigate to Main
-          navigationRef.current.reset({
-            index: 0,
-            routes: [{ name: 'Main' }],
-          });
+          navigationRef.current.reset({ index: 0, routes: [{ name: 'Main' }] });
         } else if (!authState.isAuthenticated && wasAuthenticated) {
-          // User just logged out, navigate to Login
-          navigationRef.current.reset({
-            index: 0,
-            routes: [{ name: 'Login' }],
-          });
+          navigationRef.current.reset({ index: 0, routes: [{ name: 'Login' }] });
         }
       }
     });
