@@ -2,6 +2,7 @@ import { jwtDecode } from 'jwt-decode';
 import { configService } from './config';
 import { secureStorage } from './secureStorage';
 import { AndroidStorageMigrationService } from './storageMigration';
+import { apiFetch } from './apiService';
 
 // Helper function for fetch with timeout
 const fetchWithTimeout = async (input: RequestInfo, init: RequestInit = {}, ms = 10000) => {
@@ -32,7 +33,8 @@ function isTokenExpired(token: string): boolean {
   if (!Number.isFinite(exp)) return true; // no/invalid exp ⇒ treat as expired
   const leeway = 30; // seconds - configurable via environment if needed
   const now = Math.floor(Date.now() / 1000);
-  return exp < (now - leeway);
+  // Expire if exp is at or before now + leeway
+  return exp <= (now + leeway);
 }
 
 export interface User {
@@ -259,21 +261,16 @@ class AuthService {
       this.authState.isLoading = true;
       this.notifyListeners();
 
-      const response = await fetchWithTimeout(`${configService.getBaseUrl()}/auth/signup`, {
+      const { ok, status, data } = await apiFetch('/auth/signup', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(credentials),
       });
 
-      const data = await response.json();
-
-      if (response.ok && data.token) {
+      if (ok && data.token) {
         // Successfully created user and got token
         await this.setAuthData(data.token, data.user);
         return { success: true, message: data.message, user: data.user };
-      } else if (response.ok && data.userCreated) {
+      } else if (ok && data.userCreated) {
         // User created but needs email confirmation
         return { success: true, message: data.message };
       } else {
@@ -295,17 +292,12 @@ class AuthService {
       this.authState.isLoading = true;
       this.notifyListeners();
 
-      const response = await fetchWithTimeout(`${configService.getBaseUrl()}/auth/login`, {
+      const { ok, status, data } = await apiFetch('/auth/login', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(credentials),
       });
 
-      const data = await response.json();
-
-      if (response.ok && data.token) {
+      if (ok && data.token) {
         await this.setAuthData(data.token, data.user);
         return { success: true, message: data.message, user: data.user };
       } else {
@@ -346,16 +338,11 @@ class AuthService {
         return { success: false, message: 'No authentication token' };
       }
 
-      const response = await fetchWithTimeout(`${configService.getBaseUrl()}/auth/profile`, {
+      const { ok, status, data } = await apiFetch('/auth/profile', {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      }, 15000);
 
-      const data = await response.json();
-
-      if (response.ok) {
+      if (ok) {
         return { success: true, user: data };
       } else {
         return { success: false, message: data.error || 'Failed to get profile' };
@@ -393,33 +380,27 @@ class AuthService {
 
   // Set authentication data
   private async setAuthData(token: string, user: User): Promise<void> {
-    try {
-      // Validate token before storing
-      if (!token || token === 'undefined' || token === 'null') {
-        console.error('Invalid token provided to setAuthData:', token);
-        throw new Error('Invalid authentication token');
-      }
-
-      // Check if token is expired before storing
-      if (isTokenExpired(token)) {
-        console.error('Token is expired, cannot store auth data');
-        throw new Error('Authentication token is expired');
-      }
-
-      await secureStorage.set('auth_token', token);
-      await secureStorage.set('auth_user', JSON.stringify(user));
-      
-      this.authState = {
-        user,
-        token,
-        isLoading: false,
-        isAuthenticated: true,
-      };
-      
-      this.notifyListeners();
-    } catch (_error) {
-      console.error('Error setting auth data:', _error);
+    // Validate token before storing
+    if (!token || token === 'undefined' || token === 'null') {
+      throw new Error('Invalid authentication token');
     }
+
+    // Check if token is expired before storing
+    if (isTokenExpired(token)) {
+      throw new Error('Authentication token is expired');
+    }
+
+    await secureStorage.set('auth_token', token);
+    await secureStorage.set('auth_user', JSON.stringify(user));
+    
+    this.authState = {
+      user,
+      token,
+      isLoading: false,
+      isAuthenticated: true,
+    };
+    
+    this.notifyListeners();
   }
 
   // Set session (public method for external use)
@@ -430,6 +411,11 @@ class AuthService {
   // Check if user is authenticated
   public isAuthenticated(): boolean {
     return this.authState.isAuthenticated && !!this.authState.token;
+  }
+
+  // Check if auth service is initialized
+  public isInitialized(): boolean {
+    return this.initialized;
   }
 
   // Get current user
@@ -451,14 +437,11 @@ class AuthService {
         return false;
       }
 
-      const response = await fetchWithTimeout(`${configService.getBaseUrl()}/auth/profile`, {
+      const { ok, status, data } = await apiFetch('/auth/profile', {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      }, 15000);
 
-      if (response.ok) {
+      if (ok) {
         return true;
       } else {
         // Token is invalid, logout user

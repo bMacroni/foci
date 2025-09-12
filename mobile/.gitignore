@@ -79,3 +79,8 @@ yarn-error.log
 .env.local
 .env.development
 .env.production
+
+# Firebase configuration files (security)
+**/google-services.json
+**/GoogleService-Info.plist
+**/GoogleService-Info-*.plist

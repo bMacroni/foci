@@ -1,7 +1,7 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
-apply plugin: 'com.google.gms.google-services'
+// Google Services plugin removed - using backend-only approach
 
 // Add this line for vector icons
 apply from: file("../../node_modules/react-native-vector-icons/fonts.gradle")
@@ -103,6 +103,7 @@ android {
         // Optimize native builds - use only arm64 for faster builds
         ndk {
             abiFilters "arm64-v8a"
+            debugSymbolLevel 'none'
         }
     }
     signingConfigs {
@@ -123,9 +124,11 @@ android {
             // Reduce build time by limiting architectures in debug
             ndk {
                 abiFilters "arm64-v8a"
+                debugSymbolLevel 'none'
             }
             // Disable unnecessary features for faster debug builds
             buildConfigField "boolean", "DEBUG_MODE", "true"
+            // Keep default CMake settings; we already limit ABIs to speed builds
         }
         release {
             // Caution! In production, you need to generate your own keystore file.
@@ -139,7 +142,6 @@ android {
             }
         }
     }
-
 }
 
 dependencies {
@@ -155,14 +157,7 @@ dependencies {
     // Google Play Services for Google Sign-In
     implementation 'com.google.android.gms:play-services-auth:20.7.0'
 
-    // Firebase BOM - manages all Firebase library versions
-    implementation platform('com.google.firebase:firebase-bom:33.7.0')
-    
-    // Firebase Analytics (required for other Firebase services)
-    implementation 'com.google.firebase:firebase-analytics'
-    
-    // Firebase Cloud Messaging
-    implementation 'com.google.firebase:firebase-messaging'
+    // Firebase dependencies removed for security - using backend-only approach
 
     // Exclude react-native-worklets in release to avoid prefab CMake issues on Windows
     configurations.releaseImplementation {

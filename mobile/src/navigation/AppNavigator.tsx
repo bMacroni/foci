@@ -22,35 +22,53 @@ export default function AppNavigator() {
   const navigationRef = useRef<any>(null);
 
   useEffect(() => {
-    // Subscribe to auth state changes
+    // Check authentication state on app start
+    const checkAuthState = async () => {
+      try {
+        // Wait for auth service to initialize
+        await new Promise(resolve => {
+          const checkInitialized = () => {
+            if (authService.isInitialized()) {
+              resolve(true);
+            } else {
+              setTimeout(checkInitialized, 100);
+            }
+          };
+          checkInitialized();
+        });
+
+        const authenticated = authService.isAuthenticated();
+        console.log('🔐 AppNavigator: Auth state check - authenticated:', authenticated);
+        setIsAuthenticated(authenticated);
+      } catch (error) {
+        console.error('🔐 AppNavigator: Error checking auth state:', error);
+        setIsAuthenticated(false);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkAuthState();
+
+    // Listen for auth state changes
     const unsubscribe = authService.subscribe((authState) => {
       const wasAuthenticated = isAuthenticated;
+      console.log('🔐 AppNavigator: Auth state changed - authenticated:', authState.isAuthenticated);
       setIsAuthenticated(authState.isAuthenticated);
-      setIsLoading(authState.isLoading);
 
       // Handle navigation when auth state changes
       if (navigationRef.current && !authState.isLoading) {
         if (authState.isAuthenticated && !wasAuthenticated) {
-          // User just logged in, navigate to Main
-          navigationRef.current.reset({
-            index: 0,
-            routes: [{ name: 'Main' }],
-          });
+          navigationRef.current.reset({ index: 0, routes: [{ name: 'Main' }] });
         } else if (!authState.isAuthenticated && wasAuthenticated) {
-          // User just logged out, navigate to Login
-          navigationRef.current.reset({
-            index: 0,
-            routes: [{ name: 'Login' }],
-          });
+          navigationRef.current.reset({ index: 0, routes: [{ name: 'Login' }] });
         }
       }
     });
 
-    // Cleanup subscription on unmount
     return unsubscribe;
   }, [isAuthenticated]);
 
-  // Show loading screen while checking authentication
   if (isLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background.primary }}>

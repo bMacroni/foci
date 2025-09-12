@@ -9,7 +9,7 @@ import com.facebook.react.ReactNativeHost
 import com.facebook.react.ReactPackage
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.facebook.react.defaults.DefaultReactNativeHost
-import com.google.firebase.FirebaseApp
+// Firebase import removed - using backend-only approach
 
 class MainApplication : Application(), ReactApplication {
 
@@ -34,7 +34,7 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onCreate() {
     super.onCreate()
-    FirebaseApp.initializeApp(this)
+    // Firebase initialization removed - using backend-only approach
     loadReactNative(this)
   }
 }
